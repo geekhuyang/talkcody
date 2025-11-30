@@ -42,7 +42,7 @@ jobs:
           body: |
             ## What's Changed (Windows Release)
 
-            See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for details.
+            Download packages for all platforms at: https://www.talkcody.com/docs/introduction/client-downloads
 
   build-windows:
     name: Build Windows MSI

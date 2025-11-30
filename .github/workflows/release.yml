@@ -39,13 +39,8 @@ jobs:
           draft: false
           prerelease: false
           body: |
-            ## What's Changed
 
-            See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for details.
-
-            ### Platforms Included
-            - Linux (AppImage)
-            - Windows (MSI)
+            Download packages for all platforms at: https://www.talkcody.com/docs/introduction/client-downloads
 
   build-linux:
     name: Build Linux AppImage
