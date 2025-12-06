@@ -120,13 +120,9 @@ export function AddCustomModelDialog({
     setSelectedModels(newSelection);
   };
 
-  // Select all models
+  // Select all models (respect current filter only)
   const selectAllModels = () => {
-    const newSelection = new Set(selectedModels);
-    filteredModels.forEach((m) => {
-      newSelection.add(m.id);
-    });
-    setSelectedModels(newSelection);
+    setSelectedModels(new Set(filteredModels.map((m) => m.id)));
   };
 
   // Clear all selections
@@ -240,7 +236,7 @@ export function AddCustomModelDialog({
 
               <div className="relative">
                 <Input
-                  placeholder="Search models..."
+                  placeholder={t.Settings.customModelsDialog.searchPlaceholder}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="h-8 pr-8"
@@ -250,7 +246,7 @@ export function AddCustomModelDialog({
                     type="button"
                     onClick={() => setSearchQuery('')}
                     className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                    aria-label="Clear search"
+                    aria-label={t.Settings.customModelsDialog.clearSearchAria}
                   >
                     <X className="h-4 w-4" />
                   </button>
@@ -280,7 +276,7 @@ export function AddCustomModelDialog({
                   ))}
                   {filteredModels.length === 0 && (
                     <div className="text-sm text-muted-foreground text-center py-4">
-                      No models found matching "{searchQuery}"
+                      {t.Settings.customModelsDialog.noModelsMatch(searchQuery)}
                     </div>
                   )}
                 </div>

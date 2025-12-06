@@ -266,6 +266,9 @@ export interface LocaleDefinition {
       hideManualInput: string;
       addModelManually: string;
       noModelsFound: string;
+      searchPlaceholder: string;
+      clearSearchAria: string;
+      noModelsMatch: (query: string) => string;
       fetchFailed: (error: string) => string;
       selectAtLeastOne: string;
       addedModels: (count: number) => string;
