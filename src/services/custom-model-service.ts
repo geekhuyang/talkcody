@@ -1,6 +1,7 @@
+import { invoke } from '@tauri-apps/api/core';
 import { BaseDirectory, exists, readTextFile, writeTextFile } from '@tauri-apps/plugin-fs';
 import { logger } from '@/lib/logger';
-import { createTauriFetch } from '@/lib/tauri-fetch';
+import type { ProxyRequest, ProxyResponse } from '@/lib/tauri-fetch';
 import { PROVIDER_CONFIGS, type ProviderIds } from '@/providers/provider_config';
 import { settingsManager } from '@/stores/settings-store';
 import type { ModelConfig, ModelsConfiguration } from '@/types/models';
@@ -26,23 +27,33 @@ const PROVIDER_MODELS_ENDPOINTS: Record<string, string | null> = {
   lmstudio: 'http://127.0.0.1:1234/v1/models',
   openRouter: 'https://openrouter.ai/api/v1/models',
   zhipu: 'https://open.bigmodel.cn/api/paas/v4/models',
-  MiniMax: 'https://api.minimaxi.com/v1/models',
-  // Providers that don't support /v1/models endpoint
-  anthropic: null,
-  google: null,
-  aiGateway: null,
+  MiniMax: null, // MiniMax doesn't support /v1/models endpoint
+  deepseek: 'https://api.deepseek.com/v1/models',
+  anthropic: 'https://api.anthropic.com/v1/models',
+  google: 'https://generativelanguage.googleapis.com/v1beta/models', // API key as query param
+  aiGateway: 'https://ai-gateway.vercel.sh/v1/models',
+  // Non-AI providers, no need to test
   tavily: null,
   elevenlabs: null,
 };
 
-interface FetchedModel {
-  id: string;
+// Raw model from API response (fields may be optional)
+interface RawModel {
+  id?: string;
   name?: string;
   owned_by?: string;
 }
 
+// Normalized model returned by the service
+export interface FetchedModel {
+  id: string;
+  name: string;
+  owned_by?: string;
+}
+
 interface ModelsListResponse {
-  data: FetchedModel[];
+  data?: RawModel[];
+  models?: RawModel[]; // Google format
 }
 
 /**
@@ -171,7 +182,7 @@ class CustomModelService {
    * Fetch available models from a provider
    */
   async fetchProviderModels(providerId: string): Promise<FetchedModel[]> {
-    const endpoint = this.getModelsEndpoint(providerId);
+    let endpoint = this.getModelsEndpoint(providerId);
     if (!endpoint) {
       throw new Error(`Provider ${providerId} does not support models listing`);
     }
@@ -185,40 +196,74 @@ class CustomModelService {
     }
 
     try {
-      const tauriFetch = createTauriFetch();
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
+        Accept: 'application/json',
       };
 
-      // Add authorization header if API key exists
-      if (apiKey && !isLocalProvider(providerId)) {
+      // Provider-specific authentication (apiKey is guaranteed to exist for non-local providers)
+      if (providerId === 'anthropic' && apiKey) {
+        // Anthropic uses x-api-key header
+        headers['x-api-key'] = apiKey;
+        headers['anthropic-version'] = '2023-06-01';
+      } else if (providerId === 'google' && apiKey) {
+        // Google uses API key as query parameter
+        endpoint = `${endpoint}?key=${apiKey}`;
+      } else if (providerId === 'openRouter' && apiKey) {
+        // OpenRouter uses Bearer + custom headers
+        headers['Authorization'] = `Bearer ${apiKey}`;
+        headers['HTTP-Referer'] = 'https://talkcody.com';
+        headers['X-Title'] = 'TalkCody';
+      } else if (apiKey && !isLocalProvider(providerId)) {
+        // Default: Bearer token
         headers['Authorization'] = `Bearer ${apiKey}`;
       }
 
-      // Special headers for OpenRouter
-      if (providerId === 'openRouter') {
-        headers['HTTP-Referer'] = 'https://talkcody.com';
-        headers['X-Title'] = 'TalkCody';
-      }
-
-      const response = await tauriFetch(endpoint, {
+      // Use non-streaming proxy_fetch for simple GET requests
+      // This avoids the race condition in stream_fetch where data may arrive before listener is ready
+      const proxyRequest: ProxyRequest = {
+        url: endpoint,
         method: 'GET',
         headers,
-      });
+      };
 
-      if (!response.ok) {
-        throw new Error(`Failed to fetch models: ${response.status} ${response.statusText}`);
+      const response = await invoke<ProxyResponse>('proxy_fetch', { request: proxyRequest });
+
+      if (response.status >= 400) {
+        throw new Error(`Failed to fetch models: ${response.status}`);
       }
 
-      const data = (await response.json()) as ModelsListResponse;
+      const data = JSON.parse(response.body) as ModelsListResponse;
+      logger.info(`Raw models data from ${providerId}:`, data);
 
-      // Normalize the response
-      const models = data.data || [];
-      return models.map((m) => ({
-        id: m.id,
-        name: m.name || m.id,
-        owned_by: m.owned_by,
-      }));
+      // Normalize the response - handle different response formats
+      let rawModels: RawModel[] = [];
+      if (Array.isArray(data.data)) {
+        // Standard OpenAI-compatible format
+        rawModels = data.data;
+      } else if (Array.isArray(data.models)) {
+        // Google format: { "models": [...] }
+        rawModels = data.models;
+      } else if (Array.isArray(data)) {
+        // Direct array format
+        rawModels = data as unknown as RawModel[];
+      }
+      logger.info(`Fetched ${rawModels.length} models from ${providerId}`);
+
+      // Transform and filter models
+      const models: FetchedModel[] = [];
+      for (const m of rawModels) {
+        // Google uses "name" field like "models/gemini-2.5-flash", extract model id
+        const id = m.id || (m.name?.startsWith('models/') ? m.name.slice(7) : m.name);
+        if (id) {
+          models.push({
+            id,
+            name: m.name || id,
+            owned_by: m.owned_by,
+          });
+        }
+      }
+      return models;
     } catch (error) {
       logger.error(`Failed to fetch models from ${providerId}:`, error);
       throw error;

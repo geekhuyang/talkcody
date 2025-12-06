@@ -2,6 +2,11 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { FileDiffPreview } from './file-diff-preview';
 
+// Mock useSettingsStore to return English language
+vi.mock('@/stores/settings-store', () => ({
+  useSettingsStore: (selector: (state: { language: string }) => string) => selector({ language: 'en' }),
+}));
+
 // Helper function to test diff generation (extracted for testing)
 function generateDiff(original: string, modified: string): any[] {
   const originalLines = original.split('\n');

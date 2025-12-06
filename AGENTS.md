@@ -62,6 +62,13 @@ cd apps/api
 bun run test
 ```
 
+### locales Directory
+
+- src/locales/en.ts - English locale file
+- src/locales/zh.ts - Chinese locale file
+- src/locales/types.ts - Locale type definitions
+- src/hooks/use-locale.ts - Custom hook for locale management
+
 ### Important Notes
 
 - The docs directory is the user documentation website and does not need to be modified during development.

@@ -1,6 +1,6 @@
 import {
-  CLAUDE_HAIKU,
   GEMINI_25_FLASH_LITE,
+  GPT51_CODE_MAX,
   NANO_BANANA_PRO,
   SCRIBE_V2_REALTIME,
 } from '@/lib/models';
@@ -30,7 +30,7 @@ export const MODEL_TYPE_DESCRIPTIONS: Record<ModelType, string> = {
 };
 
 export const DEFAULT_MODELS_BY_TYPE: Record<ModelType, string> = {
-  [ModelType.MAIN]: CLAUDE_HAIKU,
+  [ModelType.MAIN]: GPT51_CODE_MAX,
   [ModelType.SMALL]: GEMINI_25_FLASH_LITE,
   [ModelType.IMAGE_GENERATOR]: NANO_BANANA_PRO,
   [ModelType.TRANSCRIPTION]: SCRIBE_V2_REALTIME,

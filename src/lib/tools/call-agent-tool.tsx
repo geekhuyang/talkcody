@@ -220,9 +220,9 @@ export const callAgent = createTool({
   ),
   renderToolResult: (result, { agentId } = {}) => (
     <CallAgentToolResult
-      success={result.success}
-      message={result.message}
-      output={result.task_result}
+      success={result?.success ?? false}
+      message={result?.message}
+      output={result?.task_result}
     />
   ),
 });

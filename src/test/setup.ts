@@ -48,12 +48,17 @@ vi.mock('@tauri-apps/plugin-log', () => ({
 vi.mock('@tauri-apps/api/path', () => ({
   normalize: vi.fn().mockImplementation(async (path: string) => path),
   appDataDir: vi.fn().mockResolvedValue('/test/app-data'),
-  join: vi.fn().mockImplementation(async (...paths: string[]) => paths.join('/')),
+  join: vi.fn().mockImplementation(async (...paths: string[]) => {
+    // Filter out "." and empty strings, then join
+    const filtered = paths.filter((p) => p && p !== '.');
+    return filtered.join('/');
+  }),
   dirname: vi.fn().mockImplementation(async (path: string) => {
     const parts = path.split('/');
     parts.pop();
     return parts.join('/') || '/';
   }),
+  isAbsolute: vi.fn().mockImplementation(async (path: string) => path.startsWith('/')),
 }));
 
 // Mock logger
@@ -124,11 +129,13 @@ vi.mock('@/services/workspace-root-service', () => ({
 }));
 
 // Mock ResizeObserver
-(globalThis as any).ResizeObserver = vi.fn().mockImplementation(() => ({
-  observe: vi.fn(),
-  unobserve: vi.fn(),
-  disconnect: vi.fn(),
-}));
+(globalThis as unknown as { ResizeObserver?: unknown }).ResizeObserver = vi
+  .fn()
+  .mockImplementation(() => ({
+    observe: vi.fn(),
+    unobserve: vi.fn(),
+    disconnect: vi.fn(),
+  }));
 
 // Mock models config JSON import
 vi.mock('@talkcody/shared/data/models-config.json', () => ({

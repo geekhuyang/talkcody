@@ -2,7 +2,7 @@ import type { User } from '@talkcody/shared';
 import { open } from '@tauri-apps/plugin-shell';
 import { getApiUrl } from '@/lib/config';
 import { logger } from '@/lib/logger';
-import { tauriFetch } from '@/lib/tauri-fetch';
+import { simpleFetch } from '@/lib/tauri-fetch';
 import { secureStorage } from './secure-storage';
 
 class AuthService {
@@ -36,7 +36,7 @@ class AuthService {
       }
 
       logger.info('[Auth Service] Token found, calling API:', getApiUrl('/api/auth/me'));
-      const response = await tauriFetch(getApiUrl('/api/auth/me'), {
+      const response = await simpleFetch(getApiUrl('/api/auth/me'), {
         headers: {
           Authorization: `Bearer ${token}`,
         },

@@ -3,7 +3,7 @@
 import { createOpenAI } from '@ai-sdk/openai';
 import { experimental_generateImage, NoImageGeneratedError } from 'ai';
 import { logger } from '@/lib/logger';
-import { createTauriFetch } from '@/lib/tauri-fetch';
+import { streamFetch } from '@/lib/tauri-fetch';
 import { generateId } from '@/lib/utils';
 import type { MessageAttachment } from '../types/agent';
 import { fileService } from './file-service';
@@ -20,7 +20,7 @@ export class ImageGenerationService {
 
     this.openai = createOpenAI({
       apiKey,
-      fetch: createTauriFetch() as typeof fetch,
+      fetch: streamFetch as typeof fetch,
     });
   }
 

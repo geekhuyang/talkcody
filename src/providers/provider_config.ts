@@ -5,7 +5,7 @@ import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { createOpenAI } from '@ai-sdk/openai';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
-import { createTauriFetch } from '@/lib/tauri-fetch';
+import { streamFetch } from '@/lib/tauri-fetch';
 import type { ProviderDefinition, ProviderRegistry } from './types';
 
 export const PROVIDER_CONFIGS: ProviderRegistry = {
@@ -23,7 +23,7 @@ export const PROVIDER_CONFIGS: ProviderRegistry = {
           'x-title': 'TalkCody',
         },
         apiKey,
-        fetch: createTauriFetch() as typeof fetch,
+        fetch: streamFetch as typeof fetch,
       }),
   },
 
@@ -46,7 +46,7 @@ export const PROVIDER_CONFIGS: ProviderRegistry = {
             enabled: true,
           },
         },
-        fetch: createTauriFetch() as typeof fetch,
+        fetch: streamFetch as typeof fetch,
       }),
   },
 
@@ -63,12 +63,12 @@ export const PROVIDER_CONFIGS: ProviderRegistry = {
           apiKey,
           name: 'openai',
           baseURL: baseUrl,
-          fetch: createTauriFetch() as typeof fetch,
+          fetch: streamFetch as typeof fetch,
         });
       }
       return createOpenAI({
         apiKey,
-        fetch: createTauriFetch() as typeof fetch,
+        fetch: streamFetch as typeof fetch,
       });
     },
   },
@@ -86,7 +86,7 @@ export const PROVIDER_CONFIGS: ProviderRegistry = {
         ...(baseUrl && { baseURL: baseUrl }),
         // Use Tauri fetch to bypass webview CORS restrictions
         // This works for both official Anthropic API and third-party compatible APIs
-        fetch: createTauriFetch() as typeof fetch,
+        fetch: streamFetch as typeof fetch,
       }),
   },
 
@@ -103,7 +103,7 @@ export const PROVIDER_CONFIGS: ProviderRegistry = {
         apiKey,
         name: 'deepseek',
         baseURL: baseUrl || 'https://api.deepseek.com/v1/',
-        fetch: createTauriFetch() as typeof fetch,
+        fetch: streamFetch as typeof fetch,
       }),
   },
 
@@ -120,7 +120,7 @@ export const PROVIDER_CONFIGS: ProviderRegistry = {
         apiKey,
         name: 'zhipu',
         baseURL: baseUrl || 'https://open.bigmodel.cn/api/paas/v4/',
-        fetch: createTauriFetch() as typeof fetch,
+        fetch: streamFetch as typeof fetch,
       }),
   },
 
@@ -132,16 +132,11 @@ export const PROVIDER_CONFIGS: ProviderRegistry = {
     required: false,
     type: 'openai-compatible',
     createProvider: (apiKey: string) =>
-      // createAnthropic({
-      //   apiKey,
-      //   baseURL: 'https://api.minimaxi.com/anthropic/v1',
-      //   fetch: createTauriFetch() as typeof fetch,
-      // }),
       createOpenAICompatible({
         apiKey,
         name: 'MINIMAX',
         baseURL: 'https://api.minimaxi.com/v1',
-        fetch: createTauriFetch() as typeof fetch,
+        fetch: streamFetch as typeof fetch,
       }),
   },
 
@@ -155,7 +150,7 @@ export const PROVIDER_CONFIGS: ProviderRegistry = {
     createProvider: (apiKey: string) =>
       createGoogleGenerativeAI({
         apiKey,
-        fetch: createTauriFetch() as typeof fetch,
+        fetch: streamFetch as typeof fetch,
       }),
   },
 
@@ -172,7 +167,7 @@ export const PROVIDER_CONFIGS: ProviderRegistry = {
         name: 'ollama',
         baseURL: 'http://127.0.0.1:11434/v1',
         apiKey: 'ollama', // Ollama doesn't require a real API key
-        fetch: createTauriFetch() as typeof fetch,
+        fetch: streamFetch as typeof fetch,
       }),
   },
 
@@ -189,7 +184,7 @@ export const PROVIDER_CONFIGS: ProviderRegistry = {
         name: 'lmstudio',
         baseURL: baseUrl ? `${baseUrl}/v1` : 'http://127.0.0.1:1234/v1',
         apiKey: 'lm-studio', // LM Studio doesn't require a real API key
-        fetch: createTauriFetch() as typeof fetch,
+        fetch: streamFetch as typeof fetch,
       }),
   },
 

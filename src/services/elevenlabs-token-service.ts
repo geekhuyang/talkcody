@@ -1,7 +1,7 @@
 // Service for generating Eleven Labs single-use tokens for real-time transcription
 
 import { logger } from '@/lib/logger';
-import { createTauriFetch } from '@/lib/tauri-fetch';
+import { simpleFetch } from '@/lib/tauri-fetch';
 
 interface TokenResponse {
   token: string;
@@ -27,12 +27,10 @@ export async function generateElevenLabsToken(apiKey: string): Promise<string> {
     throw new Error('Eleven Labs API key is required');
   }
 
-  const tauriFetch = createTauriFetch();
-
   try {
     logger.info('[ElevenLabs Token] Generating single-use token...');
 
-    const response = await tauriFetch(
+    const response = await simpleFetch(
       'https://api.elevenlabs.io/v1/single-use-token/realtime_scribe',
       {
         method: 'POST',

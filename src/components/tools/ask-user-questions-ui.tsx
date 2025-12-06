@@ -6,6 +6,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
+import { useLocale } from '@/hooks/use-locale';
 import { useUserQuestionStore } from '@/stores/user-question-store';
 import type { AskUserQuestionsOutput, Question } from '@/types/user-question';
 
@@ -26,6 +27,7 @@ export function AskUserQuestionsUI({ questions }: AskUserQuestionsUIProps) {
     }
   );
 
+  const { t } = useLocale();
   const submitAnswers = useUserQuestionStore((state) => state.submitAnswers);
 
   const handleOptionToggle = (questionId: string, optionLabel: string, multiSelect: boolean) => {
@@ -96,7 +98,7 @@ export function AskUserQuestionsUI({ questions }: AskUserQuestionsUIProps) {
       <Card className="border-green-500/50 bg-green-500/10 p-4">
         <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
           <Check className="size-5" />
-          <span className="font-medium">Answers submitted successfully</span>
+          <span className="font-medium">{t.AskUserQuestions.submitted}</span>
         </div>
       </Card>
     );
@@ -106,12 +108,8 @@ export function AskUserQuestionsUI({ questions }: AskUserQuestionsUIProps) {
     <Card className="border-blue-500/50 bg-blue-500/10 p-4 w-full overflow-hidden">
       <div className="space-y-4 min-w-0">
         <div>
-          <h3 className="font-semibold text-foreground text-lg">
-            Please answer the following questions
-          </h3>
-          <p className="text-muted-foreground text-sm">
-            Select one or more options, or provide your own answer in the text field.
-          </p>
+          <h3 className="font-semibold text-foreground text-lg">{t.AskUserQuestions.title}</h3>
+          <p className="text-muted-foreground text-sm">{t.AskUserQuestions.description}</p>
         </div>
 
         <Tabs defaultValue={questions[0]?.id} className="w-full">
@@ -128,7 +126,7 @@ export function AskUserQuestionsUI({ questions }: AskUserQuestionsUIProps) {
               <div>
                 <h4 className="font-medium text-foreground">{q.question}</h4>
                 <p className="text-muted-foreground text-xs">
-                  {q.multiSelect ? 'You can select multiple options' : 'Select one option'}
+                  {q.multiSelect ? t.AskUserQuestions.selectMultiple : t.AskUserQuestions.selectOne}
                 </p>
               </div>
 
@@ -165,11 +163,11 @@ export function AskUserQuestionsUI({ questions }: AskUserQuestionsUIProps) {
 
               <div className="space-y-2">
                 <Label htmlFor={`${q.id}-custom`} className="text-foreground text-sm">
-                  Other (please specify)
+                  {t.AskUserQuestions.otherLabel}
                 </Label>
                 <Textarea
                   id={`${q.id}-custom`}
-                  placeholder="Type your custom answer here..."
+                  placeholder={t.AskUserQuestions.otherPlaceholder}
                   value={answers[q.id]?.text || ''}
                   onChange={(e) => handleTextChange(q.id, e.target.value)}
                   className="min-h-[80px] resize-none w-full"
@@ -181,7 +179,7 @@ export function AskUserQuestionsUI({ questions }: AskUserQuestionsUIProps) {
 
         <div className="flex justify-end pt-2">
           <Button onClick={handleSubmit} className="min-w-[120px]">
-            Submit Answers
+            {t.AskUserQuestions.submitAnswers}
           </Button>
         </div>
       </div>

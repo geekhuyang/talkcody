@@ -841,11 +841,6 @@ pub fn run() {
                 if window.label() == "main" {
                     log::info!("Main window destroyed, cleaning up resources");
 
-                    // Send analytics session_end
-                    if let Some(analytics_state) = window.try_state::<AnalyticsState>() {
-                        analytics::send_session_end_sync(analytics_state.inner());
-                    }
-
                     // Stop legacy file watcher
                     if let Some(app_state) = window.try_state::<AppState>() {
                         if let Ok(mut watcher_guard) = app_state.file_watcher.lock() {
@@ -868,6 +863,20 @@ pub fn run() {
                 }
             }
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app_handle, event| {
+            // RunEvent::Exit always runs (unlike ExitRequested which is inconsistent on macOS)
+            // See: https://github.com/tauri-apps/tauri/issues/9198
+            if let tauri::RunEvent::Exit = event {
+                log::info!("App exiting, sending session_end");
+
+                // Send session_end synchronously before exit
+                if let Some(analytics_state) = app_handle.try_state::<AnalyticsState>() {
+                    analytics::send_session_end_sync(analytics_state.inner());
+                }
+
+                log::info!("session_end sent, app will exit now");
+            }
+        });
 }

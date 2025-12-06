@@ -1,5 +1,5 @@
 import { getApiUrl } from '@/lib/config';
-import { tauriFetch } from '@/lib/tauri-fetch';
+import { simpleFetch } from '@/lib/tauri-fetch';
 import { getLocale, type SupportedLocale } from '@/locales';
 import { useAuthStore } from '@/stores/auth-store';
 import { useSettingsStore } from '@/stores/settings-store';
@@ -47,7 +47,7 @@ class ApiClient {
 
     // Make request
     const url = getApiUrl(endpoint);
-    const response = await tauriFetch(url, {
+    const response = await simpleFetch(url, {
       ...fetchOptions,
       headers,
     });

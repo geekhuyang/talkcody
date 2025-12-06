@@ -50,7 +50,7 @@ export const globTool = createTool({
           return 'Error: Project root path not set. Please set a project root path first.';
         }
         searchPath = projectRoot;
-      } else if (!isAbsolute(searchPath)) {
+      } else if (!(await isAbsolute(searchPath))) {
         // Convert relative path to absolute
         const projectRoot = await resolveProjectRoot();
         if (!projectRoot) {
@@ -58,6 +58,7 @@ export const globTool = createTool({
         }
         searchPath = await join(projectRoot, searchPath);
       }
+      logger.info(`Searching files with pattern "${pattern}" in path: ${searchPath}`);
 
       const results: GlobResultType[] = await invoke('search_files_by_glob', {
         pattern,

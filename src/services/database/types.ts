@@ -59,7 +59,7 @@ export interface StoredToolResult {
   toolName: string;
   input?: Record<string, unknown>;
   output?: unknown; // Full output for proper restoration
-  inputSummary: string;
+  inputSummary?: string; // Deprecated: kept for backward compatibility
   status: 'success' | 'error';
   errorMessage?: string;
 }

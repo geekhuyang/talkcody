@@ -196,7 +196,8 @@ describe('Tool-call message persistence bug fix', () => {
         type: 'tool-result',
         toolCallId: 'call-123',
         toolName: 'readFile',
-        inputSummary: 'Read /test.ts',
+        input: { file_path: '/test.ts' },
+        output: 'File content here',
         status: 'success',
       };
 

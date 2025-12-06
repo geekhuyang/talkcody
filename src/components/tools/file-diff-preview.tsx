@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
+import { useTranslation } from '@/hooks/use-locale';
 
 interface FileDiffPreviewProps {
   filePath: string;
@@ -242,6 +243,7 @@ export function FileDiffPreview({
   onAllowAll,
   operation,
 }: FileDiffPreviewProps) {
+  const locale = useTranslation();
   const [feedback, setFeedback] = useState('');
 
   const fileName = filePath.split('/').pop() || filePath;
@@ -265,7 +267,9 @@ export function FileDiffPreview({
             <FileText className="h-5 w-5 text-blue-600" />
             <div>
               <CardTitle className="text-lg">
-                {operation === 'edit' ? 'File Edit Preview' : 'File Write Preview'}
+                {operation === 'edit'
+                  ? locale.FileDiffPreview.editTitle
+                  : locale.FileDiffPreview.writeTitle}
               </CardTitle>
               <CardDescription className="font-mono text-sm">{fileName}</CardDescription>
             </div>
@@ -287,14 +291,14 @@ export function FileDiffPreview({
 
       <CardContent className="space-y-4">
         {/* File path */}
-        <div className="bg-gray-50 px-3 py-2 rounded text-sm font-mono text-gray-700">
+        <div className="bg-gray-50 dark:bg-gray-800 px-3 py-2 rounded text-sm font-mono text-gray-700 dark:text-gray-300">
           {filePath}
         </div>
 
         {/* Diff display */}
         <div className="border rounded-lg overflow-hidden">
-          <div className="bg-gray-50 px-4 py-2 border-b text-sm font-medium text-gray-700">
-            Changes
+          <div className="bg-gray-50 dark:bg-gray-800 px-4 py-2 border-b text-sm font-medium text-gray-700 dark:text-gray-300">
+            {locale.FileDiffPreview.changes}
           </div>
           <div className="max-h-[60vh] overflow-auto">
             {diff.map((line, index) => {
@@ -370,9 +374,9 @@ export function FileDiffPreview({
           <MessageSquare className="h-4 w-4" />
           <AlertDescription className="w-full">
             <div className="space-y-2 w-full">
-              <p className="text-sm font-medium">Feedback (optional):</p>
+              <p className="text-sm font-medium">{locale.FileDiffPreview.feedbackTitle}</p>
               <Textarea
-                placeholder="Describe what changes you'd like to see..."
+                placeholder={locale.FileDiffPreview.feedbackPlaceholder}
                 value={feedback}
                 onChange={(e) => setFeedback(e.target.value)}
                 className="min-h-[60px] w-full resize-y"
@@ -384,34 +388,36 @@ export function FileDiffPreview({
         <Separator />
 
         {/* Action buttons */}
-        <div className="flex items-center justify-between">
-          <div className="text-sm text-gray-600">Review the changes above and choose an action</div>
-          <div className="flex gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="text-sm text-gray-600 dark:text-gray-400">
+            {locale.FileDiffPreview.reviewPrompt}
+          </div>
+          <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
             <Button
               variant="destructive"
               onClick={handleReject}
               disabled={!feedback.trim()}
-              className="flex items-center gap-2"
+              className="flex items-center gap-2 justify-center"
             >
               <X className="h-4 w-4" />
-              Submit Feedback
+              {locale.FileDiffPreview.submitFeedback}
             </Button>
             {onAllowAll && (
               <Button
                 variant="outline"
                 onClick={onAllowAll}
-                className="flex items-center gap-2 border-blue-600 text-blue-600 hover:bg-blue-50"
+                className="flex items-center gap-2 border-blue-600 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950 justify-center"
               >
                 <Check className="h-4 w-4" />
-                Allow all edits in this conversation
+                {locale.FileDiffPreview.allowAllEdits}
               </Button>
             )}
             <Button
               onClick={onApprove}
-              className="flex items-center gap-2 bg-green-600 hover:bg-green-700"
+              className="flex items-center gap-2 bg-green-600 hover:bg-green-700 justify-center"
             >
               <Check className="h-4 w-4" />
-              Approve & Apply
+              {locale.FileDiffPreview.approveAndApply}
             </Button>
           </div>
         </div>

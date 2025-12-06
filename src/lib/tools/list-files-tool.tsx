@@ -22,13 +22,14 @@ The directory path must be absolute.`,
   execute: async ({ directory_path, max_depth = 3 }) => {
     try {
       let absolutePath = directory_path;
-      if (!isAbsolute(directory_path)) {
+      if (!(await isAbsolute(directory_path))) {
         const projectRoot = await getValidatedWorkspaceRoot();
         if (!projectRoot) {
           return 'Error: Project root path not set. Please set a project root path first.';
         }
         absolutePath = await join(projectRoot, directory_path);
       }
+      logger.info(`Listing files in directory: ${absolutePath} with max depth: ${max_depth}`);
 
       const result: string = await invoke('list_project_files', {
         directoryPath: absolutePath,

@@ -17,7 +17,7 @@ import { Label } from '@/components/ui/label';
 import { useTranslation } from '@/hooks/use-locale';
 import { getApiUrl } from '@/lib/config';
 import { logger } from '@/lib/logger';
-import { tauriFetch } from '@/lib/tauri-fetch';
+import { simpleFetch } from '@/lib/tauri-fetch';
 import { secureStorage } from '@/services/secure-storage';
 
 interface ProfileEditDialogProps {
@@ -98,7 +98,7 @@ export function ProfileEditDialog({ open, onOpenChange, user, onSave }: ProfileE
           throw new Error(t.Settings.account.authRequired);
         }
 
-        const response = await tauriFetch(apiUrl, {
+        const response = await simpleFetch(apiUrl, {
           method: 'POST',
           headers: {
             Authorization: `Bearer ${token}`,

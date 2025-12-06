@@ -6,10 +6,6 @@ import {
 } from '@tauri-apps/plugin-notification';
 import { logger } from '@/lib/logger';
 
-/**
- * Notification Service
- * Handles sending native notifications when the app is not focused
- */
 class NotificationService {
   private permissionGranted: boolean | null = null;
 

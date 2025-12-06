@@ -173,12 +173,12 @@ The file path should be an absolute path.`,
   renderToolDoing: ({ file_path }) => <GenericToolDoing operation="read" filePath={file_path} />,
   renderToolResult: (result, { file_path } = {}) => (
     <GenericToolResult
-      success={result.success}
+      success={result?.success ?? false}
       operation="read"
       filePath={file_path}
-      content={result.content}
-      message={result.message}
-      error={result.success ? undefined : result.message}
+      content={result?.content}
+      message={result?.message}
+      error={result?.success ? undefined : result?.message}
     />
   ),
 });

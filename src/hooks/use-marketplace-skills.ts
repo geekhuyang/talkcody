@@ -4,7 +4,7 @@ import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
 import { API_BASE_URL } from '@/lib/config';
 import { logger } from '@/lib/logger';
-import { tauriFetch } from '@/lib/tauri-fetch';
+import { simpleFetch } from '@/lib/tauri-fetch';
 import { apiClient } from '@/services/api-client';
 import type { MarketplaceSkill, SkillCategory, SkillSortOption, SkillTag } from '@/types/skill';
 
@@ -57,7 +57,7 @@ export function useMarketplaceSkills(): UseMarketplaceSkillsReturn {
       if (options?.tags?.length) params.append('tags', options.tags.join(','));
       if (options?.featured !== undefined) params.append('featured', options.featured.toString());
 
-      const response = await tauriFetch(`${API_BASE_URL}/api/skills-marketplace/skills?${params}`);
+      const response = await simpleFetch(`${API_BASE_URL}/api/skills-marketplace/skills?${params}`);
 
       if (!response.ok) {
         throw new Error('Failed to load skills');
@@ -75,7 +75,7 @@ export function useMarketplaceSkills(): UseMarketplaceSkillsReturn {
 
   const loadCategories = useCallback(async () => {
     try {
-      const response = await tauriFetch(`${API_BASE_URL}/api/skills-marketplace/categories`);
+      const response = await simpleFetch(`${API_BASE_URL}/api/skills-marketplace/categories`);
 
       if (!response.ok) {
         throw new Error('Failed to load categories');
@@ -90,7 +90,7 @@ export function useMarketplaceSkills(): UseMarketplaceSkillsReturn {
 
   const loadTags = useCallback(async () => {
     try {
-      const response = await tauriFetch(`${API_BASE_URL}/api/skills-marketplace/tags`);
+      const response = await simpleFetch(`${API_BASE_URL}/api/skills-marketplace/tags`);
 
       if (!response.ok) {
         throw new Error('Failed to load tags');
@@ -105,7 +105,7 @@ export function useMarketplaceSkills(): UseMarketplaceSkillsReturn {
 
   const loadFeaturedSkills = useCallback(async () => {
     try {
-      const response = await tauriFetch(`${API_BASE_URL}/api/skills-marketplace/skills/featured`);
+      const response = await simpleFetch(`${API_BASE_URL}/api/skills-marketplace/skills/featured`);
 
       if (!response.ok) {
         throw new Error('Failed to load featured skills');
@@ -120,7 +120,7 @@ export function useMarketplaceSkills(): UseMarketplaceSkillsReturn {
 
   const getSkillBySlug = useCallback(async (slug: string): Promise<MarketplaceSkill | null> => {
     try {
-      const response = await tauriFetch(`${API_BASE_URL}/api/skills-marketplace/skills/${slug}`);
+      const response = await simpleFetch(`${API_BASE_URL}/api/skills-marketplace/skills/${slug}`);
 
       if (!response.ok) {
         throw new Error('Failed to load skill');

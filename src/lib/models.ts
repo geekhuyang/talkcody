@@ -1,6 +1,5 @@
-export const GPT5 = 'gpt-5';
 export const GPT5_MINI = 'gpt-5-mini';
-export const GPT5_NANO = 'gpt-5-nano';
+export const GPT51_CODE_MAX = 'gpt-51-codex-max';
 export const GEMINI_25_FLASH_LITE = 'gemini-2.5-flash-lite';
 export const CODE_STARL = 'codestral';
 export const CLAUDE_HAIKU = 'claude-haiku-4.5';

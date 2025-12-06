@@ -4,7 +4,7 @@ import { join } from '@tauri-apps/api/path';
 import { readTextFile } from '@tauri-apps/plugin-fs';
 import { v4 as uuidv4 } from 'uuid';
 import { logger } from '@/lib/logger';
-import { tauriFetch } from '@/lib/tauri-fetch';
+import { simpleFetch } from '@/lib/tauri-fetch';
 import type {
   ConversationSkill,
   CreateSkillRequest,
@@ -278,8 +278,8 @@ export class SkillService {
           }
 
           try {
-            // Use tauriFetch to bypass CORS restrictions in Tauri WebView
-            const response = await tauriFetch(doc.url);
+            // Use simpleFetch to bypass CORS restrictions in Tauri WebView
+            const response = await simpleFetch(doc.url);
             if (!response.ok) {
               throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }

@@ -46,12 +46,12 @@ The command will be executed in the current working directory.`,
   renderToolDoing: ({ command }) => <BashToolDoing command={command} />,
   renderToolResult: (result) => (
     <BashToolResult
-      output={result.output || result.error || ''}
-      success={result.success}
-      exitCode={result.exit_code}
-      idleTimedOut={result.idle_timed_out}
-      timedOut={result.timed_out}
-      pid={result.pid}
+      output={result?.output || result?.error || ''}
+      success={result?.success ?? false}
+      exitCode={result?.exit_code}
+      idleTimedOut={result?.idle_timed_out}
+      timedOut={result?.timed_out}
+      pid={result?.pid}
     />
   ),
 });

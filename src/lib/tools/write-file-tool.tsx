@@ -279,11 +279,11 @@ The file path should be an absolute path.`,
   },
   renderToolResult: (result, { file_path } = {}) => (
     <GenericToolResult
-      success={result.success}
+      success={result?.success ?? false}
       operation="write"
       filePath={file_path}
-      message={result.message}
-      error={result.success ? undefined : result.message}
+      message={result?.message}
+      error={result?.success ? undefined : result?.message}
     />
   ),
 });

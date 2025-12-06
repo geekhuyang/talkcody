@@ -2,6 +2,7 @@ import { ChevronRight, File as FileIcon, Loader2, Search, X } from 'lucide-react
 import { type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { useGlobalContentSearch } from '@/hooks/use-global-content-search';
+import { useTranslation } from '@/hooks/use-locale';
 import { cn } from '@/lib/utils';
 import { repositoryService } from '@/services/repository-service';
 
@@ -28,6 +29,7 @@ export function GlobalContentSearch({
   onFileSelect,
   repositoryPath,
 }: GlobalContentSearchProps) {
+  const t = useTranslation();
   const { searchQuery, setSearchQuery, searchResults, isLoading, executeSearch, resetSearch } =
     useGlobalContentSearch(repositoryPath);
 
@@ -199,7 +201,7 @@ export function GlobalContentSearch({
             className="border-0 bg-transparent pl-4 shadow-none focus-visible:ring-0"
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Search in files content..."
+            placeholder={t.Settings.search.searchContentPlaceholder}
             ref={inputRef}
             type="text"
             value={searchQuery}
@@ -219,17 +221,19 @@ export function GlobalContentSearch({
             isLoading ? (
               <div className="flex items-center justify-center p-8 text-center text-gray-500">
                 <Loader2 className="mr-2 h-8 w-8 animate-spin" />
-                Searching...
+                {t.Settings.search.searching}
               </div>
             ) : searchResults.length === 0 && searchQuery ? (
               <div className="p-8 text-center text-gray-500">
                 <FileIcon className="mx-auto mb-4 h-12 w-12 text-gray-300" />
-                <p>No matches found for "{searchQuery}"</p>
+                <p>
+                  {t.Settings.search.noMatchesFound} "{searchQuery}"
+                </p>
               </div>
             ) : (
               <div className="py-2">
                 <div className="border-b px-4 py-2 text-gray-500 text-xs dark:border-gray-700">
-                  {totalMatches} matches in {searchResults.length} files
+                  {t.Settings.search.matchesInFiles(totalMatches, searchResults.length)}
                 </div>
 
                 {flatResults.map((item, index) => {
@@ -268,8 +272,11 @@ export function GlobalContentSearch({
                         <span className="font-semibold">
                           {repositoryService.getFileNameFromPath(item.filePath)}
                         </span>
-                        <span className="ml-2 text-gray-500 text-xs">
-                          ({item.totalMatches} matches)
+                        <span className="ml-2 text-gray-400 text-xs">
+                          {repositoryService.getRelativePath(item.filePath, repositoryPath || '')}
+                        </span>
+                        <span className="ml-2 text-gray-500 border rounded-full bg-gray-200 px-2 py-0.5 text-xs dark:bg-gray-700">
+                          {item.totalMatches}
                         </span>
                       </button>
                     );
@@ -311,7 +318,7 @@ export function GlobalContentSearch({
           ) : (
             <div className="p-8 text-center text-gray-500">
               <Search className="mx-auto mb-4 h-12 w-12 text-gray-300" />
-              <p>Type to search for content in your repository files.</p>
+              <p>{t.Settings.search.typeToSearchContent}</p>
             </div>
           )}
         </div>

@@ -1,6 +1,6 @@
 // src/components/chat/message-item.tsx
 
-import { Check, CopyIcon, RefreshCcwIcon, Trash2, X } from 'lucide-react';
+import { Check, CopyIcon, RefreshCcwIcon, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { FilePreview } from '@/components/chat/file-preview';
 import { ToolErrorBoundary } from '@/components/tools/tool-error-boundary';
@@ -8,23 +8,10 @@ import { ToolErrorFallback } from '@/components/tools/tool-error-fallback';
 import { UnifiedToolResult } from '@/components/tools/unified-tool-result';
 import { logger } from '@/lib/logger';
 import { getToolUIRenderers } from '@/lib/tool-adapter';
-import type {
-  StoredToolCall,
-  StoredToolContent,
-  StoredToolResult,
-} from '@/services/database/types';
+import type { StoredToolCall, StoredToolContent } from '@/services/database/types';
 import type { ToolMessageContent, UIMessage } from '@/types/agent';
 import { Action, Actions } from '../ai-elements/actions';
 import MyMarkdown from './my-markdown';
-
-/**
- * Check if a tool content item is a stored/historical tool-result message (has inputSummary)
- */
-function isStoredToolResult(
-  item: ToolMessageContent | StoredToolContent
-): item is StoredToolResult {
-  return 'inputSummary' in item && item.type === 'tool-result';
-}
 
 /**
  * Check if a tool content item is a stored/historical tool-call message
@@ -104,44 +91,15 @@ export function MessageItem({ message, onRegenerate, onDelete }: MessageItemProp
         );
       }
 
-      // Handle historical/stored tool-result messages (have inputSummary instead of input)
-      if (isStoredToolResult(item)) {
-        const uniqueKey = `${item.toolCallId}-${item.type}-stored`;
-        const isError = item.status === 'error';
-
-        return (
-          <div
-            key={uniqueKey}
-            className="w-full border rounded-md bg-card text-card-foreground shadow-sm my-0.5"
-          >
-            <div className="flex items-center w-full p-2">
-              <div className="mr-2 flex-shrink-0">
-                {isError ? (
-                  <X className="h-4 w-4 text-red-500" />
-                ) : (
-                  <Check className="h-4 w-4 text-green-500" />
-                )}
-              </div>
-              <div className="font-medium mr-2 flex-shrink-0">{item.toolName}</div>
-              <div className="text-muted-foreground flex-1 font-mono text-xs break-all overflow-hidden line-clamp-2">
-                {item.inputSummary}
-              </div>
-            </div>
-            {item.errorMessage && (
-              <div className="border-t bg-red-50 dark:bg-red-900/20 p-2 text-sm text-red-600 dark:text-red-400">
-                {item.errorMessage}
-              </div>
-            )}
-          </div>
-        );
-      }
-
       const isCallAgent = item.toolName === 'callAgent';
       const toolRenderers = getToolUIRenderers(item.toolName);
       // Generate unique key using toolCallId and type
       const uniqueKey = `${item.toolCallId}-${item.type}`;
 
       if (!toolRenderers) {
+        const unifiedInput =
+          item.input || (item.output as { _input?: Record<string, unknown> })?._input || {};
+
         return (
           <div key={uniqueKey} className="w-full">
             {item.type === 'tool-call' ? (
@@ -156,11 +114,7 @@ export function MessageItem({ message, onRegenerate, onDelete }: MessageItemProp
                 )}
               </div>
             ) : (
-              <UnifiedToolResult
-                toolName={item.toolName}
-                input={item.input || (item.output as any)?._input || {}}
-                output={item.output}
-              >
+              <UnifiedToolResult toolName={item.toolName} input={unifiedInput} output={item.output}>
                 {item.output ? (
                   <div className="text-sm text-gray-600 dark:text-gray-400">
                     <pre className="overflow-y-auto overflow-x-hidden whitespace-pre-wrap break-words max-h-60">
@@ -245,22 +199,15 @@ export function MessageItem({ message, onRegenerate, onDelete }: MessageItemProp
       } else if (item.type === 'tool-result') {
         const input =
           item.input ||
-          (item.output as { _input?: unknown })?._input ||
+          (item.output as { _input?: Record<string, unknown> })?._input ||
           ({} as Record<string, unknown>); // Get input from either location, fallback to empty object
 
         try {
-          const resultComponent = toolRenderers.renderToolResult(
-            item.output,
-            input as Record<string, unknown>
-          );
+          const resultComponent = toolRenderers.renderToolResult(item.output, input);
 
           return (
             <ToolErrorBoundary key={uniqueKey} toolName={item.toolName}>
-              <UnifiedToolResult
-                toolName={item.toolName}
-                input={input as Record<string, unknown>}
-                output={item.output}
-              >
+              <UnifiedToolResult toolName={item.toolName} input={input} output={item.output}>
                 {resultComponent}
               </UnifiedToolResult>
             </ToolErrorBoundary>

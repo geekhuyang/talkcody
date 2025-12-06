@@ -2,7 +2,7 @@ import { getApiUrl } from '@/lib/config';
 import { logger } from '@/lib/logger';
 import { modelLoader } from '@/lib/model-loader';
 import { refreshModelConfigs } from '@/lib/models';
-import { tauriFetch } from '@/lib/tauri-fetch';
+import { simpleFetch } from '@/lib/tauri-fetch';
 import type { ModelsConfiguration, ModelVersionResponse } from '@/types/models';
 
 const VERSION_ENDPOINT = '/api/models/version';
@@ -73,7 +73,7 @@ class ModelSyncService {
    */
   private async fetchRemoteVersion(): Promise<ModelVersionResponse> {
     const url = getApiUrl(VERSION_ENDPOINT);
-    const response = await tauriFetch(url, {
+    const response = await simpleFetch(url, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -92,7 +92,7 @@ class ModelSyncService {
    */
   private async downloadAndUpdate(): Promise<void> {
     const url = getApiUrl(CONFIGS_ENDPOINT);
-    const response = await tauriFetch(url, {
+    const response = await simpleFetch(url, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',

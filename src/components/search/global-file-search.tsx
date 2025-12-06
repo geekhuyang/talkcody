@@ -4,6 +4,7 @@ import { File, Search, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { useTranslation } from '@/hooks/use-locale';
 import { logger } from '@/lib/logger';
 import { cn } from '@/lib/utils';
 import type { FileNode } from '@/types/file-system';
@@ -40,6 +41,7 @@ export function GlobalFileSearch({
   onFileSelect,
   repositoryPath,
 }: GlobalFileSearchProps) {
+  const t = useTranslation();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<FileNode[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -205,7 +207,7 @@ export function GlobalFileSearch({
     <Dialog onOpenChange={onClose} open={isOpen}>
       <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-[600px]" showCloseButton={false}>
         {/* Hidden title for accessibility */}
-        <DialogTitle className="sr-only">Search Files</DialogTitle>
+        <DialogTitle className="sr-only">{t.Settings.search.searchFiles}</DialogTitle>
 
         <div className="flex h-[500px] flex-col">
           {/* Header */}
@@ -215,7 +217,7 @@ export function GlobalFileSearch({
               <Input
                 className="border-0 bg-transparent pl-10 shadow-none focus-visible:ring-0"
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search files by name (use spaces for multiple keywords)..."
+                placeholder={t.Settings.search.searchFilesPlaceholder}
                 ref={inputRef}
                 type="text"
                 value={query}
@@ -236,21 +238,22 @@ export function GlobalFileSearch({
               isSearching ? (
                 <div className="p-8 text-center text-gray-500">
                   <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-blue-600 border-b-2" />
-                  <p>Searching files...</p>
+                  <p>{t.Settings.search.searchingFiles}</p>
                   {keywords.length > 1 && (
                     <p className="mt-2 text-xs">
-                      Looking for: {keywords.map((k) => `"${k}"`).join(', ')}
+                      {t.Settings.search.lookingFor} {keywords.map((k) => `"${k}"`).join(', ')}
                     </p>
                   )}
                 </div>
               ) : results.length === 0 ? (
                 <div className="p-8 text-center text-gray-500">
                   <File className="mx-auto mb-4 h-12 w-12 text-gray-300" />
-                  <p className="mb-2 font-medium text-lg">No files found</p>
-                  <p className="text-sm">Try a different search term</p>
+                  <p className="mb-2 font-medium text-lg">{t.Settings.search.noFilesFound}</p>
+                  <p className="text-sm">{t.Settings.search.tryDifferentTerm}</p>
                   {keywords.length > 1 && (
                     <p className="mt-2 text-orange-600 text-xs dark:text-orange-400">
-                      No files contain all keywords: {keywords.map((k) => `"${k}"`).join(', ')}
+                      {t.Settings.search.noFilesContainAllKeywords}{' '}
+                      {keywords.map((k) => `"${k}"`).join(', ')}
                     </p>
                   )}
                 </div>
@@ -296,29 +299,29 @@ export function GlobalFileSearch({
             ) : (
               <div className="p-8 text-center text-gray-500">
                 <Search className="mx-auto mb-4 h-12 w-12 text-gray-300" />
-                <p className="mb-2 font-medium text-lg">Search Files</p>
-                <p className="text-sm">Type to search for files in your repository</p>
+                <p className="mb-2 font-medium text-lg">{t.Settings.search.searchFiles}</p>
+                <p className="text-sm">{t.Settings.search.typeToSearchFiles}</p>
                 <p className="mt-2 text-blue-600 text-sm dark:text-blue-400">
-                  💡 Use spaces to search with multiple keywords
+                  {t.Settings.search.useSpacesForMultipleKeywords}
                 </p>
                 <div className="mt-4 space-y-1 text-xs">
                   <p>
                     <kbd className="rounded bg-gray-100 px-1 py-0.5 text-xs dark:bg-gray-700">
                       ↑↓
                     </kbd>{' '}
-                    Navigate
+                    {t.Settings.search.navigate}
                   </p>
                   <p>
                     <kbd className="rounded bg-gray-100 px-1 py-0.5 text-xs dark:bg-gray-700">
                       Enter
                     </kbd>{' '}
-                    Open file
+                    {t.Settings.search.openFile}
                   </p>
                   <p>
                     <kbd className="rounded bg-gray-100 px-1 py-0.5 text-xs dark:bg-gray-700">
                       Esc
                     </kbd>{' '}
-                    Cancel
+                    {t.Settings.search.cancel}
                   </p>
                 </div>
               </div>
@@ -329,14 +332,14 @@ export function GlobalFileSearch({
           {results.length > 0 && (
             <div className="flex justify-between border-t bg-gray-50 px-4 py-2 text-gray-500 text-xs dark:bg-gray-800">
               <span>
-                {results.length} files found
+                {results.length} {t.Settings.search.filesFound}
                 {keywords.length > 1 && (
                   <span className="ml-2 text-blue-600 dark:text-blue-400">
-                    (matching all: {keywords.map((k) => `"${k}"`).join(', ')})
+                    {t.Settings.search.matchingAll} {keywords.map((k) => `"${k}"`).join(', ')})
                   </span>
                 )}
               </span>
-              <span>Use ↑↓ to navigate, Enter to select</span>
+              <span>{t.Settings.search.useArrowsToNavigate}</span>
             </div>
           )}
         </div>

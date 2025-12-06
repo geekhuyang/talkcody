@@ -5,7 +5,7 @@ import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
 import { API_BASE_URL } from '@/lib/config';
 import { logger } from '@/lib/logger';
-import { tauriFetch } from '@/lib/tauri-fetch';
+import { simpleFetch } from '@/lib/tauri-fetch';
 import { agentRegistry } from '@/services/agents/agent-registry';
 import { apiClient } from '@/services/api-client';
 
@@ -49,7 +49,7 @@ export function useMarketplace(): UseMarketplaceReturn {
       if (options?.isFeatured !== undefined)
         params.append('isFeatured', options.isFeatured.toString());
 
-      const response = await tauriFetch(`${API_BASE_URL}/api/marketplace/agents?${params}`);
+      const response = await simpleFetch(`${API_BASE_URL}/api/marketplace/agents?${params}`);
 
       if (!response.ok) {
         throw new Error('Failed to load agents');
@@ -67,7 +67,7 @@ export function useMarketplace(): UseMarketplaceReturn {
 
   const loadCategories = useCallback(async () => {
     try {
-      const response = await tauriFetch(`${API_BASE_URL}/api/marketplace/categories`);
+      const response = await simpleFetch(`${API_BASE_URL}/api/marketplace/categories`);
 
       if (!response.ok) {
         throw new Error('Failed to load categories');
@@ -82,7 +82,7 @@ export function useMarketplace(): UseMarketplaceReturn {
 
   const loadTags = useCallback(async () => {
     try {
-      const response = await tauriFetch(`${API_BASE_URL}/api/marketplace/tags`);
+      const response = await simpleFetch(`${API_BASE_URL}/api/marketplace/tags`);
 
       if (!response.ok) {
         throw new Error('Failed to load tags');
@@ -97,7 +97,9 @@ export function useMarketplace(): UseMarketplaceReturn {
 
   const loadFeaturedAgents = useCallback(async () => {
     try {
-      const response = await tauriFetch(`${API_BASE_URL}/api/marketplace/agents/featured?limit=10`);
+      const response = await simpleFetch(
+        `${API_BASE_URL}/api/marketplace/agents/featured?limit=10`
+      );
 
       if (!response.ok) {
         throw new Error('Failed to load featured agents');
@@ -112,7 +114,7 @@ export function useMarketplace(): UseMarketplaceReturn {
 
   const getAgentBySlug = useCallback(async (slug: string): Promise<MarketplaceAgent | null> => {
     try {
-      const response = await tauriFetch(`${API_BASE_URL}/api/marketplace/agents/${slug}`);
+      const response = await simpleFetch(`${API_BASE_URL}/api/marketplace/agents/${slug}`);
 
       if (!response.ok) {
         throw new Error('Failed to load agent');

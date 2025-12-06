@@ -8,7 +8,7 @@
 import { dirname } from '@tauri-apps/api/path';
 import { exists, mkdir, readFile, writeFile } from '@tauri-apps/plugin-fs';
 import { logger } from '@/lib/logger';
-import { tauriFetch } from '@/lib/tauri-fetch';
+import { simpleFetch } from '@/lib/tauri-fetch';
 import type { R2UploadResult } from '@/types/marketplace-skill';
 
 /**
@@ -93,7 +93,7 @@ export class R2StorageService {
         headers.Authorization = `Bearer ${this.config.authToken}`;
       }
 
-      const response = await tauriFetch(`${this.config.baseUrl}/api/skills/packages/upload`, {
+      const response = await simpleFetch(`${this.config.baseUrl}/api/skills/packages/upload`, {
         method: 'POST',
         headers,
         body: formData,
@@ -135,7 +135,7 @@ export class R2StorageService {
     try {
       // Download from API
       const url = `${this.config.baseUrl}/api/skills/packages/${skillId}/${version}/download`;
-      const response = await tauriFetch(url);
+      const response = await simpleFetch(url);
 
       if (!response.ok) {
         const error = await response.json().catch(() => ({ error: response.statusText }));
@@ -177,7 +177,7 @@ export class R2StorageService {
       }
 
       const url = `${this.config.baseUrl}/api/skills/packages/${skillId}/${version}`;
-      const response = await tauriFetch(url, {
+      const response = await simpleFetch(url, {
         method: 'DELETE',
         headers,
       });
@@ -202,7 +202,7 @@ export class R2StorageService {
 
     try {
       const url = `${this.config.baseUrl}/api/skills/packages/${skillId}/versions`;
-      const response = await tauriFetch(url);
+      const response = await simpleFetch(url);
 
       if (!response.ok) {
         const error = await response.json().catch(() => ({ error: response.statusText }));

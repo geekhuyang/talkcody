@@ -123,14 +123,6 @@ const modelMessagesSchema = z.array(modelMessageSchema).superRefine((messages, c
   }
 });
 
-// Exploratory tools that should be filtered out from conversation history
-// These tools generate a lot of output that doesn't need to be retained for context
-const EXPLORATORY_TOOLS = new Set(['glob', 'listFiles', 'codeSearch']);
-
-function isExploratoryTool(toolName: string): boolean {
-  return EXPLORATORY_TOOLS.has(toolName);
-}
-
 function isContentTooLong(content: string | undefined): { tooLong: boolean; lineCount: number } {
   const lineCount = content?.split('\n').length ?? 0;
   return { tooLong: lineCount > MAX_LINES, lineCount };
@@ -189,15 +181,6 @@ export async function convertMessages(
       }
 
       const toolName = toolContent.toolName || msg.toolName;
-
-      // Filter out exploratory tools
-      if (toolName && isExploratoryTool(toolName)) {
-        logger.info(
-          `Filtering exploratory tool from conversation history: ${toolName}, toolCallId: ${toolContent.toolCallId}`
-        );
-        continue;
-      }
-
       if (toolContent.type === 'tool-call') {
         // Skip orphaned tool-calls (no corresponding tool-result)
         // This happens when tool execution was interrupted

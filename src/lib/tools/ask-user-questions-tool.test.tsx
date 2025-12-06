@@ -38,6 +38,16 @@ vi.mock('@/lib/logger', () => ({
   },
 }));
 
+vi.mock('@/stores/settings-store', () => ({
+  useSettingsStore: vi.fn((selector) => {
+    const state = { language: 'en' };
+    if (typeof selector === 'function') {
+      return selector(state);
+    }
+    return state;
+  }),
+}));
+
 import { logger } from '@/lib/logger';
 import { useUserQuestionStore } from '@/stores/user-question-store';
 

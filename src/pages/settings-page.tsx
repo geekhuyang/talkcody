@@ -43,7 +43,7 @@ export function SettingsPage() {
               <TabsTrigger value="api-keys">{t.Settings.tabs.apiKeys}</TabsTrigger>
               <TabsTrigger value="models">{t.Settings.tabs.models}</TabsTrigger>
               <TabsTrigger value="shortcuts">{t.Settings.tabs.shortcuts}</TabsTrigger>
-              <TabsTrigger value="language">{t.Settings.tabs.language}</TabsTrigger>
+              <TabsTrigger value="language">{t.Settings.tabs.general || 'General'}</TabsTrigger>
               <TabsTrigger value="about">{t.Settings.tabs.about}</TabsTrigger>
             </TabsList>
 

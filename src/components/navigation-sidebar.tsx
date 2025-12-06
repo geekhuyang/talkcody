@@ -6,16 +6,14 @@ import {
   FolderOpen,
   Github,
   MessageSquare,
-  Moon,
   Server,
   Settings,
-  Sun,
   Zap,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useLocale } from '@/hooks/use-locale';
-import { useTheme } from '@/hooks/use-theme';
+
 import { cn } from '@/lib/utils';
 import { NavigationView } from '@/types/navigation';
 
@@ -25,7 +23,6 @@ interface NavigationSidebarProps {
 }
 
 export function NavigationSidebar({ activeView, onViewChange }: NavigationSidebarProps) {
-  const { resolvedTheme, toggleTheme } = useTheme();
   const { t } = useLocale();
 
   const navigationItems = [
@@ -130,25 +127,7 @@ export function NavigationSidebar({ activeView, onViewChange }: NavigationSideba
           </TooltipTrigger>
           <TooltipContent side="right">{t.Navigation.settingsTooltip}</TooltipContent>
         </Tooltip>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-10 w-10 p-0 hover:bg-gray-200 dark:hover:bg-gray-800"
-              onClick={toggleTheme}
-            >
-              {resolvedTheme === 'light' ? (
-                <Moon className="h-3.5 w-3.5" />
-              ) : (
-                <Sun className="h-3.5 w-3.5" />
-              )}
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="right">
-            {t.Navigation.switchTheme(resolvedTheme === 'light' ? 'dark' : 'light')}
-          </TooltipContent>
-        </Tooltip>
+
         <Tooltip>
           <TooltipTrigger asChild>
             <Button

@@ -2,7 +2,7 @@
 import { logger } from '@/lib/logger';
 import type { ModelKey, ProviderType } from '@/lib/models';
 import { getProvidersForModel, MODEL_CONFIGS } from '@/lib/models';
-import { tauriFetch } from '@/lib/tauri-fetch';
+import { simpleFetch } from '@/lib/tauri-fetch';
 import { settingsManager } from '@/stores/settings-store';
 import { MODEL_TYPE_SETTINGS_KEYS, ModelType } from '@/types/model-types';
 
@@ -162,7 +162,7 @@ class AITranscriptionService {
           ? 'webm'
           : 'wav';
 
-    const response = await tauriFetch('https://openrouter.ai/api/v1/chat/completions', {
+    const response = await simpleFetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -234,7 +234,7 @@ class AITranscriptionService {
       ? `${baseUrl}/audio/transcriptions`
       : 'https://api.openai.com/v1/audio/transcriptions';
 
-    const response = await tauriFetch(apiUrl, {
+    const response = await simpleFetch(apiUrl, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -277,7 +277,7 @@ class AITranscriptionService {
     const base64Audio = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
 
     // Use Gemini API to transcribe
-    const response = await tauriFetch(
+    const response = await simpleFetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
       {
         method: 'POST',

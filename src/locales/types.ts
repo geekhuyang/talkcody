@@ -155,6 +155,7 @@ export interface LocaleDefinition {
       apiKeys: string;
       models: string;
       shortcuts: string;
+      general: string;
       about: string;
       language: string;
     };
@@ -277,6 +278,21 @@ export interface LocaleDefinition {
       selectLanguage: string;
       autoDetect: string;
     };
+    theme: {
+      title: string;
+      description: string;
+      options: {
+        light: string;
+        dark: string;
+        system: string;
+      };
+      currentTheme: string;
+      switchTo: string;
+    };
+    general: {
+      title: string;
+      description: string;
+    };
     shortcuts: {
       title: string;
       description: string;
@@ -305,6 +321,30 @@ export interface LocaleDefinition {
       usageModifiers: string;
       usagePlatform: string;
       usageResetButton: string;
+    };
+    search: {
+      searchFiles: string;
+      searchFilesPlaceholder: string;
+      searchContentPlaceholder: string;
+      searching: string;
+      searchingFiles: string;
+      noFilesFound: string;
+      noFilesFoundDescription: string;
+      noMatchesFound: string;
+      tryDifferentTerm: string;
+      typeToSearch: string;
+      typeToSearchFiles: string;
+      typeToSearchContent: string;
+      filesFound: string;
+      matchesInFiles: (matches: number, files: number) => string;
+      navigate: string;
+      openFile: string;
+      cancel: string;
+      useArrowsToNavigate: string;
+      useSpacesForMultipleKeywords: string;
+      lookingFor: string;
+      noFilesContainAllKeywords: string;
+      matchingAll: string;
     };
     about: {
       title: string;
@@ -833,6 +873,18 @@ export interface LocaleDefinition {
     };
   };
 
+  FileDiffPreview: {
+    editTitle: string;
+    writeTitle: string;
+    changes: string;
+    feedbackTitle: string;
+    feedbackPlaceholder: string;
+    reviewPrompt: string;
+    submitFeedback: string;
+    allowAllEdits: string;
+    approveAndApply: string;
+  };
+
   MCPServersExtra: {
     alerts: {
       cannotDeleteBuiltIn: string;
@@ -866,6 +918,33 @@ export interface LocaleDefinition {
       thinking: string;
       callingTool: (toolName: string) => string;
     };
+  };
+
+  PlanReview: {
+    submitted: string;
+    title: string;
+    description: string;
+    editHint: string;
+    editPlaceholder: string;
+    feedbackPrompt: string;
+    feedbackPlaceholder: string;
+    cancel: string;
+    submitRejection: string;
+    edit: string;
+    preview: string;
+    rejectAndFeedback: string;
+    approve: string;
+  };
+
+  AskUserQuestions: {
+    submitted: string;
+    title: string;
+    description: string;
+    selectMultiple: string;
+    selectOne: string;
+    otherLabel: string;
+    otherPlaceholder: string;
+    submitAnswers: string;
   };
 }
 

@@ -549,13 +549,13 @@ Best practice workflow:
     const editCount = edits?.length || 0;
     return (
       <GenericToolResult
-        success={result.success}
+        success={result?.success ?? false}
         operation="edit"
         filePath={file_path}
-        message={result.message}
-        error={result.success ? undefined : result.message}
+        message={result?.message}
+        error={result?.success ? undefined : result?.message}
         details={
-          result.success && editCount > 1
+          result?.success && editCount > 1
             ? `Applied ${editCount} edit${editCount > 1 ? 's' : ''}`
             : undefined
         }

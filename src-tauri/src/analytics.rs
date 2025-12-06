@@ -104,7 +104,6 @@ pub async fn start_session(state: &AnalyticsState, app_data_dir: &std::path::Pat
         session_id
     );
 
-    // Store session info
     {
         let mut session_guard = match state.session.lock() {
             Ok(g) => g,

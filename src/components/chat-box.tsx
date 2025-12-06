@@ -32,11 +32,9 @@ import { notificationService } from '@/services/notification-service';
 import { previewSystemPrompt } from '@/services/prompt/preview';
 import { getValidatedWorkspaceRoot } from '@/services/workspace-root-service';
 import { useAgentExecutionStore } from '@/stores/agent-execution-store';
-import { useRepositoryStore } from '@/stores/repository-store';
 import { settingsManager, useSettingsStore } from '@/stores/settings-store';
 import type { MessageAttachment, ToolMessageContent, UIMessage } from '@/types/agent';
 import type { Command, CommandContext, CommandResult } from '@/types/command';
-// Conversation mode removed - users directly select agents now
 import {
   Conversation,
   ConversationContent,
@@ -45,8 +43,6 @@ import {
 import { ChatInput, type ChatInputRef } from './chat/chat-input';
 import { FileChangesSummary } from './chat/file-changes-summary';
 import { MessageList } from './chat/message-list';
-import { formatToolInputSummary } from './tools/unified-tool-result';
-// ModeSelectionCards import removed - no longer needed
 import { Button } from './ui/button';
 
 interface ChatBoxProps {
@@ -61,7 +57,6 @@ interface ChatBoxProps {
   onDiffApplied?: () => void;
   showModeSelection?: boolean;
   onAddFileToChat?: (filePath: string, fileContent: string) => Promise<void>;
-  // Mode selection props removed - users directly select agents now
   onFileSelect?: (filePath: string) => void;
 }
 
@@ -96,7 +91,6 @@ export const ChatBox = forwardRef<ChatBoxRef, ChatBoxProps>(
     const abortControllerRef = useRef<AbortController | null>(null);
     const activeConversationIdRef = useRef<string | undefined>(undefined);
     const { startExecution, stopExecution } = useAgentExecutionStore();
-    const rootPath = useRepositoryStore((state) => state.rootPath);
     const language = useSettingsStore((state) => state.language);
     const t = useMemo(() => getLocale((language || 'en') as SupportedLocale), [language]);
 
@@ -194,12 +188,7 @@ export const ChatBox = forwardRef<ChatBoxRef, ChatBoxProps>(
             toolCallId: message.toolCallId,
             toolName: message.toolName,
             input: input as Record<string, unknown>,
-            output: output, // Save full output for proper restoration
-            inputSummary: formatToolInputSummary(
-              message.toolName,
-              input as Record<string, unknown>,
-              { rootPath: rootPath ?? undefined, output }
-            ),
+            output: output,
             status: isError ? 'error' : 'success',
             errorMessage:
               isError && output && typeof output === 'object' && 'error' in output

@@ -356,11 +356,7 @@ export function RepositoryLayout() {
 
       <div className="flex h-screen flex-1 flex-col overflow-hidden">
         <div className="flex-1 overflow-hidden">
-          <ResizablePanelGroup
-            key={`layout-${hasOpenFiles}-${fullscreenPanel}`}
-            className="h-full"
-            direction="horizontal"
-          >
+          <ResizablePanelGroup className="h-full" direction="horizontal">
             {/* Left Panel: FileTree when repository is loaded, EmptyRepositoryState when not */}
             {showFileTree && (
               <>

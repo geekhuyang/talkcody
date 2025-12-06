@@ -158,6 +158,7 @@ const en: LocaleDefinition = {
       models: 'Models',
       shortcuts: 'Shortcuts',
       about: 'About',
+      general: 'General',
       language: 'Language',
     },
     account: {
@@ -284,6 +285,21 @@ const en: LocaleDefinition = {
       selectLanguage: 'Select Language',
       autoDetect: 'Auto-detect from browser',
     },
+    theme: {
+      title: 'Theme',
+      description: 'Choose your preferred appearance theme',
+      options: {
+        light: 'Light',
+        dark: 'Dark',
+        system: 'System',
+      },
+      currentTheme: 'Current theme',
+      switchTo: 'Switch to',
+    },
+    general: {
+      title: 'General Settings',
+      description: 'Configure language and theme preferences',
+    },
     shortcuts: {
       title: 'Keyboard Shortcuts',
       description: 'Customize keyboard shortcuts for common actions',
@@ -312,6 +328,30 @@ const en: LocaleDefinition = {
       usageModifiers: 'Supports Cmd/Ctrl + Alt + Shift + letter key combinations',
       usagePlatform: 'Shows Cmd on macOS, Ctrl on other platforms',
       usageResetButton: 'Use the reset button to restore individual shortcuts to defaults',
+    },
+    search: {
+      searchFiles: 'Search Files',
+      searchFilesPlaceholder: 'Search files by name (use spaces for multiple keywords)...',
+      searchContentPlaceholder: 'Search in files content...',
+      searching: 'Searching...',
+      searchingFiles: 'Searching files...',
+      noFilesFound: 'No files found',
+      noFilesFoundDescription: 'Try a different search term',
+      noMatchesFound: 'No matches found',
+      tryDifferentTerm: 'Try a different search term',
+      typeToSearch: 'Type to search',
+      typeToSearchFiles: 'Type to search for files in your repository',
+      typeToSearchContent: 'Type to search for content in your repository files',
+      filesFound: 'files found',
+      matchesInFiles: (matches, files) => `${matches} matches in ${files} files`,
+      navigate: 'Navigate',
+      openFile: 'Open file',
+      cancel: 'Cancel',
+      useArrowsToNavigate: 'Use ↑↓ to navigate, Enter to select',
+      useSpacesForMultipleKeywords: '💡 Use spaces to search with multiple keywords',
+      lookingFor: 'Looking for:',
+      noFilesContainAllKeywords: 'No files contain all keywords:',
+      matchingAll: '(matching all:',
     },
     about: {
       title: 'About TalkCody',
@@ -892,6 +932,47 @@ const en: LocaleDefinition = {
       thinking: 'Thinking',
       callingTool: (toolName) => `Calling tool ${toolName}`,
     },
+  },
+
+  FileDiffPreview: {
+    editTitle: 'File Edit Preview',
+    writeTitle: 'File Write Preview',
+    changes: 'Changes',
+    feedbackTitle: 'Feedback (optional):',
+    feedbackPlaceholder: "Describe what changes you'd like to see...",
+    reviewPrompt: 'Review the changes above and choose an action',
+    submitFeedback: 'Submit Feedback',
+    allowAllEdits: 'Allow all edits in this conversation',
+    approveAndApply: 'Approve & Apply',
+  },
+
+  PlanReview: {
+    submitted: 'Plan review submitted successfully',
+    title: 'Implementation Plan Review',
+    description:
+      'Please review the implementation plan below. You can approve it as-is, edit it, or reject it with feedback.',
+    editHint: 'Edit the plan below (Markdown supported):',
+    editPlaceholder: 'Edit your plan here...',
+    feedbackPrompt: "Please provide feedback on why you're rejecting this plan:",
+    feedbackPlaceholder:
+      "e.g., 'Please use JWT authentication instead of sessions', 'Add error handling for network failures', etc.",
+    cancel: 'Cancel',
+    submitRejection: 'Submit Rejection',
+    edit: 'Edit',
+    preview: 'Preview',
+    rejectAndFeedback: 'Reject & Feedback',
+    approve: 'Approve',
+  },
+
+  AskUserQuestions: {
+    submitted: 'Answers submitted successfully',
+    title: 'Please answer the following questions',
+    description: 'Select one or more options, or provide your own answer in the text field.',
+    selectMultiple: 'You can select multiple options',
+    selectOne: 'Select one option',
+    otherLabel: 'Other (please specify)',
+    otherPlaceholder: 'Type your custom answer here...',
+    submitAnswers: 'Submit Answers',
   },
 };
 

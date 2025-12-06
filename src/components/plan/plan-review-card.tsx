@@ -4,6 +4,7 @@ import ReactMarkdown from 'react-markdown';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
+import { useLocale } from '@/hooks/use-locale';
 import { usePlanModeStore } from '@/stores/plan-mode-store';
 
 interface PlanReviewCardProps {
@@ -17,6 +18,7 @@ export function PlanReviewCard({ planContent }: PlanReviewCardProps) {
   const [feedback, setFeedback] = useState('');
   const [submitted, setSubmitted] = useState(false);
 
+  const { t } = useLocale();
   const { approvePlan, rejectPlan } = usePlanModeStore();
 
   const handleApprove = () => {
@@ -56,7 +58,7 @@ export function PlanReviewCard({ planContent }: PlanReviewCardProps) {
       <Card className="border-green-500/50 bg-green-500/10 p-4">
         <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
           <Check className="size-5" />
-          <span className="font-medium">Plan review submitted successfully</span>
+          <span className="font-medium">{t.PlanReview.submitted}</span>
         </div>
       </Card>
     );
@@ -67,25 +69,20 @@ export function PlanReviewCard({ planContent }: PlanReviewCardProps) {
       <div className="space-y-4 min-w-0">
         {/* Header */}
         <div>
-          <h3 className="font-semibold text-foreground text-lg">Implementation Plan Review</h3>
-          <p className="text-muted-foreground text-sm">
-            Please review the implementation plan below. You can approve it as-is, edit it, or
-            reject it with feedback.
-          </p>
+          <h3 className="font-semibold text-foreground text-lg">{t.PlanReview.title}</h3>
+          <p className="text-muted-foreground text-sm">{t.PlanReview.description}</p>
         </div>
 
         {/* Plan Content */}
         <div className="rounded-lg border border-border bg-background p-4 w-full overflow-hidden">
           {isEditing ? (
             <div className="space-y-2">
-              <div className="text-muted-foreground text-xs">
-                Edit the plan below (Markdown supported):
-              </div>
+              <div className="text-muted-foreground text-xs">{t.PlanReview.editHint}</div>
               <Textarea
                 value={editedContent}
                 onChange={(e) => setEditedContent(e.target.value)}
                 className="min-h-[300px] resize-vertical font-mono text-sm w-full"
-                placeholder="Edit your plan here..."
+                placeholder={t.PlanReview.editPlaceholder}
               />
             </div>
           ) : (
@@ -98,14 +95,12 @@ export function PlanReviewCard({ planContent }: PlanReviewCardProps) {
         {/* Feedback Input (shown when rejecting) */}
         {showFeedbackInput && (
           <div className="space-y-2 rounded-lg border border-orange-500/50 bg-orange-500/10 p-4 w-full overflow-hidden">
-            <div className="text-foreground text-sm font-medium">
-              Please provide feedback on why you're rejecting this plan:
-            </div>
+            <div className="text-foreground text-sm font-medium">{t.PlanReview.feedbackPrompt}</div>
             <Textarea
               value={feedback}
               onChange={(e) => setFeedback(e.target.value)}
               className="min-h-[100px] resize-none w-full"
-              placeholder="e.g., 'Please use JWT authentication instead of sessions', 'Add error handling for network failures', etc."
+              placeholder={t.PlanReview.feedbackPlaceholder}
             />
           </div>
         )}
@@ -115,18 +110,18 @@ export function PlanReviewCard({ planContent }: PlanReviewCardProps) {
           {showFeedbackInput ? (
             <>
               <Button variant="outline" onClick={handleCancelFeedback} className="min-w-[100px]">
-                Cancel
+                {t.PlanReview.cancel}
               </Button>
               <Button onClick={handleReject} variant="destructive" className="min-w-[100px]">
                 <X className="mr-2 size-4" />
-                Submit Rejection
+                {t.PlanReview.submitRejection}
               </Button>
             </>
           ) : (
             <>
               <Button variant="outline" onClick={handleEdit} className="min-w-[100px]">
                 <Edit2 className="mr-2 size-4" />
-                {isEditing ? 'Preview' : 'Edit'}
+                {isEditing ? t.PlanReview.preview : t.PlanReview.edit}
               </Button>
               <Button
                 variant="outline"
@@ -134,14 +129,14 @@ export function PlanReviewCard({ planContent }: PlanReviewCardProps) {
                 className="min-w-[120px] border-orange-500/50 text-orange-600 hover:bg-orange-500/10 dark:text-orange-400"
               >
                 <X className="mr-2 size-4" />
-                Reject & Feedback
+                {t.PlanReview.rejectAndFeedback}
               </Button>
               <Button
                 onClick={handleApprove}
                 className="min-w-[100px] bg-green-600 hover:bg-green-700"
               >
                 <Check className="mr-2 size-4" />
-                Approve
+                {t.PlanReview.approve}
               </Button>
             </>
           )}

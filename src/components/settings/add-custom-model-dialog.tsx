@@ -23,19 +23,13 @@ import {
 } from '@/components/ui/select';
 import { useTranslation } from '@/hooks/use-locale';
 import { logger } from '@/lib/logger';
-import { customModelService } from '@/services/custom-model-service';
+import { customModelService, type FetchedModel } from '@/services/custom-model-service';
 import type { ModelConfig } from '@/types/models';
 
 interface AddCustomModelDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onModelsAdded?: () => void;
-}
-
-interface FetchedModel {
-  id: string;
-  name?: string;
-  owned_by?: string;
 }
 
 export function AddCustomModelDialog({

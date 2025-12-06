@@ -1,4 +1,3 @@
-import { generateText } from 'ai';
 import { ChevronDown, ChevronRight, ExternalLink, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
@@ -11,11 +10,10 @@ import { Switch } from '@/components/ui/switch';
 import { useLocale } from '@/hooks/use-locale';
 import { getDocLinks } from '@/lib/doc-links';
 import { logger } from '@/lib/logger';
-import { CLAUDE_HAIKU, GEMINI_25_FLASH_LITE, GLM_46, GPT5_NANO } from '@/lib/models';
-import { createTauriFetch } from '@/lib/tauri-fetch';
+import { simpleFetch } from '@/lib/tauri-fetch';
 import { PROVIDER_CONFIGS } from '@/providers';
 import { aiProviderService } from '@/services/ai-provider-service';
-import { isLocalProvider } from '@/services/custom-model-service';
+import { customModelService, isLocalProvider } from '@/services/custom-model-service';
 import { settingsManager } from '@/stores/settings-store';
 import type { ApiKeySettings } from '@/types/api-keys';
 
@@ -79,21 +77,15 @@ export function ApiKeysSettings() {
       clearTimeout(apiKeyTimeouts[providerId]);
     }
 
-    // Set new timeout
+    // Set new timeout with debounce
     const timeoutId = setTimeout(async () => {
-      try {
-        await settingsManager.setApiKeys({
-          [providerId]: value,
-        } as ApiKeySettings);
-        logger.info('Model service cache invalidated after API key update');
-        // Refresh providers after API key change
-        await aiProviderService.refreshProviders();
-        // Notify components that API keys have been updated
-        window.dispatchEvent(new CustomEvent('apiKeysUpdated'));
-        logger.info(`${providerId} API key updated`);
-      } catch (error) {
-        logger.error(`Failed to update ${providerId} API key:`, error);
-      }
+      await saveApiKey(providerId, value);
+      // Remove the timeout reference after execution
+      setApiKeyTimeouts((prev) => {
+        const newTimeouts = { ...prev };
+        delete newTimeouts[providerId];
+        return newTimeouts;
+      });
     }, 1000);
 
     setApiKeyTimeouts((prev) => ({ ...prev, [providerId]: timeoutId }));
@@ -152,13 +144,41 @@ export function ApiKeysSettings() {
     }));
   };
 
+  // Helper function to save API key (extracted for reuse)
+  const saveApiKey = async (providerId: string, value: string) => {
+    try {
+      await settingsManager.setApiKeys({
+        [providerId]: value,
+      } as ApiKeySettings);
+      logger.info('Model service cache invalidated after API key update');
+      await aiProviderService.refreshProviders();
+      window.dispatchEvent(new CustomEvent('apiKeysUpdated'));
+      logger.info(`${providerId} API key updated`);
+    } catch (error) {
+      logger.error(`Failed to update ${providerId} API key:`, error);
+    }
+  };
+
   const handleTestConnection = async (providerId: string) => {
     setTestingProvider(providerId);
     try {
       logger.info(`Testing connection for ${providerId}...`);
 
-      // Refresh providers first
-      await aiProviderService.refreshProviders();
+      // If there's a pending API key save, flush it immediately
+      if (apiKeyTimeouts[providerId]) {
+        clearTimeout(apiKeyTimeouts[providerId]);
+        setApiKeyTimeouts((prev) => {
+          const newTimeouts = { ...prev };
+          delete newTimeouts[providerId];
+          return newTimeouts;
+        });
+        // Save the current API key value immediately
+        const currentKeyValue = apiKeys[providerId as keyof ApiKeySettings] || '';
+        await saveApiKey(providerId, currentKeyValue);
+      } else {
+        // Refresh providers first (only if no pending save)
+        await aiProviderService.refreshProviders();
+      }
 
       // For local providers (Ollama, LM Studio), test the connection directly
       if (isLocalProvider(providerId)) {
@@ -180,8 +200,7 @@ export function ApiKeysSettings() {
               : 'http://localhost:1234/v1/models';
 
           // Use Tauri fetch to go through the HTTP proxy (native fetch is blocked in webview)
-          const tauriFetch = createTauriFetch();
-          const response = await tauriFetch(testUrl);
+          const response = await simpleFetch(testUrl);
           if (!response.ok) {
             throw new Error(
               `${PROVIDER_CONFIGS[providerId]?.name} API returned status: ${response.status}`
@@ -212,22 +231,16 @@ export function ApiKeysSettings() {
           );
         }
       } else {
-        // Try to get a simple response from the provider for non-Ollama providers
-        const testModel = getTestModelForProvider(providerId);
-        if (testModel) {
-          const providerModel = await aiProviderService.getProviderModelAsync(testModel);
-
-          await generateText({
-            model: providerModel,
-            prompt: 'Hello',
-          });
-
-          logger.info(`${providerId} connection test successful`);
+        // Test connection using /v1/models endpoint (faster and more reliable)
+        if (customModelService.supportsModelsFetch(providerId)) {
+          const models = await customModelService.fetchProviderModels(providerId);
+          logger.info(`${providerId} connection test successful - found ${models.length} models`);
           toast.success(
             t.Settings.apiKeys.testSuccess(PROVIDER_CONFIGS[providerId]?.name || providerId)
           );
         } else {
-          logger.info(`${providerId} connection refreshed (no test model available)`);
+          // For providers without /v1/models endpoint (tavily, elevenlabs), just refresh
+          logger.info(`${providerId} connection refreshed (no models endpoint available)`);
           toast.success(
             t.Settings.apiKeys.testSuccess(PROVIDER_CONFIGS[providerId]?.name || providerId)
           );
@@ -241,25 +254,6 @@ export function ApiKeysSettings() {
       toast.error(t.Settings.apiKeys.testFailed(PROVIDER_CONFIGS[providerId]?.name || providerId));
     } finally {
       setTestingProvider(null);
-    }
-  };
-
-  const getTestModelForProvider = (providerId: string): string | null => {
-    switch (providerId) {
-      case 'openai':
-        return GPT5_NANO;
-      case 'anthropic':
-        return CLAUDE_HAIKU;
-      case 'google':
-        return GEMINI_25_FLASH_LITE;
-      case 'zhipu':
-        return GLM_46;
-      case 'aiGateway':
-        return GEMINI_25_FLASH_LITE;
-      case 'openRouter':
-        return GEMINI_25_FLASH_LITE;
-      default:
-        return null;
     }
   };
 

@@ -70,12 +70,12 @@ The script will be executed with the specified arguments and environment variabl
   ),
   renderToolResult: (result) => (
     <ExecuteSkillScriptResult
-      stdout={result.stdout}
-      stderr={result.stderr}
-      exit_code={result.exit_code}
-      execution_time_ms={result.execution_time_ms}
-      success={result.success}
-      error={result.error}
+      stdout={result?.stdout}
+      stderr={result?.stderr}
+      exit_code={result?.exit_code}
+      execution_time_ms={result?.execution_time_ms}
+      success={result?.success ?? false}
+      error={result?.error}
     />
   ),
 });
