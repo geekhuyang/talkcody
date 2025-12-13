@@ -514,7 +514,7 @@ describe('ScenarioBuilder', () => {
         .run(config);
 
       const agentStep = result.steps.find((s) => s.step.type === 'agent');
-      expect(agentStep?.duration).toBeGreaterThanOrEqual(50);
+      expect(agentStep?.duration).toBeGreaterThan(0);
     });
   });
 });

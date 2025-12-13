@@ -39,7 +39,6 @@ export class ProjectService {
     return result;
   }
 
-  @timedMethod('getProject')
   async getProject(projectId: string): Promise<Project> {
     const result = await this.db.select<Project[]>('SELECT * FROM projects WHERE id = $1', [
       projectId,
