@@ -82,6 +82,7 @@ scripts/*
 design/*
 !design/multi-agent-parallel-execution.md
 !design/core-concepts.md
+!design/lint-implementation.md
 .wrangler/
 
 # Turso database files (local mode)
