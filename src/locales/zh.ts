@@ -173,6 +173,10 @@ const zh: LocaleDefinition = {
       apiKeys: 'API 密钥',
       customProviders: '自定义提供商',
       models: '模型',
+      terminal: '终端',
+      lint: '代码检查',
+      lsp: 'LSP',
+      worktree: '工作树',
       shortcuts: '快捷键',
       about: '关于',
       general: '常规',
@@ -926,6 +930,17 @@ const zh: LocaleDefinition = {
     },
   },
 
+  TalkCodyFreeDialog: {
+    title: 'TalkCody Free',
+    description: '为防止免费 API 被滥用，我们需要验证您的 GitHub 身份。这有助于我们：',
+    signInWithGitHub: '使用 GitHub 登录',
+    useOwnApiKey: '使用我的 API Key',
+    benefits: {
+      preventAbuse: '防止单个用户大量消耗资源',
+      stableService: '确保所有用户都能享受稳定的服务',
+    },
+  },
+
   RepositoryStore: {
     success: {
       repositoryOpened: '仓库打开成功',
@@ -1274,6 +1289,27 @@ const zh: LocaleDefinition = {
       editorNotReady: '编辑器未就绪',
       editorModelNotReady: '编辑器模型未就绪',
       unknownFixType: (fixId) => `未知的修复类型: ${fixId}`,
+    },
+  },
+
+  Lsp: {
+    // Severity
+    showErrors: '显示错误',
+    showWarnings: '显示警告',
+    showInfo: '显示信息',
+    showHints: '显示提示',
+
+    // Settings
+    settings: {
+      title: 'LSP 设置',
+      description: '配置语言服务器协议设置以获得智能代码功能',
+      enableLsp: '启用 LSP',
+      enableLspDesc: '启用语言服务器协议以获得代码智能功能',
+      supportedLanguages: '支持的语言',
+      showDiagnostics: '显示诊断',
+      showDiagnosticsDesc: '显示来自语言服务器的代码诊断信息',
+      severitySettings: '严重级别设置',
+      severitySettingsDesc: '选择要显示的诊断严重级别',
     },
   },
 };

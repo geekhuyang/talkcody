@@ -17,19 +17,15 @@ import type {
   RepositoryState,
 } from '@/types/file-system';
 
-// Helper function to collect paths of directories at level 0 and 1 for initial expansion
+// Helper function to collect paths for initial expansion
+// Only expand root directory (level 0), all subdirectories are collapsed by default (VS Code behavior)
 const collectInitialExpandedPaths = (
   node: FileNode,
-  level = 0,
+  _level = 0,
   paths: Set<string> = new Set()
 ): Set<string> => {
-  if (level < 2 && node.is_directory) {
+  if (node.is_directory) {
     paths.add(node.path);
-    if (node.children) {
-      for (const child of node.children) {
-        collectInitialExpandedPaths(child, level + 1, paths);
-      }
-    }
   }
   return paths;
 };

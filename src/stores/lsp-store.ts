@@ -2,8 +2,10 @@
 // LSP state management store
 
 import { create } from 'zustand';
+import { logger } from '@/lib/logger';
 import type { Diagnostic } from '@/services/lsp/lsp-protocol';
 import { severityToString, uriToFilePath } from '@/services/lsp/lsp-protocol';
+import { useSettingsStore } from './settings-store';
 
 // ============================================================================
 // Types
@@ -169,12 +171,60 @@ export const useLspStore = create<LspState>((set, get) => ({
   isDownloading: false,
 
   // Actions
-  setEnabled: (enabled) => set({ enabled }),
-  setShowDiagnostics: (show) => set({ showDiagnostics: show }),
-  setShowErrors: (show) => set({ showErrors: show }),
-  setShowWarnings: (show) => set({ showWarnings: show }),
-  setShowInfo: (show) => set({ showInfo: show }),
-  setShowHints: (show) => set({ showHints: show }),
+  setEnabled: (enabled) => {
+    set({ enabled });
+    useSettingsStore
+      .getState()
+      .setLspEnabled(enabled)
+      .catch((e) => {
+        logger.error('[LspStore] Failed to persist lsp_enabled:', e);
+      });
+  },
+  setShowDiagnostics: (show) => {
+    set({ showDiagnostics: show });
+    useSettingsStore
+      .getState()
+      .setLspShowDiagnostics(show)
+      .catch((e) => {
+        logger.error('[LspStore] Failed to persist lsp_show_diagnostics:', e);
+      });
+  },
+  setShowErrors: (show) => {
+    set({ showErrors: show });
+    useSettingsStore
+      .getState()
+      .setLspShowErrors(show)
+      .catch((e) => {
+        logger.error('[LspStore] Failed to persist lsp_show_errors:', e);
+      });
+  },
+  setShowWarnings: (show) => {
+    set({ showWarnings: show });
+    useSettingsStore
+      .getState()
+      .setLspShowWarnings(show)
+      .catch((e) => {
+        logger.error('[LspStore] Failed to persist lsp_show_warnings:', e);
+      });
+  },
+  setShowInfo: (show) => {
+    set({ showInfo: show });
+    useSettingsStore
+      .getState()
+      .setLspShowInfo(show)
+      .catch((e) => {
+        logger.error('[LspStore] Failed to persist lsp_show_info:', e);
+      });
+  },
+  setShowHints: (show) => {
+    set({ showHints: show });
+    useSettingsStore
+      .getState()
+      .setLspShowHints(show)
+      .catch((e) => {
+        logger.error('[LspStore] Failed to persist lsp_show_hints:', e);
+      });
+  },
 
   // Server actions
   setServerStatus: (serverId, status) => {
@@ -321,3 +371,46 @@ export const useLspStore = create<LspState>((set, get) => ({
     set({ isDownloading });
   },
 }));
+
+// ============================================================================
+// Initialize from settings-store
+// ============================================================================
+
+/**
+ * Initialize LSP store settings from persisted settings.
+ * Should be called after settings-store is initialized.
+ */
+export function initializeLspSettings(): void {
+  const settingsState = useSettingsStore.getState();
+
+  // Only initialize if settings store is ready
+  if (!settingsState.isInitialized) {
+    // Subscribe to settings store initialization
+    const unsubscribe = useSettingsStore.subscribe((state) => {
+      if (state.isInitialized) {
+        useLspStore.setState({
+          enabled: state.lsp_enabled,
+          showDiagnostics: state.lsp_show_diagnostics,
+          showErrors: state.lsp_show_errors,
+          showWarnings: state.lsp_show_warnings,
+          showInfo: state.lsp_show_info,
+          showHints: state.lsp_show_hints,
+        });
+        logger.info('[LspStore] Initialized from settings-store');
+        unsubscribe();
+      }
+    });
+    return;
+  }
+
+  // Settings store already initialized, sync immediately
+  useLspStore.setState({
+    enabled: settingsState.lsp_enabled,
+    showDiagnostics: settingsState.lsp_show_diagnostics,
+    showErrors: settingsState.lsp_show_errors,
+    showWarnings: settingsState.lsp_show_warnings,
+    showInfo: settingsState.lsp_show_info,
+    showHints: settingsState.lsp_show_hints,
+  });
+  logger.info('[LspStore] Initialized from settings-store (immediate)');
+}

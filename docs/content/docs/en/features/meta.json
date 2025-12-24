@@ -2,5 +2,5 @@
   "title": "Features",
   "icon": "Sparkles",
   "defaultOpen": true,
-  "pages": ["ai-agents", "tools", "skills", "mcp-servers", "plan-mode", "worktree", "coding-plan", "web-search", "voice-input", "code-lint", "terminal", "multi-window", "search"]
+  "pages": ["claude-pro-plan", "openai-plus-plan", "ai-agents", "tools", "skills", "mcp-servers", "plan-mode", "worktree", "coding-plan", "web-search", "voice-input", "code-lint", "lsp", "terminal", "multi-window", "search"]
 }

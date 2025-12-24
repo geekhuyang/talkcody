@@ -178,6 +178,10 @@ const en: LocaleDefinition = {
       apiKeys: 'API Keys',
       customProviders: 'Custom Providers',
       models: 'Models',
+      terminal: 'Terminal',
+      lint: 'Lint',
+      lsp: 'LSP',
+      worktree: 'Worktree',
       shortcuts: 'Shortcuts',
       about: 'About',
       general: 'General',
@@ -949,6 +953,18 @@ const en: LocaleDefinition = {
     },
   },
 
+  TalkCodyFreeDialog: {
+    title: 'TalkCody Free',
+    description:
+      'To prevent abuse of our free API, we need to verify your GitHub identity. This helps us:',
+    signInWithGitHub: 'Sign in with GitHub',
+    useOwnApiKey: 'Use my API Key',
+    benefits: {
+      preventAbuse: 'Prevent abuse of shared capacity',
+      stableService: 'Ensure stable and reliable service for all users',
+    },
+  },
+
   RepositoryStore: {
     success: {
       repositoryOpened: 'Repository opened successfully',
@@ -1303,6 +1319,27 @@ const en: LocaleDefinition = {
       editorNotReady: 'Editor not ready',
       editorModelNotReady: 'Editor model not ready',
       unknownFixType: (fixId) => `Unknown fix type: ${fixId}`,
+    },
+  },
+
+  Lsp: {
+    // Severity
+    showErrors: 'Show Errors',
+    showWarnings: 'Show Warnings',
+    showInfo: 'Show Info',
+    showHints: 'Show Hints',
+
+    // Settings
+    settings: {
+      title: 'LSP Settings',
+      description: 'Configure Language Server Protocol settings for intelligent code features',
+      enableLsp: 'Enable LSP',
+      enableLspDesc: 'Enable Language Server Protocol for code intelligence features',
+      supportedLanguages: 'Supported Languages',
+      showDiagnostics: 'Show Diagnostics',
+      showDiagnosticsDesc: 'Display code diagnostics from language servers',
+      severitySettings: 'Severity Settings',
+      severitySettingsDesc: 'Select which severity levels to display',
     },
   },
 };

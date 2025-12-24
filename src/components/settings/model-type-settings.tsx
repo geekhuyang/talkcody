@@ -245,32 +245,6 @@ export function ModelTypeSettings() {
 
   return (
     <div className="space-y-6">
-      {/* Custom Models Section */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div className="flex-1">
-              <CardTitle className="text-lg">{t.Settings.models.customModels.title}</CardTitle>
-              <CardDescription className="mt-1.5">
-                {t.Settings.models.customModels.description}
-              </CardDescription>
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setIsCustomModelDialogOpen(true)}
-              className="ml-4"
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              {t.Settings.models.customModels.addModel}
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <CustomModelList onRefresh={handleCustomModelsAdded} />
-        </CardContent>
-      </Card>
-
       {/* Model Type Cards */}
       {Object.values(ModelType).map((modelType) => (
         <Card key={modelType}>
@@ -336,6 +310,32 @@ export function ModelTypeSettings() {
           </CardContent>
         </Card>
       ))}
+
+      {/* Custom Models Section */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex-1">
+              <CardTitle className="text-lg">{t.Settings.models.customModels.title}</CardTitle>
+              <CardDescription className="mt-1.5">
+                {t.Settings.models.customModels.description}
+              </CardDescription>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsCustomModelDialogOpen(true)}
+              className="ml-4"
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              {t.Settings.models.customModels.addModel}
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <CustomModelList onRefresh={handleCustomModelsAdded} />
+        </CardContent>
+      </Card>
 
       {/* Add Custom Model Dialog */}
       <AddCustomModelDialog

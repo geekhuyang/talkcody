@@ -173,6 +173,10 @@ export interface LocaleDefinition {
       apiKeys: string;
       customProviders: string;
       models: string;
+      terminal: string;
+      lint: string;
+      lsp: string;
+      worktree: string;
       shortcuts: string;
       general: string;
       about: string;
@@ -917,6 +921,17 @@ export interface LocaleDefinition {
     };
   };
 
+  TalkCodyFreeDialog: {
+    title: string;
+    description: string;
+    signInWithGitHub: string;
+    useOwnApiKey: string;
+    benefits: {
+      preventAbuse: string;
+      stableService: string;
+    };
+  };
+
   RepositoryStore: {
     success: {
       repositoryOpened: string;
@@ -1264,6 +1279,27 @@ export interface LocaleDefinition {
       editorNotReady: string;
       editorModelNotReady: string;
       unknownFixType: (fixId: string) => string;
+    };
+  };
+
+  Lsp: {
+    // Severity
+    showErrors: string;
+    showWarnings: string;
+    showInfo: string;
+    showHints: string;
+
+    // Settings
+    settings: {
+      title: string;
+      description: string;
+      enableLsp: string;
+      enableLspDesc: string;
+      supportedLanguages: string;
+      showDiagnostics: string;
+      showDiagnosticsDesc: string;
+      severitySettings: string;
+      severitySettingsDesc: string;
     };
   };
 }

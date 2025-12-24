@@ -63,6 +63,14 @@ interface SettingsState {
   // Worktree Settings
   worktree_root_path: string; // Custom worktree root path (empty = use default ~/.talkcody)
 
+  // LSP Settings
+  lsp_enabled: boolean;
+  lsp_show_diagnostics: boolean;
+  lsp_show_errors: boolean;
+  lsp_show_warnings: boolean;
+  lsp_show_info: boolean;
+  lsp_show_hints: boolean;
+
   // Internal state
   loading: boolean;
   error: Error | null;
@@ -145,6 +153,20 @@ interface SettingsActions {
   setWorktreeRootPath: (path: string) => Promise<void>;
   getWorktreeRootPath: () => string;
 
+  // LSP Settings
+  setLspEnabled: (enabled: boolean) => Promise<void>;
+  getLspEnabled: () => boolean;
+  setLspShowDiagnostics: (show: boolean) => Promise<void>;
+  getLspShowDiagnostics: () => boolean;
+  setLspShowErrors: (show: boolean) => Promise<void>;
+  getLspShowErrors: () => boolean;
+  setLspShowWarnings: (show: boolean) => Promise<void>;
+  getLspShowWarnings: () => boolean;
+  setLspShowInfo: (show: boolean) => Promise<void>;
+  getLspShowInfo: () => boolean;
+  setLspShowHints: (show: boolean) => Promise<void>;
+  getLspShowHints: () => boolean;
+
   // Convenience getters
   getModel: () => string;
   getAgentId: () => string;
@@ -185,6 +207,12 @@ const DEFAULT_SETTINGS: Omit<SettingsState, 'loading' | 'error' | 'isInitialized
     'Menlo, Monaco, "DejaVu Sans Mono", "Ubuntu Mono", "Liberation Mono", "Droid Sans Mono", "Courier New", monospace',
   terminal_font_size: 14,
   worktree_root_path: '',
+  lsp_enabled: true,
+  lsp_show_diagnostics: true,
+  lsp_show_errors: true,
+  lsp_show_warnings: true,
+  lsp_show_info: true,
+  lsp_show_hints: false,
 };
 
 // Database persistence layer
@@ -247,6 +275,12 @@ class SettingsDatabase {
         'Menlo, Monaco, "DejaVu Sans Mono", "Ubuntu Mono", "Liberation Mono", "Droid Sans Mono", "Courier New", monospace',
       terminal_font_size: '14',
       worktree_root_path: '',
+      lsp_enabled: 'true',
+      lsp_show_diagnostics: 'true',
+      lsp_show_errors: 'true',
+      lsp_show_warnings: 'true',
+      lsp_show_info: 'true',
+      lsp_show_hints: 'false',
     };
 
     const now = Date.now();
@@ -362,6 +396,12 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
         'terminal_font',
         'terminal_font_size',
         'worktree_root_path',
+        'lsp_enabled',
+        'lsp_show_diagnostics',
+        'lsp_show_errors',
+        'lsp_show_warnings',
+        'lsp_show_info',
+        'lsp_show_hints',
       ];
 
       // Add API key keys
@@ -431,6 +471,12 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
           'Menlo, Monaco, "DejaVu Sans Mono", "Ubuntu Mono", "Liberation Mono", "Droid Sans Mono", "Courier New", monospace',
         terminal_font_size: Number(rawSettings.terminal_font_size) || 14,
         worktree_root_path: rawSettings.worktree_root_path || '',
+        lsp_enabled: rawSettings.lsp_enabled !== 'false',
+        lsp_show_diagnostics: rawSettings.lsp_show_diagnostics !== 'false',
+        lsp_show_errors: rawSettings.lsp_show_errors !== 'false',
+        lsp_show_warnings: rawSettings.lsp_show_warnings !== 'false',
+        lsp_show_info: rawSettings.lsp_show_info !== 'false',
+        lsp_show_hints: rawSettings.lsp_show_hints === 'true',
         loading: false,
         isInitialized: true,
       });
@@ -792,6 +838,61 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     return get().worktree_root_path || '';
   },
 
+  // LSP Settings
+  setLspEnabled: async (enabled: boolean) => {
+    await settingsDb.set('lsp_enabled', enabled.toString());
+    set({ lsp_enabled: enabled });
+  },
+
+  getLspEnabled: () => {
+    return get().lsp_enabled;
+  },
+
+  setLspShowDiagnostics: async (show: boolean) => {
+    await settingsDb.set('lsp_show_diagnostics', show.toString());
+    set({ lsp_show_diagnostics: show });
+  },
+
+  getLspShowDiagnostics: () => {
+    return get().lsp_show_diagnostics;
+  },
+
+  setLspShowErrors: async (show: boolean) => {
+    await settingsDb.set('lsp_show_errors', show.toString());
+    set({ lsp_show_errors: show });
+  },
+
+  getLspShowErrors: () => {
+    return get().lsp_show_errors;
+  },
+
+  setLspShowWarnings: async (show: boolean) => {
+    await settingsDb.set('lsp_show_warnings', show.toString());
+    set({ lsp_show_warnings: show });
+  },
+
+  getLspShowWarnings: () => {
+    return get().lsp_show_warnings;
+  },
+
+  setLspShowInfo: async (show: boolean) => {
+    await settingsDb.set('lsp_show_info', show.toString());
+    set({ lsp_show_info: show });
+  },
+
+  getLspShowInfo: () => {
+    return get().lsp_show_info;
+  },
+
+  setLspShowHints: async (show: boolean) => {
+    await settingsDb.set('lsp_show_hints', show.toString());
+    set({ lsp_show_hints: show });
+  },
+
+  getLspShowHints: () => {
+    return get().lsp_show_hints;
+  },
+
   // Convenience getters
   getModel: () => {
     return get().model;
@@ -936,6 +1037,20 @@ export const settingsManager = {
   // Worktree Settings
   setWorktreeRootPath: (path: string) => useSettingsStore.getState().setWorktreeRootPath(path),
   getWorktreeRootPath: () => useSettingsStore.getState().getWorktreeRootPath(),
+
+  // LSP Settings
+  setLspEnabled: (enabled: boolean) => useSettingsStore.getState().setLspEnabled(enabled),
+  getLspEnabled: () => useSettingsStore.getState().getLspEnabled(),
+  setLspShowDiagnostics: (show: boolean) => useSettingsStore.getState().setLspShowDiagnostics(show),
+  getLspShowDiagnostics: () => useSettingsStore.getState().getLspShowDiagnostics(),
+  setLspShowErrors: (show: boolean) => useSettingsStore.getState().setLspShowErrors(show),
+  getLspShowErrors: () => useSettingsStore.getState().getLspShowErrors(),
+  setLspShowWarnings: (show: boolean) => useSettingsStore.getState().setLspShowWarnings(show),
+  getLspShowWarnings: () => useSettingsStore.getState().getLspShowWarnings(),
+  setLspShowInfo: (show: boolean) => useSettingsStore.getState().setLspShowInfo(show),
+  getLspShowInfo: () => useSettingsStore.getState().getLspShowInfo(),
+  setLspShowHints: (show: boolean) => useSettingsStore.getState().setLspShowHints(show),
+  getLspShowHints: () => useSettingsStore.getState().getLspShowHints(),
 };
 
 // Export settingsDb for direct database access (used by ThemeProvider before store initialization)

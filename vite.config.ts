@@ -9,7 +9,16 @@ const host = process.env.TAURI_DEV_HOST;
 
 // https://vite.dev/config/
 export default defineConfig(() => ({
-  plugins: [wasm(), react(), tailwindcss(), monacoEditorEsmPlugin()],
+  plugins: [
+    wasm(),
+    react(),
+    tailwindcss(),
+    monacoEditorEsmPlugin({
+      // Only include base editor worker, remove TypeScript worker (~6MB)
+      // Completion is provided by LSP (typescript-language-server)
+      languageWorkers: ['editorWorkerService'],
+    }),
+  ],
 
   resolve: {
     alias: {

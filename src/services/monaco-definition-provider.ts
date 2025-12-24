@@ -3,6 +3,7 @@ import type * as Monaco from 'monaco-editor';
 import { logger } from '@/lib/logger';
 import { settingsManager } from '@/stores/settings-store';
 import { findDefinition, findReferencesHybrid, getLangFamily } from './code-navigation-service';
+import { getLspCompletion } from './lsp/lsp-completion-provider';
 import {
   getLspDefinition,
   getLspReferences,
@@ -484,6 +485,111 @@ export function registerDefinitionProviders(monaco: typeof Monaco) {
         } catch (error) {
           logger.error('[CodeNav] Error finding references:', error);
           return [];
+        }
+      },
+    });
+
+    // Code Completion via LSP (replaces Monaco's built-in TypeScript worker)
+    monaco.languages.registerCompletionItemProvider(langId, {
+      triggerCharacters: ['.', ':', '<', '"', "'", '/', '@', '(', ' '],
+
+      provideCompletionItems: async (model, position, context) => {
+        const currentFile = model.uri.path;
+
+        if (!hasLspConnection(currentFile)) {
+          return { suggestions: [] };
+        }
+
+        try {
+          const lspLine = position.lineNumber - 1;
+          const lspChar = position.column - 1;
+
+          // Map Monaco trigger kind to LSP
+          let triggerKind: number | undefined;
+          let triggerCharacter: string | undefined;
+
+          if (context.triggerKind === monaco.languages.CompletionTriggerKind.TriggerCharacter) {
+            triggerKind = 2; // LSP TriggerCharacter
+            triggerCharacter = context.triggerCharacter;
+          } else if (context.triggerKind === monaco.languages.CompletionTriggerKind.Invoke) {
+            triggerKind = 1; // LSP Invoked
+          }
+
+          const completions = await getLspCompletion(
+            currentFile,
+            lspLine,
+            lspChar,
+            triggerKind,
+            triggerCharacter
+          );
+
+          if (!completions || completions.length === 0) {
+            return { suggestions: [] };
+          }
+
+          // Map LSP CompletionItem to Monaco CompletionItem
+          const suggestions = completions.map((item) => {
+            // Map LSP CompletionItemKind to Monaco CompletionItemKind
+            const kindMap: Record<number, Monaco.languages.CompletionItemKind> = {
+              1: monaco.languages.CompletionItemKind.Text,
+              2: monaco.languages.CompletionItemKind.Method,
+              3: monaco.languages.CompletionItemKind.Function,
+              4: monaco.languages.CompletionItemKind.Constructor,
+              5: monaco.languages.CompletionItemKind.Field,
+              6: monaco.languages.CompletionItemKind.Variable,
+              7: monaco.languages.CompletionItemKind.Class,
+              8: monaco.languages.CompletionItemKind.Interface,
+              9: monaco.languages.CompletionItemKind.Module,
+              10: monaco.languages.CompletionItemKind.Property,
+              11: monaco.languages.CompletionItemKind.Unit,
+              12: monaco.languages.CompletionItemKind.Value,
+              13: monaco.languages.CompletionItemKind.Enum,
+              14: monaco.languages.CompletionItemKind.Keyword,
+              15: monaco.languages.CompletionItemKind.Snippet,
+              16: monaco.languages.CompletionItemKind.Color,
+              17: monaco.languages.CompletionItemKind.File,
+              18: monaco.languages.CompletionItemKind.Reference,
+              19: monaco.languages.CompletionItemKind.Folder,
+              20: monaco.languages.CompletionItemKind.EnumMember,
+              21: monaco.languages.CompletionItemKind.Constant,
+              22: monaco.languages.CompletionItemKind.Struct,
+              23: monaco.languages.CompletionItemKind.Event,
+              24: monaco.languages.CompletionItemKind.Operator,
+              25: monaco.languages.CompletionItemKind.TypeParameter,
+            };
+
+            const monacoKind = item.kind
+              ? kindMap[item.kind] || monaco.languages.CompletionItemKind.Text
+              : monaco.languages.CompletionItemKind.Text;
+
+            // Get documentation as string
+            let documentation: string | undefined;
+            if (typeof item.documentation === 'string') {
+              documentation = item.documentation;
+            } else if (item.documentation?.value) {
+              documentation = item.documentation.value;
+            }
+
+            return {
+              label: item.label,
+              kind: monacoKind,
+              detail: item.detail,
+              documentation,
+              insertText: item.insertText || item.label,
+              insertTextRules:
+                item.insertTextFormat === 2
+                  ? monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet
+                  : undefined,
+              sortText: item.sortText,
+              filterText: item.filterText,
+              preselect: item.preselect,
+            } as Monaco.languages.CompletionItem;
+          });
+
+          return { suggestions };
+        } catch (error) {
+          logger.error('[CodeNav] LSP completion error:', error);
+          return { suggestions: [] };
         }
       },
     });

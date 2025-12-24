@@ -4,6 +4,7 @@ import { commandRegistry } from '@/services/commands/command-registry';
 import { terminalService } from '@/services/terminal-service';
 import { useAgentStore } from '@/stores/agent-store';
 import { useAuthStore } from '@/stores/auth-store';
+import { initializeLspSettings } from '@/stores/lsp-store';
 import { usePlanModeStore } from '@/stores/plan-mode-store';
 import { useProviderStore } from '@/stores/provider-store';
 import { useSettingsStore } from '@/stores/settings-store';
@@ -163,6 +164,11 @@ class InitializationManager {
           // Plan mode store
           Promise.resolve(usePlanModeStore.getState().initialize()).then(() => {
             logger.info('[InitManager] ✓ Plan mode initialized (background)');
+          }),
+
+          // LSP settings (sync from persisted settings)
+          Promise.resolve(initializeLspSettings()).then(() => {
+            logger.info('[InitManager] ✓ LSP settings initialized (background)');
           }),
         ]);
 

@@ -1,5 +1,3 @@
-// TalkCody provider routes - Proxy to MiniMax Anthropic API with JWT authentication
-
 import { Hono } from 'hono';
 import { authMiddleware, getAuth } from '../middlewares/auth';
 import { userUsageService } from '../services/user-usage-service';
@@ -9,35 +7,18 @@ const talkcodyProvider = new Hono<HonoContext>();
 
 const ALLOWED_MODELS = ['MiniMax-M2.1'];
 
-const MINIMAX_ANTHROPIC_API = 'https://api.minimaxi.com/anthropic';
-
-// Headers to forward from MiniMax response
-const FORWARD_HEADERS = [
-  'minimax-request-id',
-  'trace-id',
-  'x-session-id',
-  'alb-request-id',
-] as const;
-
-/**
- * Extract headers to forward from upstream response
- */
-function extractForwardHeaders(response: Response): Record<string, string> {
-  const headers: Record<string, string> = {};
-  for (const header of FORWARD_HEADERS) {
-    const value = response.headers.get(header);
-    if (value) {
-      headers[header] = value;
-    }
+function getUpstreamApiUrl(env?: HonoContext['Bindings']): string | undefined {
+  if (typeof Bun !== 'undefined') {
+    return Bun.env.TALKCODY_UPSTREAM_API;
   }
-  return headers;
+  return env?.TALKCODY_UPSTREAM_API;
 }
 
-function getMinimaxApiKey(env?: HonoContext['Bindings']): string | undefined {
+function getUpstreamApiKey(env?: HonoContext['Bindings']): string | undefined {
   if (typeof Bun !== 'undefined') {
-    return Bun.env.MINIMAX_API_KEY;
+    return Bun.env.TALKCODY_UPSTREAM_API_KEY;
   }
-  return env?.MINIMAX_API_KEY;
+  return env?.TALKCODY_UPSTREAM_API_KEY;
 }
 
 /**
@@ -63,10 +44,11 @@ talkcodyProvider.post('/v1/messages', authMiddleware, async (c) => {
     );
   }
 
-  // Get MiniMax API key
-  const minimaxApiKey = getMinimaxApiKey(c.env);
-  if (!minimaxApiKey) {
-    console.error('MINIMAX_API_KEY is not configured');
+  // Get upstream API configuration
+  const upstreamApiUrl = getUpstreamApiUrl(c.env);
+  const upstreamApiKey = getUpstreamApiKey(c.env);
+  if (!upstreamApiUrl || !upstreamApiKey) {
+    console.error('TALKCODY_UPSTREAM_API or TALKCODY_UPSTREAM_API_KEY is not configured');
     return c.json(
       {
         type: 'error',
@@ -96,28 +78,21 @@ talkcodyProvider.post('/v1/messages', authMiddleware, async (c) => {
       );
     }
 
-    // Forward request to MiniMax Anthropic API
-    const response = await fetch(`${MINIMAX_ANTHROPIC_API}/v1/messages`, {
+    // Forward request to upstream Anthropic-compatible API
+    const response = await fetch(`${upstreamApiUrl}/v1/messages`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': minimaxApiKey,
+        'x-api-key': upstreamApiKey,
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify(body),
     });
 
-    // Extract headers to forward from MiniMax response
-    const forwardHeaders = extractForwardHeaders(response);
-
     // Handle error responses (non-2xx status)
     if (!response.ok) {
       const errorData = await response.json();
-      return c.json(
-        errorData,
-        response.status as 400 | 401 | 403 | 404 | 429 | 500,
-        forwardHeaders
-      );
+      return c.json(errorData, response.status as 400 | 401 | 403 | 404 | 429 | 500);
     }
 
     // Handle streaming response
@@ -189,14 +164,6 @@ talkcodyProvider.post('/v1/messages', authMiddleware, async (c) => {
         } finally {
           await writer.close();
 
-          // Record usage after stream ends
-          // If we didn't get token counts, estimate based on typical ratios
-          if (inputTokens === 0 && outputTokens === 0) {
-            // Fallback: estimate 500 tokens per request
-            inputTokens = 300;
-            outputTokens = 200;
-          }
-
           try {
             await userUsageService.recordUsage(
               userId,
@@ -224,7 +191,6 @@ talkcodyProvider.post('/v1/messages', authMiddleware, async (c) => {
           'Cache-Control': 'no-cache',
           Connection: 'keep-alive',
           'X-TalkCody-Remaining-Tokens': String(usageCheck.remaining?.dailyTokens || 0),
-          ...forwardHeaders,
         },
       });
     }
@@ -245,7 +211,6 @@ talkcodyProvider.post('/v1/messages', authMiddleware, async (c) => {
 
     return c.json(data, 200, {
       'X-TalkCody-Remaining-Tokens': String(remainingDailyTokens),
-      ...forwardHeaders,
     });
   } catch (error) {
     console.error('TalkCody provider error:', error);
@@ -302,10 +267,11 @@ talkcodyProvider.get('/models', async (c) => {
  * GET /api/talkcody/health
  */
 talkcodyProvider.get('/health', async (c) => {
-  const minimaxApiKey = getMinimaxApiKey(c.env);
+  const upstreamApiUrl = getUpstreamApiUrl(c.env);
+  const upstreamApiKey = getUpstreamApiKey(c.env);
 
   return c.json({
-    status: minimaxApiKey ? 'ok' : 'not_configured',
+    status: upstreamApiUrl && upstreamApiKey ? 'ok' : 'not_configured',
     provider: 'talkcody',
     models: ALLOWED_MODELS.length,
     timestamp: new Date().toISOString(),

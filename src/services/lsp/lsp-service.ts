@@ -5,6 +5,8 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { logger } from '@/lib/logger';
 import {
+  type CompletionItem,
+  type CompletionList,
   type Definition,
   type Diagnostic,
   filePathToUri,
@@ -67,6 +69,8 @@ interface ServerConnection {
   rootPath: string;
   isInitialized: boolean;
   documentVersions: Map<string, number>;
+  refCount: number;
+  cleanupTimer: ReturnType<typeof setTimeout> | null;
 }
 
 type DiagnosticsCallback = (uri: string, diagnostics: Diagnostic[]) => void;
@@ -89,6 +93,7 @@ class LspService {
   private notificationCallbacks: Set<NotificationCallback> = new Set();
 
   private readonly REQUEST_TIMEOUT = 30000; // 30 seconds
+  private readonly CLEANUP_DELAY = 30000; // 30 seconds delay before stopping idle server
 
   static getInstance(): LspService {
     if (!LspService.instance) {
@@ -170,15 +175,27 @@ class LspService {
 
   /**
    * Start an LSP server for a language
+   * Returns existing server ID if already running, or starts a new one
    */
   async startServer(language: string, rootPath: string): Promise<string> {
     await this.init();
 
     // Check if we already have a server for this language and root
-    for (const [serverId, conn] of this.servers) {
-      if (conn.language === language && conn.rootPath === rootPath) {
-        logger.info(`[LSP] Reusing existing server: ${serverId}`);
-        return serverId;
+    const existingServerId = this.findServerByLanguageAndRoot(language, rootPath);
+    if (existingServerId) {
+      const conn = this.servers.get(existingServerId);
+      if (conn) {
+        // Cancel any pending cleanup and increment ref count
+        if (conn.cleanupTimer) {
+          clearTimeout(conn.cleanupTimer);
+          conn.cleanupTimer = null;
+          logger.info(`[LSP] Cancelled cleanup for server: ${existingServerId}`);
+        }
+        conn.refCount++;
+        logger.info(
+          `[LSP] Reusing existing server: ${existingServerId}, refCount: ${conn.refCount}`
+        );
+        return existingServerId;
       }
     }
 
@@ -212,13 +229,15 @@ class LspService {
 
     const { serverId } = response;
 
-    // Register the connection
+    // Register the connection with refCount = 1
     this.servers.set(serverId, {
       serverId,
       language,
       rootPath,
       isInitialized: false,
       documentVersions: new Map(),
+      refCount: 1,
+      cleanupTimer: null,
     });
 
     // Initialize the server
@@ -229,11 +248,22 @@ class LspService {
   }
 
   /**
-   * Stop an LSP server
+   * Stop an LSP server (reference counted)
+   * Only stops the server if refCount reaches 0
+   * @param force If true, immediately stops regardless of refCount
    */
-  async stopServer(serverId: string): Promise<void> {
+  async stopServer(serverId: string, force = false): Promise<void> {
     const conn = this.servers.get(serverId);
     if (!conn) {
+      return;
+    }
+
+    // Check if we should decrement or actually stop
+    if (!force && conn.refCount > 1) {
+      conn.refCount--;
+      logger.info(
+        `[LSP] Decremented refCount for server: ${serverId}, remaining: ${conn.refCount}`
+      );
       return;
     }
 
@@ -259,6 +289,13 @@ class LspService {
    * Get server for a language and root path
    */
   getServer(language: string, rootPath: string): string | null {
+    return this.findServerByLanguageAndRoot(language, rootPath);
+  }
+
+  /**
+   * Find server ID by language and root path
+   */
+  private findServerByLanguageAndRoot(language: string, rootPath: string): string | null {
     for (const [serverId, conn] of this.servers) {
       if (conn.language === language && conn.rootPath === rootPath) {
         return serverId;
@@ -268,9 +305,136 @@ class LspService {
   }
 
   /**
+   * Schedule server cleanup after delay
+   * Only stops the server if no new references are added within the delay
+   */
+  scheduleServerCleanup(serverId: string): void {
+    const conn = this.servers.get(serverId);
+    if (!conn) {
+      return;
+    }
+
+    // Clear existing timer if any
+    if (conn.cleanupTimer) {
+      clearTimeout(conn.cleanupTimer);
+    }
+
+    // Schedule cleanup only if refCount is 0
+    if (conn.refCount <= 0) {
+      logger.info(`[LSP] Scheduling cleanup for server: ${serverId} in ${this.CLEANUP_DELAY}ms`);
+      conn.cleanupTimer = setTimeout(async () => {
+        // Double-check refCount before stopping
+        const currentConn = this.servers.get(serverId);
+        if (currentConn && currentConn.refCount <= 0) {
+          logger.info(`[LSP] Cleaning up idle server: ${serverId}`);
+          await this.stopServer(serverId, true);
+        } else if (currentConn) {
+          currentConn.cleanupTimer = null;
+          logger.info(
+            `[LSP] Skipped cleanup for server: ${serverId}, refCount: ${currentConn.refCount}`
+          );
+        }
+      }, this.CLEANUP_DELAY);
+    }
+  }
+
+  /**
+   * Increment reference count for a server
+   * Returns true if successful, false if server doesn't exist
+   */
+  incrementRefCount(serverId: string): boolean {
+    const conn = this.servers.get(serverId);
+    if (!conn) {
+      logger.warn(`[LSP] Cannot increment refCount: server ${serverId} not found`);
+      return false;
+    }
+    // Cancel pending cleanup
+    if (conn.cleanupTimer) {
+      clearTimeout(conn.cleanupTimer);
+      conn.cleanupTimer = null;
+    }
+    conn.refCount++;
+    logger.info(`[LSP] Incremented refCount for ${serverId}: ${conn.refCount}`);
+    return true;
+  }
+
+  /**
+   * Decrement reference count for a server
+   * Returns true if cleanup was scheduled, false if server is still in use
+   */
+  decrementRefCount(serverId: string): boolean {
+    const conn = this.servers.get(serverId);
+    if (!conn) {
+      return false;
+    }
+
+    conn.refCount--;
+    logger.info(`[LSP] Decremented refCount for ${serverId}: ${conn.refCount}`);
+
+    // Schedule cleanup if refCount reaches 0
+    if (conn.refCount <= 0) {
+      this.scheduleServerCleanup(serverId);
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Get current ref count for a server
+   */
+  getRefCount(serverId: string): number {
+    const conn = this.servers.get(serverId);
+    return conn?.refCount ?? 0;
+  }
+
+  /**
+   * Build language-specific initialization options
+   */
+  private buildInitializationOptions(
+    language: string,
+    rootPath: string
+  ): Record<string, unknown> | undefined {
+    switch (language) {
+      case 'typescript':
+      case 'javascript':
+      case 'typescriptreact':
+      case 'javascriptreact':
+        // TypeScript Language Server specific options
+        // IMPORTANT: tsserver.path must point to tsserver.js FILE, not the directory!
+        // This matches how opencode configures typescript-language-server
+        return {
+          tsserver: {
+            // Path to the tsserver.js file (not just the lib directory)
+            path: `${rootPath}/node_modules/typescript/lib/tsserver.js`,
+          },
+          preferences: {
+            quotePreference: 'single',
+            importModuleSpecifierPreference: 'relative',
+          },
+        };
+      case 'rust':
+        // rust-analyzer doesn't need special initializationOptions
+        // It reads configuration from rust-analyzer.json or Cargo.toml
+        return undefined;
+      case 'python':
+        // Pyright doesn't need special initializationOptions
+        return undefined;
+      case 'go':
+        // gopls doesn't need special initializationOptions
+        return undefined;
+      default:
+        return undefined;
+    }
+  }
+
+  /**
    * Initialize an LSP server
    */
   private async initializeServer(serverId: string, rootPath: string): Promise<void> {
+    // Get the language from the server connection
+    const conn = this.servers.get(serverId);
+    const language = conn?.language || '';
+
     const params: InitializeParams = {
       processId: null,
       clientInfo: {
@@ -279,10 +443,26 @@ class LspService {
       },
       rootUri: filePathToUri(rootPath),
       rootPath,
+      // Only include initializationOptions for languages that need them
+      initializationOptions: this.buildInitializationOptions(language, rootPath),
       capabilities: {
         textDocument: {
           synchronization: {
             didSave: true,
+          },
+          completion: {
+            completionItem: {
+              snippetSupport: true,
+              documentationFormat: ['markdown', 'plaintext'],
+              deprecatedSupport: true,
+            },
+            completionItemKind: {
+              valueSet: [
+                1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+                24, 25,
+              ],
+            },
+            contextSupport: true,
           },
           hover: {
             contentFormat: ['markdown', 'plaintext'],
@@ -324,8 +504,7 @@ class LspService {
     // Send initialized notification
     await this.sendNotification(serverId, LSP_METHODS.INITIALIZED, {});
 
-    // Mark as initialized
-    const conn = this.servers.get(serverId);
+    // Mark as initialized (reuse conn from above)
     if (conn) {
       conn.isInitialized = true;
     }
@@ -496,6 +675,41 @@ class LspService {
       return result;
     } catch (e) {
       logger.debug(`[LSP] References request failed: ${e}`);
+      return null;
+    }
+  }
+
+  /**
+   * Get completions at a position
+   */
+  async completion(
+    serverId: string,
+    filePath: string,
+    line: number,
+    character: number,
+    triggerKind?: number,
+    triggerCharacter?: string
+  ): Promise<CompletionList | CompletionItem[] | null> {
+    const params = {
+      textDocument: { uri: filePathToUri(filePath) },
+      position: { line, character },
+      context: triggerKind
+        ? {
+            triggerKind,
+            triggerCharacter,
+          }
+        : undefined,
+    };
+
+    try {
+      const result = await this.sendRequest<CompletionList | CompletionItem[] | null>(
+        serverId,
+        LSP_METHODS.COMPLETION,
+        params
+      );
+      return result;
+    } catch (e) {
+      logger.debug(`[LSP] Completion request failed: ${e}`);
       return null;
     }
   }

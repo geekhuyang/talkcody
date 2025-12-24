@@ -8,10 +8,12 @@ import { lspService } from '@/services/lsp';
 import { lspConnectionManager } from '@/services/lsp/lsp-connection-manager';
 import type { Hover, Location } from '@/services/lsp/lsp-protocol';
 import {
+  findWorkspaceRoot,
+  getLanguageDisplayName,
   getLanguageIdForPath,
+  getLspLanguageIdForPath,
   getServerConfig,
   hasLspSupport,
-  monacoToLspLanguage,
 } from '@/services/lsp/lsp-servers';
 import { type PendingDownload, useLspStore } from '@/stores/lsp-store';
 
@@ -66,21 +68,6 @@ function mapLspSeverity(
   }
 }
 
-function getLanguageDisplayName(language: string): string {
-  const names: Record<string, string> = {
-    typescript: 'TypeScript',
-    javascript: 'JavaScript',
-    typescriptreact: 'TypeScript React',
-    javascriptreact: 'JavaScript React',
-    rust: 'Rust',
-    python: 'Python',
-    go: 'Go',
-    c: 'C',
-    cpp: 'C++',
-  };
-  return names[language] || language;
-}
-
 // ============================================================================
 // Hook
 // ============================================================================
@@ -95,6 +82,7 @@ export function useLsp({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [serverId, setServerId] = useState<string | null>(null);
+  const [workspaceRoot, setWorkspaceRoot] = useState<string | null>(null);
 
   const { enabled: storeEnabled, setDiagnostics, addPendingDownload } = useLspStore();
   const isEnabled = enabled && storeEnabled;
@@ -102,37 +90,82 @@ export function useLsp({
   const serverIdRef = useRef<string | null>(null);
   const filePathRef = useRef<string | null>(null);
   const languageRef = useRef<string | null>(null);
+  const workspaceRootRef = useRef<string | null>(null);
   const isDocumentOpenRef = useRef(false);
+  // Track if we have incremented ref count (either via startServer or incrementRefCount)
+  const hasIncrementedRefRef = useRef(false);
 
-  // Get language for the current file
+  // Get language for the current file (server key, e.g., 'typescript' for both .ts and .tsx)
   const language = filePath ? getLanguageIdForPath(filePath) : null;
+
+  // Compute the correct workspace root based on rootPatterns (async)
+  useEffect(() => {
+    if (!filePath || !language || !rootPath) {
+      setWorkspaceRoot(rootPath);
+      return;
+    }
+
+    let cancelled = false;
+    findWorkspaceRoot(filePath, language, rootPath).then((root) => {
+      if (!cancelled) {
+        setWorkspaceRoot(root);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [filePath, language, rootPath]);
 
   // Start/stop LSP server based on file and settings
   useEffect(() => {
-    if (!isEnabled || !filePath || !rootPath || !language) {
-      // Cleanup if disabled
-      if (serverIdRef.current && isDocumentOpenRef.current && filePathRef.current) {
-        lspService.closeDocument(serverIdRef.current, filePathRef.current).catch(() => {});
+    // Helper function to perform cleanup synchronously where possible
+    const performCleanup = () => {
+      const currentServerId = serverIdRef.current;
+      const currentFilePath = filePathRef.current;
+      const hasIncremented = hasIncrementedRefRef.current;
+
+      // Close document if open (fire and forget - we can't wait in cleanup)
+      if (currentServerId && isDocumentOpenRef.current && currentFilePath) {
+        lspService.closeDocument(currentServerId, currentFilePath).catch(() => {});
         isDocumentOpenRef.current = false;
       }
+
       // Unregister connection
-      if (filePathRef.current) {
-        lspConnectionManager.unregister(filePathRef.current);
+      if (currentFilePath) {
+        lspConnectionManager.unregister(currentFilePath);
       }
-      setIsConnected(false);
-      setServerId(null);
+
+      // Decrement ref count if we incremented it
+      if (hasIncremented && currentServerId) {
+        lspService.decrementRefCount(currentServerId);
+        hasIncrementedRefRef.current = false;
+      }
+
+      // Reset state refs
+      serverIdRef.current = null;
+      filePathRef.current = null;
+    };
+
+    if (!isEnabled || !filePath || !workspaceRoot || !language) {
+      // Cleanup if disabled - only if we had a previous connection
+      if (serverIdRef.current || hasIncrementedRefRef.current) {
+        performCleanup();
+        setIsConnected(false);
+        setServerId(null);
+      }
       return;
     }
 
     // Check if language has LSP support
     if (!hasLspSupport(language)) {
-      logger.debug(`[useLsp] No LSP support for language: ${language}`);
+      logger.info(`[useLsp] No LSP support for language: ${language}`);
       return;
     }
 
     let isMounted = true;
 
-    const startServer = async () => {
+    const initializeConnection = async () => {
       setIsLoading(true);
       setError(null);
 
@@ -171,19 +204,53 @@ export function useLsp({
           }
         }
 
-        // Server is available, start it
-        const id = await lspService.startServer(language, rootPath);
+        // Check if there's already an existing server for this language + root
+        const existingConnection = lspConnectionManager.getConnectionByRoot(
+          workspaceRoot,
+          language
+        );
+        let serverId: string | null = null;
+
+        if (existingConnection) {
+          // Try to reuse existing server by incrementing ref count
+          const success = lspService.incrementRefCount(existingConnection.serverId);
+          if (success) {
+            // Successfully incremented ref count
+            serverId = existingConnection.serverId;
+            logger.info(
+              `[useLsp] Reusing existing LSP server for ${language} in ${workspaceRoot}: ${serverId}`
+            );
+            hasIncrementedRefRef.current = true;
+          } else {
+            // Server was cleaned up between check and increment, need to start new one
+            logger.info(
+              `[useLsp] Existing server ${existingConnection.serverId} was cleaned up, starting new one`
+            );
+            // Clean up stale connection manager entry
+            lspConnectionManager.unregisterServer(existingConnection.serverId);
+          }
+        }
+
+        if (!serverId) {
+          // Need to start a new server (startServer sets refCount=1 internally, or reuses existing)
+          logger.info(
+            `[useLsp] Starting LSP server for ${language} with workspace root: ${workspaceRoot}`
+          );
+          serverId = await lspService.startServer(language, workspaceRoot);
+          hasIncrementedRefRef.current = true; // startServer sets refCount=1, so we count as incremented
+        }
 
         if (isMounted) {
-          serverIdRef.current = id;
+          serverIdRef.current = serverId;
           languageRef.current = language;
-          setServerId(id);
+          workspaceRootRef.current = workspaceRoot;
+          setServerId(serverId);
           setIsConnected(true);
 
-          // Register connection with connection manager for cross-file lookups
-          lspConnectionManager.register(filePath, id, language, rootPath);
+          // Register connection with connection manager for cross-file lookups and ref counting
+          lspConnectionManager.register(filePath, serverId, language, workspaceRoot);
 
-          logger.info(`[useLsp] Connected to LSP server: ${id}`);
+          logger.info(`[useLsp] Connected to LSP server: ${serverId}`);
         }
       } catch (e) {
         if (isMounted) {
@@ -198,16 +265,14 @@ export function useLsp({
       }
     };
 
-    startServer();
+    initializeConnection();
 
     return () => {
       isMounted = false;
-      // Unregister connection on cleanup
-      if (filePath) {
-        lspConnectionManager.unregister(filePath);
-      }
+      // Cleanup: unregister and decrement ref count
+      performCleanup();
     };
-  }, [isEnabled, language, rootPath, filePath, addPendingDownload]);
+  }, [isEnabled, language, workspaceRoot, filePath, addPendingDownload]);
 
   // Subscribe to diagnostics and apply to Monaco editor
   useEffect(() => {
@@ -231,9 +296,6 @@ export function useLsp({
         // Convert URI to file path for comparison
         const diagnosticFilePath = uri.startsWith('file://') ? uri.slice(7) : uri;
         if (diagnosticFilePath !== filePath) {
-          logger.debug(
-            `[LSP] Diagnostics for different file: ${diagnosticFilePath} vs ${filePath}`
-          );
           return;
         }
 
@@ -241,25 +303,43 @@ export function useLsp({
         const diagnosticLang = getLanguageIdForPath(diagnosticFilePath);
         const currentLang = languageRef.current;
         if (diagnosticLang && currentLang && diagnosticLang !== currentLang) {
-          logger.debug(`[LSP] Diagnostics language mismatch: ${diagnosticLang} vs ${currentLang}`);
+          logger.info(`[LSP] Diagnostics language mismatch: ${diagnosticLang} vs ${currentLang}`);
           return;
         }
 
         // Get the language for this file to use as source
         const diagnosticLanguage = getLanguageIdForPath(diagnosticFilePath) || 'lsp';
 
-        const markers = diagnostics.map((d) => ({
-          severity: mapLspSeverity(d.severity, monaco),
-          message: d.message,
-          startLineNumber: d.range.start.line + 1,
-          startColumn: d.range.start.character + 1,
-          endLineNumber: d.range.end.line + 1,
-          endColumn: d.range.end.character + 1,
-          source: diagnosticLanguage,
-          code: d.code?.toString(),
-        }));
+        // Get severity filter settings
+        const { showErrors, showWarnings, showInfo, showHints } = useLspStore.getState();
 
-        logger.info(`[LSP] Setting ${markers.length} markers on editor`);
+        // Convert LSP diagnostics to Monaco markers with severity filtering
+        const markers = diagnostics
+          .filter((d) => {
+            switch (d.severity) {
+              case 1: // Error
+                return showErrors;
+              case 2: // Warning
+                return showWarnings;
+              case 3: // Info
+                return showInfo;
+              case 4: // Hint
+                return showHints;
+              default:
+                return true;
+            }
+          })
+          .map((d) => ({
+            severity: mapLspSeverity(d.severity, monaco),
+            message: d.message,
+            startLineNumber: d.range.start.line + 1,
+            startColumn: d.range.start.character + 1,
+            endLineNumber: d.range.end.line + 1,
+            endColumn: d.range.end.character + 1,
+            source: diagnosticLanguage,
+            code: d.code?.toString(),
+          }));
+
         monaco.editor.setModelMarkers(model, 'lsp', markers);
       }
     });
@@ -276,9 +356,15 @@ export function useLsp({
         throw new Error('LSP server not connected');
       }
 
-      const lspLanguage = monacoToLspLanguage(languageRef.current) || languageRef.current;
+      // Skip if document is already open for this file
+      if (isDocumentOpenRef.current && filePathRef.current === filePath) {
+        return;
+      }
 
-      await lspService.openDocument(serverIdRef.current, filePath, lspLanguage, content);
+      // Use the correct LSP languageId for the file (e.g., 'typescriptreact' for .tsx)
+      const lspLanguageId = getLspLanguageIdForPath(filePath) || languageRef.current;
+
+      await lspService.openDocument(serverIdRef.current, filePath, lspLanguageId, content);
       filePathRef.current = filePath;
       isDocumentOpenRef.current = true;
     },

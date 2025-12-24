@@ -1,10 +1,27 @@
+import {
+  Bot,
+  Code,
+  FileCode,
+  GitBranch,
+  Info,
+  Key,
+  Keyboard,
+  Settings,
+  Terminal,
+  User,
+} from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { AboutSettings } from '@/components/settings/about-settings';
 import { AccountSettings } from '@/components/settings/account-settings';
 import { ApiKeysSettings } from '@/components/settings/api-keys-settings';
 import { GeneralSettings } from '@/components/settings/general-settings';
+import { LintSettings } from '@/components/settings/lint-settings';
+import { LspSettings } from '@/components/settings/lsp-settings';
 import { ModelTypeSettings } from '@/components/settings/model-type-settings';
+import { TerminalSettings } from '@/components/settings/terminal-settings';
+import { WorktreeSettings } from '@/components/settings/worktree-settings';
 import { ShortcutSettingsPanel } from '@/components/shortcuts/shortcut-settings';
+import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useLocale } from '@/hooks/use-locale';
 
@@ -25,56 +42,132 @@ export function SettingsPage() {
   }, []);
 
   return (
-    <div className="flex h-full flex-col bg-white dark:bg-gray-950">
-      {/* Header */}
-      <div className="flex items-center justify-between border-b px-6 py-4">
-        <div>
-          <h1 className="text-2xl font-bold">{t.Settings.title}</h1>
-          <p className="mt-1 text-gray-600 dark:text-gray-400">{t.Settings.description}</p>
-        </div>
-      </div>
+    <div className="flex h-full bg-white dark:bg-gray-950">
+      <Tabs
+        value={activeTab}
+        onValueChange={setActiveTab}
+        orientation="vertical"
+        className="flex h-full w-full flex-row"
+      >
+        {/* Left sidebar navigation */}
+        <aside className="w-56 shrink-0 border-r p-4">
+          <TabsList className="flex h-auto w-full flex-col gap-1 bg-transparent">
+            <TabsTrigger
+              value="account"
+              className="w-full justify-start gap-2 rounded-md px-3 py-2"
+            >
+              <User className="size-4" />
+              {t.Settings.tabs.account}
+            </TabsTrigger>
+            <TabsTrigger
+              value="api-keys"
+              className="w-full justify-start gap-2 rounded-md px-3 py-2"
+            >
+              <Key className="size-4" />
+              {t.Settings.tabs.apiKeys}
+            </TabsTrigger>
+            <TabsTrigger value="models" className="w-full justify-start gap-2 rounded-md px-3 py-2">
+              <Bot className="size-4" />
+              {t.Settings.tabs.models}
+            </TabsTrigger>
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-4xl p-6">
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full w-full">
-            <TabsList className="grid w-full grid-cols-6">
-              <TabsTrigger value="account">{t.Settings.tabs.account}</TabsTrigger>
-              <TabsTrigger value="api-keys">{t.Settings.tabs.apiKeys}</TabsTrigger>
-              <TabsTrigger value="models">{t.Settings.tabs.models}</TabsTrigger>
-              <TabsTrigger value="shortcuts">{t.Settings.tabs.shortcuts}</TabsTrigger>
-              <TabsTrigger value="general">{t.Settings.tabs.general || 'General'}</TabsTrigger>
-              <TabsTrigger value="about">{t.Settings.tabs.about}</TabsTrigger>
-            </TabsList>
+            <Separator className="my-2" />
 
-            <div className="pt-6">
-              <TabsContent value="account" className="space-y-6">
-                <AccountSettings />
-              </TabsContent>
+            <TabsTrigger
+              value="general"
+              className="w-full justify-start gap-2 rounded-md px-3 py-2"
+            >
+              <Settings className="size-4" />
+              {t.Settings.tabs.general || 'General'}
+            </TabsTrigger>
 
-              <TabsContent value="api-keys" className="space-y-6">
-                <ApiKeysSettings />
-              </TabsContent>
+            <TabsTrigger
+              value="shortcuts"
+              className="w-full justify-start gap-2 rounded-md px-3 py-2"
+            >
+              <Keyboard className="size-4" />
+              {t.Settings.tabs.shortcuts}
+            </TabsTrigger>
 
-              <TabsContent value="models" className="space-y-6">
-                <ModelTypeSettings />
-              </TabsContent>
+            <Separator className="my-2" />
 
-              <TabsContent value="shortcuts" className="space-y-6">
-                <ShortcutSettingsPanel />
-              </TabsContent>
+            <TabsTrigger
+              value="terminal"
+              className="w-full justify-start gap-2 rounded-md px-3 py-2"
+            >
+              <Terminal className="size-4" />
+              {t.Settings.tabs.terminal || 'Terminal'}
+            </TabsTrigger>
+            <TabsTrigger value="lint" className="w-full justify-start gap-2 rounded-md px-3 py-2">
+              <FileCode className="size-4" />
+              {t.Settings.tabs.lint || 'Lint'}
+            </TabsTrigger>
+            <TabsTrigger value="lsp" className="w-full justify-start gap-2 rounded-md px-3 py-2">
+              <Code className="size-4" />
+              {t.Settings.tabs.lsp || 'LSP'}
+            </TabsTrigger>
+            <TabsTrigger
+              value="worktree"
+              className="w-full justify-start gap-2 rounded-md px-3 py-2"
+            >
+              <GitBranch className="size-4" />
+              {t.Settings.tabs.worktree || 'Worktree'}
+            </TabsTrigger>
 
-              <TabsContent value="general" className="space-y-6">
-                <GeneralSettings />
-              </TabsContent>
+            <Separator className="my-2" />
 
-              <TabsContent value="about" className="space-y-6">
-                <AboutSettings />
-              </TabsContent>
-            </div>
-          </Tabs>
-        </div>
-      </div>
+            <TabsTrigger value="about" className="w-full justify-start gap-2 rounded-md px-3 py-2">
+              <Info className="size-4" />
+              {t.Settings.tabs.about}
+            </TabsTrigger>
+          </TabsList>
+        </aside>
+
+        {/* Right content area */}
+        <main className="flex-1 overflow-y-auto p-6">
+          <div className="max-w-5xl">
+            <TabsContent value="account" className="mt-0 flex-none space-y-6">
+              <AccountSettings />
+            </TabsContent>
+
+            <TabsContent value="api-keys" className="mt-0 flex-none space-y-6">
+              <ApiKeysSettings />
+            </TabsContent>
+
+            <TabsContent value="models" className="mt-0 flex-none space-y-6">
+              <ModelTypeSettings />
+            </TabsContent>
+
+            <TabsContent value="terminal" className="mt-0 flex-none space-y-6">
+              <TerminalSettings />
+            </TabsContent>
+
+            <TabsContent value="lint" className="mt-0 flex-none space-y-6">
+              <LintSettings />
+            </TabsContent>
+
+            <TabsContent value="lsp" className="mt-0 flex-none space-y-6">
+              <LspSettings />
+            </TabsContent>
+
+            <TabsContent value="worktree" className="mt-0 flex-none space-y-6">
+              <WorktreeSettings />
+            </TabsContent>
+
+            <TabsContent value="shortcuts" className="mt-0 flex-none space-y-6">
+              <ShortcutSettingsPanel />
+            </TabsContent>
+
+            <TabsContent value="general" className="mt-0 flex-none space-y-6">
+              <GeneralSettings />
+            </TabsContent>
+
+            <TabsContent value="about" className="mt-0 flex-none space-y-6">
+              <AboutSettings />
+            </TabsContent>
+          </div>
+        </main>
+      </Tabs>
     </div>
   );
 }

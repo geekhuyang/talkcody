@@ -151,8 +151,6 @@ export async function simpleFetch(input: RequestInfo | URL, init?: RequestInit):
 
   const { url, method, headers, body } = extractRequestParams(input, init);
 
-  logger.info(`[Simple Fetch] ${method} ${url} headers:`, headers);
-
   const proxyRequest: ProxyRequest = {
     url,
     method,

@@ -9,7 +9,7 @@
 use flate2::read::GzDecoder;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::Read;
 use std::path::PathBuf;
 use std::process::Stdio;
@@ -20,20 +20,98 @@ use tokio::process::{Child, ChildStdin, ChildStdout, Command as TokioCommand};
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 
+/// Result of attempting to reserve a server creation slot
+#[derive(Debug, PartialEq)]
+pub enum CreationReservation {
+    /// Server already exists, reuse it
+    ExistingServer(String),
+    /// Successfully reserved the slot for creation
+    Reserved,
+    /// Another request is already creating this server
+    AlreadyCreating,
+}
+
 /// LSP server registry - global state for managing LSP servers
 #[derive(Default)]
 pub struct LspRegistry {
     servers: HashMap<String, Arc<Mutex<LspServer>>>,
+    /// Index for quick lookup by (language, root_path) -> server_id
+    /// This avoids the need to lock each server when searching
+    server_index: HashMap<(String, String), String>,
+    /// Tracks server creations in progress to prevent TOCTOU race conditions
+    /// Key is (language, root_path) tuple
+    pending_creations: HashSet<(String, String)>,
 }
 
 impl LspRegistry {
     pub fn new() -> Self {
         Self {
             servers: HashMap::new(),
+            server_index: HashMap::new(),
+            pending_creations: HashSet::new(),
         }
     }
 
-    pub fn insert(&mut self, server_id: String, server: Arc<Mutex<LspServer>>) {
+    /// Atomically check for existing server and reserve creation slot if none exists.
+    /// This prevents TOCTOU race conditions where multiple concurrent requests
+    /// might each think no server exists and try to create one.
+    ///
+    /// Returns:
+    /// - ExistingServer(id) if a server already exists for this language/root
+    /// - Reserved if the slot was successfully reserved for creation
+    /// - AlreadyCreating if another request is already creating this server
+    pub fn try_reserve_creation(&mut self, language: &str, root_path: &str) -> CreationReservation {
+        let key = (language.to_string(), root_path.to_string());
+
+        // Check if server already exists
+        if let Some(server_id) = self.server_index.get(&key) {
+            return CreationReservation::ExistingServer(server_id.clone());
+        }
+
+        // Check if creation is already in progress
+        if self.pending_creations.contains(&key) {
+            return CreationReservation::AlreadyCreating;
+        }
+
+        // Reserve the slot
+        self.pending_creations.insert(key);
+        CreationReservation::Reserved
+    }
+
+    /// Complete a reserved creation by registering the server.
+    /// Must be called after try_reserve_creation returned Reserved.
+    pub fn finish_creation(
+        &mut self,
+        server_id: String,
+        server: Arc<Mutex<LspServer>>,
+        language: String,
+        root_path: String,
+    ) {
+        let key = (language.clone(), root_path.clone());
+
+        // Remove from pending
+        self.pending_creations.remove(&key);
+
+        // Register the server
+        self.server_index.insert(key, server_id.clone());
+        self.servers.insert(server_id, server);
+    }
+
+    /// Cancel a reserved creation (e.g., if server spawn failed).
+    /// Must be called if try_reserve_creation returned Reserved but creation failed.
+    pub fn cancel_creation(&mut self, language: &str, root_path: &str) {
+        let key = (language.to_string(), root_path.to_string());
+        self.pending_creations.remove(&key);
+    }
+
+    /// Check if a creation is pending for the given language and root path
+    pub fn is_creation_pending(&self, language: &str, root_path: &str) -> bool {
+        self.pending_creations.contains(&(language.to_string(), root_path.to_string()))
+    }
+
+    pub fn insert(&mut self, server_id: String, server: Arc<Mutex<LspServer>>, language: String, root_path: String) {
+        // Update index first
+        self.server_index.insert((language, root_path), server_id.clone());
         self.servers.insert(server_id, server);
     }
 
@@ -42,11 +120,25 @@ impl LspRegistry {
     }
 
     pub fn remove(&mut self, server_id: &str) -> Option<Arc<Mutex<LspServer>>> {
+        // Remove from index - find and remove the matching entry
+        self.server_index.retain(|_, v| v != server_id);
         self.servers.remove(server_id)
     }
 
     pub fn list(&self) -> Vec<String> {
         self.servers.keys().cloned().collect()
+    }
+
+    /// Find an existing server by language and root path
+    /// Returns the server_id if found, None otherwise
+    /// This is now O(1) using the index instead of O(n) with locks
+    pub fn find_by_language_and_root(&self, language: &str, root_path: &str) -> Option<String> {
+        self.server_index.get(&(language.to_string(), root_path.to_string())).cloned()
+    }
+
+    /// Check if a server exists for the given language and root path
+    pub fn exists(&self, language: &str, root_path: &str) -> bool {
+        self.find_by_language_and_root(language, root_path).is_some()
     }
 }
 
@@ -166,15 +258,6 @@ fn get_lsp_server_path(server_name: &str) -> Result<PathBuf, String> {
     let binary_name = server_name.to_string();
 
     Ok(lsp_dir.join(binary_name))
-}
-
-/// Check if an LSP server is installed locally
-fn is_lsp_server_installed(server_name: &str) -> bool {
-    if let Ok(path) = get_lsp_server_path(server_name) {
-        path.exists()
-    } else {
-        false
-    }
 }
 
 // ============================================================================
@@ -538,6 +621,27 @@ fn validate_root_path(root_path: &str) -> Result<PathBuf, String> {
     Ok(canonical)
 }
 
+/// Find an existing LSP server by language and root path
+#[tauri::command]
+pub async fn lsp_find_server(
+    state: tauri::State<'_, LspState>,
+    language: String,
+    root_path: String,
+) -> Result<Option<String>, String> {
+    // Validate root_path first
+    let validated_root = validate_root_path(&root_path)?;
+    let root_path_str = validated_root.to_string_lossy().to_string();
+
+    let registry = state.0.lock().await;
+    let server_id = registry.find_by_language_and_root(&language, &root_path_str);
+
+    if let Some(id) = &server_id {
+        log::info!("Found existing LSP server for {} in {}: {}", language, root_path_str, id);
+    }
+
+    Ok(server_id)
+}
+
 /// Start an LSP server for a specific language
 #[tauri::command]
 pub async fn lsp_start_server(
@@ -552,10 +656,41 @@ pub async fn lsp_start_server(
     let validated_root = validate_root_path(&root_path)?;
     let root_path_str = validated_root.to_string_lossy().to_string();
 
+    // Atomically check for existing server and reserve creation slot
+    // This prevents TOCTOU race conditions
+    {
+        let mut registry = state.0.lock().await;
+        match registry.try_reserve_creation(&language, &root_path_str) {
+            CreationReservation::ExistingServer(existing_id) => {
+                log::info!("Reusing existing LSP server: {}", existing_id);
+                return Ok(LspStartResponse {
+                    server_id: existing_id,
+                    success: true,
+                    error: None,
+                });
+            }
+            CreationReservation::AlreadyCreating => {
+                log::info!("LSP server for {} in {} is already being created by another request", language, root_path_str);
+                return Err(format!(
+                    "LSP server for {} is already being created. Please wait and retry.",
+                    language
+                ));
+            }
+            CreationReservation::Reserved => {
+                log::info!("Reserved creation slot for {} in {}", language, root_path_str);
+                // Continue with creation
+            }
+        }
+    }
+
     // Get the command for this language
     let (command, args) = match get_lsp_command(&language) {
         Some(cmd) => cmd,
         None => {
+            // Cancel the reservation before returning error
+            let mut registry = state.0.lock().await;
+            registry.cancel_creation(&language, &root_path_str);
+
             // Check if we can auto-download
             let status = get_server_status(&language);
             if status.can_download {
@@ -578,32 +713,54 @@ pub async fn lsp_start_server(
     let server_id = generate_server_id(&language);
 
     // Spawn the LSP server process
-    let mut child = TokioCommand::new(&command)
+    let mut child = match TokioCommand::new(&command)
         .args(&args)
         .current_dir(&validated_root)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .map_err(|e| format!("Failed to spawn LSP server '{}': {}", command, e))?;
+    {
+        Ok(child) => child,
+        Err(e) => {
+            // Cancel the reservation before returning error
+            let mut registry = state.0.lock().await;
+            registry.cancel_creation(&language, &root_path_str);
+            return Err(format!("Failed to spawn LSP server '{}': {}", command, e));
+        }
+    };
 
     log::info!("LSP server started with PID: {:?}", child.id());
 
     // Take stdin and stdout
-    let stdin = child.stdin.take().ok_or("Failed to get stdin")?;
-    let stdout = child.stdout.take().ok_or("Failed to get stdout")?;
+    let stdin = match child.stdin.take() {
+        Some(stdin) => stdin,
+        None => {
+            let mut registry = state.0.lock().await;
+            registry.cancel_creation(&language, &root_path_str);
+            return Err("Failed to get stdin".to_string());
+        }
+    };
+    let stdout = match child.stdout.take() {
+        Some(stdout) => stdout,
+        None => {
+            let mut registry = state.0.lock().await;
+            registry.cancel_creation(&language, &root_path_str);
+            return Err("Failed to get stdout".to_string());
+        }
+    };
 
     // Create server instance
-    let mut server = LspServer::new(server_id.clone(), language.clone(), root_path_str);
+    let mut server = LspServer::new(server_id.clone(), language.clone(), root_path_str.clone());
     server.child = Some(child);
     server.stdin = Some(stdin);
 
     let server_arc = Arc::new(Mutex::new(server));
 
-    // Register the server
+    // Complete the reservation by registering the server
     {
         let mut registry = state.0.lock().await;
-        registry.insert(server_id.clone(), server_arc.clone());
+        registry.finish_creation(server_id.clone(), server_arc.clone(), language.clone(), root_path_str);
     }
 
     // Spawn stdout reader task
@@ -1007,10 +1164,19 @@ mod tests {
             "/test/path".to_string(),
         )));
 
-        registry.insert("test_id".to_string(), server.clone());
+        registry.insert("test_id".to_string(), server.clone(), "rust".to_string(), "/test/path".to_string());
 
         assert_eq!(registry.list().len(), 1);
         assert!(registry.list().contains(&"test_id".to_string()));
+
+        // Test find_by_language_and_root
+        let found = registry.find_by_language_and_root("rust", "/test/path");
+        assert_eq!(found, Some("test_id".to_string()));
+
+        // Test exists
+        assert!(registry.exists("rust", "/test/path"));
+        assert!(!registry.exists("typescript", "/test/path"));
+        assert!(!registry.exists("rust", "/other/path"));
 
         let retrieved = registry.get("test_id");
         assert!(retrieved.is_some());
@@ -1018,6 +1184,214 @@ mod tests {
         let removed = registry.remove("test_id");
         assert!(removed.is_some());
         assert!(registry.list().is_empty());
+
+        // After removal, find should return None
+        assert!(registry.find_by_language_and_root("rust", "/test/path").is_none());
+    }
+
+    #[test]
+    fn test_creation_reservation_basic() {
+        let mut registry = LspRegistry::new();
+
+        // First reservation should succeed
+        let result = registry.try_reserve_creation("rust", "/project");
+        assert_eq!(result, CreationReservation::Reserved);
+
+        // Verify pending state
+        assert!(registry.is_creation_pending("rust", "/project"));
+        assert!(!registry.is_creation_pending("typescript", "/project"));
+        assert!(!registry.is_creation_pending("rust", "/other"));
+    }
+
+    #[test]
+    fn test_creation_reservation_blocks_duplicate() {
+        let mut registry = LspRegistry::new();
+
+        // First reservation succeeds
+        let result1 = registry.try_reserve_creation("rust", "/project");
+        assert_eq!(result1, CreationReservation::Reserved);
+
+        // Second reservation for same language/path returns AlreadyCreating
+        let result2 = registry.try_reserve_creation("rust", "/project");
+        assert_eq!(result2, CreationReservation::AlreadyCreating);
+
+        // Different language should still work
+        let result3 = registry.try_reserve_creation("typescript", "/project");
+        assert_eq!(result3, CreationReservation::Reserved);
+
+        // Different path should still work
+        let result4 = registry.try_reserve_creation("rust", "/other-project");
+        assert_eq!(result4, CreationReservation::Reserved);
+    }
+
+    #[test]
+    fn test_creation_reservation_returns_existing_server() {
+        let mut registry = LspRegistry::new();
+
+        // Insert an existing server
+        let server = Arc::new(Mutex::new(LspServer::new(
+            "existing_server".to_string(),
+            "rust".to_string(),
+            "/project".to_string(),
+        )));
+        registry.insert(
+            "existing_server".to_string(),
+            server,
+            "rust".to_string(),
+            "/project".to_string(),
+        );
+
+        // Reservation should return the existing server
+        let result = registry.try_reserve_creation("rust", "/project");
+        assert_eq!(result, CreationReservation::ExistingServer("existing_server".to_string()));
+
+        // No pending creation should be set
+        assert!(!registry.is_creation_pending("rust", "/project"));
+    }
+
+    #[test]
+    fn test_finish_creation() {
+        let mut registry = LspRegistry::new();
+
+        // Reserve creation
+        let result = registry.try_reserve_creation("rust", "/project");
+        assert_eq!(result, CreationReservation::Reserved);
+        assert!(registry.is_creation_pending("rust", "/project"));
+
+        // Finish creation
+        let server = Arc::new(Mutex::new(LspServer::new(
+            "new_server".to_string(),
+            "rust".to_string(),
+            "/project".to_string(),
+        )));
+        registry.finish_creation(
+            "new_server".to_string(),
+            server,
+            "rust".to_string(),
+            "/project".to_string(),
+        );
+
+        // Pending should be cleared
+        assert!(!registry.is_creation_pending("rust", "/project"));
+
+        // Server should be registered
+        assert!(registry.exists("rust", "/project"));
+        assert_eq!(
+            registry.find_by_language_and_root("rust", "/project"),
+            Some("new_server".to_string())
+        );
+
+        // Subsequent reservation should return existing server
+        let result2 = registry.try_reserve_creation("rust", "/project");
+        assert_eq!(result2, CreationReservation::ExistingServer("new_server".to_string()));
+    }
+
+    #[test]
+    fn test_cancel_creation() {
+        let mut registry = LspRegistry::new();
+
+        // Reserve creation
+        let result = registry.try_reserve_creation("rust", "/project");
+        assert_eq!(result, CreationReservation::Reserved);
+        assert!(registry.is_creation_pending("rust", "/project"));
+
+        // Cancel creation (simulating spawn failure)
+        registry.cancel_creation("rust", "/project");
+
+        // Pending should be cleared
+        assert!(!registry.is_creation_pending("rust", "/project"));
+
+        // No server should be registered
+        assert!(!registry.exists("rust", "/project"));
+
+        // Another request can now reserve the slot
+        let result2 = registry.try_reserve_creation("rust", "/project");
+        assert_eq!(result2, CreationReservation::Reserved);
+    }
+
+    #[test]
+    fn test_cancel_creation_idempotent() {
+        let mut registry = LspRegistry::new();
+
+        // Cancel without reservation should not panic
+        registry.cancel_creation("rust", "/project");
+
+        // Reserve and cancel
+        registry.try_reserve_creation("rust", "/project");
+        registry.cancel_creation("rust", "/project");
+
+        // Double cancel should not panic
+        registry.cancel_creation("rust", "/project");
+
+        // Should still be able to reserve
+        let result = registry.try_reserve_creation("rust", "/project");
+        assert_eq!(result, CreationReservation::Reserved);
+    }
+
+    #[test]
+    fn test_creation_flow_complete_scenario() {
+        let mut registry = LspRegistry::new();
+
+        // Simulate two concurrent requests for the same server
+        // Request 1: Reserves the slot
+        let result1 = registry.try_reserve_creation("typescript", "/app");
+        assert_eq!(result1, CreationReservation::Reserved);
+
+        // Request 2: Gets blocked because creation is in progress
+        let result2 = registry.try_reserve_creation("typescript", "/app");
+        assert_eq!(result2, CreationReservation::AlreadyCreating);
+
+        // Request 1: Finishes creating the server
+        let server = Arc::new(Mutex::new(LspServer::new(
+            "ts_server_1".to_string(),
+            "typescript".to_string(),
+            "/app".to_string(),
+        )));
+        registry.finish_creation(
+            "ts_server_1".to_string(),
+            server,
+            "typescript".to_string(),
+            "/app".to_string(),
+        );
+
+        // Request 3: Should now get the existing server
+        let result3 = registry.try_reserve_creation("typescript", "/app");
+        assert_eq!(result3, CreationReservation::ExistingServer("ts_server_1".to_string()));
+    }
+
+    #[test]
+    fn test_creation_reservation_with_failure_recovery() {
+        let mut registry = LspRegistry::new();
+
+        // Request 1: Reserves but then fails
+        let result1 = registry.try_reserve_creation("go", "/project");
+        assert_eq!(result1, CreationReservation::Reserved);
+
+        // Request 2: Gets blocked
+        let result2 = registry.try_reserve_creation("go", "/project");
+        assert_eq!(result2, CreationReservation::AlreadyCreating);
+
+        // Request 1: Fails and cancels
+        registry.cancel_creation("go", "/project");
+
+        // Request 3: Can now successfully reserve (simulating retry)
+        let result3 = registry.try_reserve_creation("go", "/project");
+        assert_eq!(result3, CreationReservation::Reserved);
+
+        // Complete the creation
+        let server = Arc::new(Mutex::new(LspServer::new(
+            "go_server".to_string(),
+            "go".to_string(),
+            "/project".to_string(),
+        )));
+        registry.finish_creation(
+            "go_server".to_string(),
+            server,
+            "go".to_string(),
+            "/project".to_string(),
+        );
+
+        assert!(registry.exists("go", "/project"));
     }
 
     #[test]

@@ -1,13 +1,38 @@
 // src/services/lsp/lsp-servers.ts
 // LSP server configurations for different languages
+//
+// IMPORTANT: All language mappings are derived from LSP_SERVERS.
+// When adding a new language, only modify LSP_SERVERS - all other
+// mappings are generated automatically.
+
+import { exists } from '@tauri-apps/plugin-fs';
+
+/**
+ * Extension-specific LSP language ID mapping
+ * Used when different extensions of the same server need different languageIds
+ * e.g., .tsx needs 'typescriptreact' while .ts needs 'typescript'
+ */
+export interface ExtensionLanguageId {
+  /** File extension (e.g., '.tsx') */
+  extension: string;
+  /** LSP languageId to send to server (e.g., 'typescriptreact') */
+  lspLanguageId: string;
+}
 
 export interface LspServerConfig {
   /** Display name for the server */
   name: string;
-  /** Language ID used by LSP */
+  /** Display name for the language (for UI) */
+  displayName: string;
+  /** Language ID used by LSP (default for this server) */
   languageId: string;
   /** File extensions this server handles */
   extensions: string[];
+  /**
+   * Extension-specific languageId overrides
+   * If not specified, uses languageId for all extensions
+   */
+  extensionLanguageIds?: ExtensionLanguageId[];
   /** Command to start the server */
   command: string;
   /** Command line arguments */
@@ -22,81 +47,209 @@ export interface LspServerConfig {
 export const LSP_SERVERS: Record<string, LspServerConfig> = {
   typescript: {
     name: 'TypeScript Language Server',
+    displayName: 'TypeScript',
     languageId: 'typescript',
-    extensions: ['.ts', '.tsx'],
+    extensions: ['.ts', '.tsx', '.mts', '.cts'],
+    extensionLanguageIds: [
+      { extension: '.ts', lspLanguageId: 'typescript' },
+      { extension: '.tsx', lspLanguageId: 'typescriptreact' },
+      { extension: '.mts', lspLanguageId: 'typescript' },
+      { extension: '.cts', lspLanguageId: 'typescript' },
+    ],
     command: 'typescript-language-server',
     args: ['--stdio'],
-    rootPatterns: ['tsconfig.json', 'package.json'],
+    // Lock files indicate package root (same as opencode)
+    rootPatterns: [
+      'package-lock.json',
+      'bun.lockb',
+      'bun.lock',
+      'pnpm-lock.yaml',
+      'yarn.lock',
+      'tsconfig.json',
+      'package.json',
+    ],
   },
   javascript: {
     name: 'TypeScript Language Server (JavaScript)',
+    displayName: 'JavaScript',
     languageId: 'javascript',
     extensions: ['.js', '.jsx', '.mjs', '.cjs'],
+    extensionLanguageIds: [
+      { extension: '.js', lspLanguageId: 'javascript' },
+      { extension: '.jsx', lspLanguageId: 'javascriptreact' },
+      { extension: '.mjs', lspLanguageId: 'javascript' },
+      { extension: '.cjs', lspLanguageId: 'javascript' },
+    ],
     command: 'typescript-language-server',
     args: ['--stdio'],
-    rootPatterns: ['jsconfig.json', 'package.json'],
+    rootPatterns: [
+      'package-lock.json',
+      'bun.lockb',
+      'bun.lock',
+      'pnpm-lock.yaml',
+      'yarn.lock',
+      'jsconfig.json',
+      'package.json',
+    ],
   },
   rust: {
     name: 'rust-analyzer',
+    displayName: 'Rust',
     languageId: 'rust',
     extensions: ['.rs'],
     command: 'rust-analyzer',
     args: [],
-    rootPatterns: ['Cargo.toml'],
+    rootPatterns: ['Cargo.toml', 'Cargo.lock'],
   },
   python: {
     name: 'Pyright',
+    displayName: 'Python',
     languageId: 'python',
     extensions: ['.py', '.pyi'],
     command: 'pyright-langserver',
     args: ['--stdio'],
-    rootPatterns: ['pyproject.toml', 'setup.py', 'requirements.txt'],
+    rootPatterns: [
+      'pyproject.toml',
+      'setup.py',
+      'setup.cfg',
+      'requirements.txt',
+      'Pipfile',
+      'pyrightconfig.json',
+    ],
   },
   go: {
     name: 'gopls',
+    displayName: 'Go',
     languageId: 'go',
     extensions: ['.go'],
     command: 'gopls',
     args: [],
-    rootPatterns: ['go.mod', 'go.sum'],
+    // go.work takes priority for multi-module workspaces
+    rootPatterns: ['go.work', 'go.mod', 'go.sum'],
   },
   c: {
     name: 'clangd',
+    displayName: 'C',
     languageId: 'c',
     extensions: ['.c', '.h'],
     command: 'clangd',
     args: [],
-    rootPatterns: ['compile_commands.json', 'CMakeLists.txt', 'Makefile'],
+    rootPatterns: [
+      'compile_commands.json',
+      'compile_flags.txt',
+      '.clangd',
+      'CMakeLists.txt',
+      'Makefile',
+    ],
   },
   cpp: {
     name: 'clangd',
+    displayName: 'C++',
     languageId: 'cpp',
-    extensions: ['.cpp', '.cc', '.cxx', '.hpp', '.hh', '.hxx'],
+    extensions: ['.cpp', '.cc', '.cxx', '.c++', '.hpp', '.hh', '.hxx', '.h++'],
     command: 'clangd',
     args: [],
-    rootPatterns: ['compile_commands.json', 'CMakeLists.txt', 'Makefile'],
+    rootPatterns: [
+      'compile_commands.json',
+      'compile_flags.txt',
+      '.clangd',
+      'CMakeLists.txt',
+      'Makefile',
+    ],
   },
-};
+} as const;
+
+// ============================================================================
+// Derived Constants (auto-generated from LSP_SERVERS)
+// ============================================================================
+
+/**
+ * Extension to server key mapping
+ * e.g., '.ts' -> 'typescript', '.tsx' -> 'typescript'
+ */
+export const EXTENSION_TO_SERVER: Readonly<Record<string, string>> = Object.freeze(
+  Object.entries(LSP_SERVERS).reduce(
+    (acc, [serverKey, config]) => {
+      for (const ext of config.extensions) {
+        acc[ext] = serverKey;
+      }
+      return acc;
+    },
+    {} as Record<string, string>
+  )
+);
+
+/**
+ * Extension to LSP languageId mapping
+ * e.g., '.ts' -> 'typescript', '.tsx' -> 'typescriptreact'
+ */
+export const EXTENSION_TO_LSP_LANGUAGE_ID: Readonly<Record<string, string>> = Object.freeze(
+  Object.entries(LSP_SERVERS).reduce(
+    (acc, [_serverKey, config]) => {
+      for (const ext of config.extensions) {
+        // Check for extension-specific override
+        const override = config.extensionLanguageIds?.find((e) => e.extension === ext);
+        acc[ext] = override?.lspLanguageId ?? config.languageId;
+      }
+      return acc;
+    },
+    {} as Record<string, string>
+  )
+);
+
+/**
+ * Monaco language to server key mapping
+ * e.g., 'typescript' -> 'typescript', 'typescriptreact' -> 'typescript'
+ */
+export const MONACO_TO_SERVER: Readonly<Record<string, string>> = Object.freeze(
+  Object.entries(LSP_SERVERS).reduce(
+    (acc, [serverKey, config]) => {
+      // Map the default languageId
+      acc[config.languageId] = serverKey;
+      // Map any extension-specific languageIds
+      if (config.extensionLanguageIds) {
+        for (const { lspLanguageId } of config.extensionLanguageIds) {
+          acc[lspLanguageId] = serverKey;
+        }
+      }
+      return acc;
+    },
+    {} as Record<string, string>
+  )
+);
+
+/**
+ * Server key to display name mapping
+ * e.g., 'typescript' -> 'TypeScript'
+ */
+export const SERVER_DISPLAY_NAMES: Readonly<Record<string, string>> = Object.freeze(
+  Object.entries(LSP_SERVERS).reduce(
+    (acc, [serverKey, config]) => {
+      acc[serverKey] = config.displayName;
+      return acc;
+    },
+    {} as Record<string, string>
+  )
+);
+
+// ============================================================================
+// Helper Functions
+// ============================================================================
 
 /**
  * Get the language ID for a file extension
  */
 export function getLanguageIdForExtension(extension: string): string | null {
   const ext = extension.startsWith('.') ? extension : `.${extension}`;
-  for (const [lang, config] of Object.entries(LSP_SERVERS)) {
-    if (config.extensions.includes(ext)) {
-      return lang;
-    }
-  }
-  return null;
+  return EXTENSION_TO_SERVER[ext] ?? null;
 }
 
 /**
- * Get the language ID for a file path
+ * Get the server key for a file path
  */
 export function getLanguageIdForPath(filePath: string): string | null {
   const ext = filePath.substring(filePath.lastIndexOf('.'));
-  return getLanguageIdForExtension(ext);
+  return EXTENSION_TO_SERVER[ext] ?? null;
 }
 
 /**
@@ -121,19 +274,73 @@ export function getSupportedLanguages(): string[] {
 }
 
 /**
- * Map Monaco language ID to LSP language ID
+ * Map Monaco language ID to LSP server key (for server selection)
  */
 export function monacoToLspLanguage(monacoLanguage: string): string | null {
-  const mapping: Record<string, string> = {
-    typescript: 'typescript',
-    typescriptreact: 'typescript',
-    javascript: 'javascript',
-    javascriptreact: 'javascript',
-    rust: 'rust',
-    python: 'python',
-    go: 'go',
-    c: 'c',
-    cpp: 'cpp',
-  };
-  return mapping[monacoLanguage] || null;
+  return MONACO_TO_SERVER[monacoLanguage] ?? null;
+}
+
+/**
+ * Get the correct LSP languageId for a file path
+ * This returns the proper languageId to send to the LSP server when opening a document
+ * (e.g., 'typescriptreact' for .tsx files, not 'typescript')
+ */
+export function getLspLanguageIdForPath(filePath: string): string | null {
+  const ext = filePath.substring(filePath.lastIndexOf('.'));
+  return EXTENSION_TO_LSP_LANGUAGE_ID[ext] ?? null;
+}
+
+/**
+ * Get the display name for a language/server key
+ */
+export function getLanguageDisplayName(language: string): string {
+  return SERVER_DISPLAY_NAMES[language] ?? language;
+}
+
+/**
+ * Find the workspace root for a file based on rootPatterns
+ * Walks up the directory tree to find the nearest directory containing a rootPattern file
+ *
+ * This follows the same pattern as opencode's NearestRoot function:
+ * - Start from the file's directory
+ * - Walk up checking each directory for rootPattern files
+ * - Return the first directory containing a rootPattern, or repoRoot as fallback
+ */
+export async function findWorkspaceRoot(
+  filePath: string,
+  language: string,
+  repoRoot: string
+): Promise<string> {
+  const config = getServerConfig(language);
+  if (!config || config.rootPatterns.length === 0) {
+    return repoRoot;
+  }
+
+  // Start from the file's directory
+  let currentDir = filePath.substring(0, filePath.lastIndexOf('/'));
+
+  // Walk up until we find a rootPattern or reach repoRoot
+  while (currentDir.startsWith(repoRoot) && currentDir.length >= repoRoot.length) {
+    // Check if any rootPattern file exists in this directory
+    for (const pattern of config.rootPatterns) {
+      const checkPath = `${currentDir}/${pattern}`;
+      try {
+        if (await exists(checkPath)) {
+          return currentDir;
+        }
+      } catch {
+        // File check failed, continue to next pattern
+      }
+    }
+
+    // Move up one directory
+    const parentDir = currentDir.substring(0, currentDir.lastIndexOf('/'));
+    if (parentDir === currentDir || parentDir.length < repoRoot.length) {
+      break;
+    }
+    currentDir = parentDir;
+  }
+
+  // Fall back to repo root if no rootPattern found
+  return repoRoot;
 }

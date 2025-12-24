@@ -37,6 +37,7 @@ import { Task, TaskContent, TaskScrollButton } from './ai-elements/task';
 import { ChatInput, type ChatInputRef } from './chat/chat-input';
 import { FileChangesSummary } from './chat/file-changes-summary';
 import { MessageList } from './chat/message-list';
+import { TalkCodyFreeLoginDialog } from './talkcody-free-login-dialog';
 import { Button } from './ui/button';
 
 interface ChatBoxProps {
@@ -79,6 +80,7 @@ export const ChatBox = forwardRef<ChatBoxRef, ChatBoxProps>(
     ref
   ) => {
     const [input, setInput] = useState('');
+    const [showTalkCodyFreeLoginDialog, setShowTalkCodyFreeLoginDialog] = useState(false);
     const chatInputRef = useRef<ChatInputRef>(null);
     // Ref to track the currently displayed taskId (from props) for background task UI isolation
     const displayedTaskIdRef = useRef<string | undefined>(taskId);
@@ -202,14 +204,9 @@ export const ChatBox = forwardRef<ChatBoxRef, ChatBoxProps>(
       // Check if using TalkCody provider and user is not authenticated
       const { providerId } = parseModelIdentifier(model);
       if (providerId === 'talkcody') {
-        const { isAuthenticated, signInWithGitHub } = useAuthStore.getState();
+        const { isAuthenticated } = useAuthStore.getState();
         if (!isAuthenticated) {
-          toast.info(t.Auth.loginRequired, {
-            action: {
-              label: t.Auth.signIn,
-              onClick: () => signInWithGitHub(),
-            },
-          });
+          setShowTalkCodyFreeLoginDialog(true);
           return;
         }
       }
@@ -626,6 +623,11 @@ export const ChatBox = forwardRef<ChatBoxRef, ChatBoxProps>(
           selectedFile={selectedFile}
           status={status}
           taskId={currentTaskId}
+        />
+
+        <TalkCodyFreeLoginDialog
+          open={showTalkCodyFreeLoginDialog}
+          onClose={() => setShowTalkCodyFreeLoginDialog(false)}
         />
       </div>
     );

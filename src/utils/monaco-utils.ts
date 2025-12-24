@@ -2,55 +2,42 @@ import type { editor } from 'monaco-editor';
 
 type Monaco = typeof import('monaco-editor');
 
+// Track if diagnostics have already been disabled (global setting, only need to run once)
+let diagnosticsDisabled = false;
+
 export function setupMonacoDiagnostics(_model: editor.ITextModel | null, monacoInstance?: Monaco) {
+  // Only run once - this is a global Monaco setting
+  if (diagnosticsDisabled) return;
+
+  // TypeScript worker is removed to reduce bundle size (~6MB)
+  // All diagnostics are now provided by LSP (typescript-language-server)
+  // We need to explicitly disable Monaco's built-in TypeScript diagnostics
+  // which still run (slower) on the main thread even without the worker
   const monaco = monacoInstance || (window as { monaco?: Monaco }).monaco;
   if (!monaco) return;
 
-  // Disable Monaco's TypeScript semantic validation to avoid false positives
-  // Monaco cannot access node_modules type definitions in the browser environment,
-  // causing errors like "Cannot find name 'HTMLTextAreaElement'" or "Cannot find namespace 'React'"
-  // We rely on Biome for linting instead
-  monaco.languages.typescript?.typescriptDefaults?.setDiagnosticsOptions({
-    noSemanticValidation: true, // Disable semantic validation (type checking)
-    noSyntaxValidation: false, // Keep syntax validation
-    noSuggestionDiagnostics: true,
-  });
-  monaco.languages.typescript?.javascriptDefaults?.setDiagnosticsOptions({
-    noSemanticValidation: true,
-    noSyntaxValidation: false,
-    noSuggestionDiagnostics: true,
-  });
-
-  // Configure TypeScript compiler options for better diagnostics
-  monaco.languages.typescript?.typescriptDefaults?.setCompilerOptions({
-    target: monaco.languages.typescript.ScriptTarget.ES2020,
-    allowNonTsExtensions: true,
-    moduleResolution: monaco.languages.typescript.ModuleResolutionKind.NodeJs,
-    module: monaco.languages.typescript.ModuleKind.ESNext,
-    noEmit: true,
-    esModuleInterop: true,
-    allowSyntheticDefaultImports: true,
-    experimentalDecorators: true,
-    strict: true,
-    noUnusedLocals: false,
-    noUnusedParameters: false,
-    jsx: monaco.languages.typescript.JsxEmit.ReactJSX,
-    lib: ['ES2020', 'DOM', 'DOM.Iterable'],
-  });
-
-  monaco.languages.typescript?.javascriptDefaults?.setCompilerOptions({
-    target: monaco.languages.typescript.ScriptTarget.ES2020,
-    allowNonTsExtensions: true,
-    moduleResolution: monaco.languages.typescript.ModuleResolutionKind.NodeJs,
-    module: monaco.languages.typescript.ModuleKind.ESNext,
-    noEmit: true,
-    esModuleInterop: true,
-    allowSyntheticDefaultImports: true,
-    experimentalDecorators: true,
-    strict: false,
-    jsx: monaco.languages.typescript.JsxEmit.ReactJSX,
-    lib: ['ES2020', 'DOM', 'DOM.Iterable'],
-  });
+  try {
+    // Disable Monaco's built-in TypeScript/JavaScript validation
+    // This prevents false module resolution errors from appearing
+    if (monaco.languages.typescript?.typescriptDefaults) {
+      monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
+        noSemanticValidation: true,
+        noSyntaxValidation: true,
+        noSuggestionDiagnostics: true,
+      });
+    }
+    if (monaco.languages.typescript?.javascriptDefaults) {
+      monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions({
+        noSemanticValidation: true,
+        noSyntaxValidation: true,
+        noSuggestionDiagnostics: true,
+      });
+    }
+    diagnosticsDisabled = true;
+  } catch {
+    // monaco.languages.typescript may not be available when worker is removed
+    // This is expected and safe to ignore
+  }
 }
 
 /**

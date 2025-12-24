@@ -110,10 +110,7 @@ export function NavigationSidebar({ activeView, onViewChange }: NavigationSideba
             </Tooltip>
           );
         })}
-      </div>
 
-      {/* Bottom Settings Items */}
-      <div className="mt-auto flex flex-col items-center space-y-1 p-1">
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -127,7 +124,10 @@ export function NavigationSidebar({ activeView, onViewChange }: NavigationSideba
           </TooltipTrigger>
           <TooltipContent side="right">{t.Navigation.settingsTooltip}</TooltipContent>
         </Tooltip>
+      </div>
 
+      {/* Bottom Settings Items */}
+      <div className="mt-auto flex flex-col items-center space-y-1 p-1">
         <Tooltip>
           <TooltipTrigger asChild>
             <Button

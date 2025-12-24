@@ -344,9 +344,6 @@ export function ApiKeysSettings() {
 
   return (
     <div className="space-y-6">
-      {/* Custom Providers Section - at the top */}
-      <CustomProviderSection />
-
       {/* Built-in Providers */}
       <Card>
         <CardHeader>
@@ -691,6 +688,9 @@ export function ApiKeysSettings() {
             })}
         </CardContent>
       </Card>
+
+      {/* Custom Providers Section - at the top */}
+      <CustomProviderSection />
     </div>
   );
 }
