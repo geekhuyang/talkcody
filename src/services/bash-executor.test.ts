@@ -43,16 +43,7 @@ vi.mock('@/lib/logger', () => ({
   },
 }));
 
-// Mock taskFileService
-const { mockSaveOutput } = vi.hoisted(() => ({
-  mockSaveOutput: vi.fn(),
-}));
 
-vi.mock('@/services/task-file-service', () => ({
-  taskFileService: {
-    saveOutput: mockSaveOutput,
-  },
-}));
 
 import { describe, expect, it, beforeEach } from 'vitest';
 import { bashExecutor } from './bash-executor';
@@ -83,7 +74,6 @@ describe('BashExecutor', () => {
     mockGetValidatedWorkspaceRoot.mockClear();
     mockGetEffectiveWorkspaceRoot.mockClear();
     mockIsPathWithinProjectDirectory.mockClear();
-    mockSaveOutput.mockClear();
 
     // Default: workspace root is set and it's a git repository
     mockGetValidatedWorkspaceRoot.mockResolvedValue('/test/root');
@@ -1141,17 +1131,14 @@ rm /outside/path`);
     });
   });
 
-  describe('large output file handling', () => {
-    // Helper to generate multiline content
-    const generateLines = (count: number): string => {
-      return Array.from({ length: count }, (_, i) => `Line ${i + 1}: Some output content`).join('\n');
+  describe('output strategy handling', () => {
+    // Helper to generate content of specific character length
+    const generateChars = (count: number): string => {
+      return 'x'.repeat(count);
     };
 
     beforeEach(() => {
-      // Setup default mocks for large output tests
       mockInvoke.mockClear();
-      mockSaveOutput.mockClear();
-
       mockInvoke.mockImplementation((cmd: string, args: Record<string, unknown>) => {
         if (cmd === 'execute_user_shell' && args.command === 'git rev-parse --is-inside-work-tree') {
           return Promise.resolve(createMockShellResult({ code: 0, stdout: 'true\n' }));
@@ -1160,223 +1147,203 @@ rm /outside/path`);
       });
     });
 
-    it('should return inline output for small output (<= 100 lines)', async () => {
-      const smallOutput = 'line1\nline2\nline3';
-      mockInvoke.mockResolvedValue(createMockShellResult({ code: 0, stdout: smallOutput }));
+    describe('full strategy (OUTPUT_IS_RESULT commands)', () => {
+      it('should return full output up to 10000 chars for git status', async () => {
+        const output = generateChars(5000);
+        mockInvoke.mockResolvedValue(createMockShellResult({ code: 0, stdout: output }));
 
-      const result = await bashExecutor.execute('ls -la', 'task-123', 'tool-456');
+        const result = await bashExecutor.execute('git status', 'task-123', 'tool-456');
 
-      expect(result.success).toBe(true);
-      expect(result.output).toBe(smallOutput);
-      expect(result.outputFile).toBeUndefined();
-      expect(mockSaveOutput).not.toHaveBeenCalled();
+        expect(result.success).toBe(true);
+        expect(result.output).toBe(output);
+      });
+
+      it('should truncate output exceeding 10000 chars for ls command', async () => {
+        const output = generateChars(15000);
+        mockInvoke.mockResolvedValue(createMockShellResult({ code: 0, stdout: output }));
+
+        const result = await bashExecutor.execute('ls -la', 'task-123', 'tool-456');
+
+        expect(result.success).toBe(true);
+        expect(result.output).toContain('chars truncated');
+        expect(result.output?.length).toBeLessThanOrEqual(10100); // 10000 + truncation message
+      });
+
+      it('should return full output for cat command', async () => {
+        const output = 'file content here';
+        mockInvoke.mockResolvedValue(createMockShellResult({ code: 0, stdout: output }));
+
+        const result = await bashExecutor.execute('cat file.txt', 'task-123', 'tool-456');
+
+        expect(result.success).toBe(true);
+        expect(result.output).toBe(output);
+      });
+
+      it('should return full output for grep command', async () => {
+        const output = 'match1\nmatch2\nmatch3';
+        mockInvoke.mockResolvedValue(createMockShellResult({ code: 0, stdout: output }));
+
+        const result = await bashExecutor.execute('grep pattern file.txt', 'task-123', 'tool-456');
+
+        expect(result.success).toBe(true);
+        expect(result.output).toBe(output);
+      });
     });
 
-    it('should return file path for large output (> 100 lines)', async () => {
-      const largeOutput = generateLines(150);
-      mockInvoke.mockResolvedValue(createMockShellResult({ code: 0, stdout: largeOutput }));
-      mockSaveOutput.mockResolvedValue('/test/root/.talkcody/output/task-123/tool-456_stdout.log');
+    describe('minimal strategy (BUILD_TEST commands)', () => {
+      it('should return minimal output for successful npm test', async () => {
+        const output = 'Running tests...\nAll 100 tests passed!';
+        mockInvoke.mockResolvedValue(createMockShellResult({ code: 0, stdout: output }));
 
-      const result = await bashExecutor.execute('ls -la', 'task-123', 'tool-456');
+        const result = await bashExecutor.execute('npm run test', 'task-123', 'tool-456');
 
-      expect(result.success).toBe(true);
-      expect(result.output).toBeUndefined();
-      expect(result.outputFile).toBe('/test/root/.talkcody/output/task-123/tool-456_stdout.log');
-      expect(mockSaveOutput).toHaveBeenCalledWith(
-        'task-123',
-        'tool-456',
-        largeOutput,
-        'stdout'
-      );
+        expect(result.success).toBe(true);
+        expect(result.output).toBe('(output truncated on success)');
+      });
+
+      it('should return minimal output for successful bun build', async () => {
+        const output = 'Building...\nBuild complete!';
+        mockInvoke.mockResolvedValue(createMockShellResult({ code: 0, stdout: output }));
+
+        const result = await bashExecutor.execute('bun run build', 'task-123', 'tool-456');
+
+        expect(result.success).toBe(true);
+        expect(result.output).toBe('(output truncated on success)');
+      });
+
+      it('should return full error output for failed npm test', async () => {
+        const errorOutput = 'Test failed: expected true but got false';
+        mockInvoke.mockResolvedValue(createMockShellResult({ code: 1, stderr: errorOutput }));
+
+        const result = await bashExecutor.execute('npm run test', 'task-123', 'tool-456');
+
+        expect(result.success).toBe(false);
+        expect(result.error).toBe(errorOutput);
+      });
+
+      it('should return undefined for empty output on success', async () => {
+        mockInvoke.mockResolvedValue(createMockShellResult({ code: 0, stdout: '' }));
+
+        const result = await bashExecutor.execute('bun run lint', 'task-123', 'tool-456');
+
+        expect(result.success).toBe(true);
+        expect(result.output).toBeUndefined();
+      });
     });
 
-    it('should handle large error output (> 100 lines)', async () => {
-      const largeError = generateLines(120);
-      mockInvoke.mockResolvedValue(createMockShellResult({ code: 1, stderr: largeError }));
-      mockSaveOutput.mockResolvedValue('/test/root/.talkcody/output/task-123/tool-456_error.log');
+    describe('default strategy (other commands)', () => {
+      it('should return output up to 10000 chars for unknown commands', async () => {
+        const output = generateChars(5000);
+        mockInvoke.mockResolvedValue(createMockShellResult({ code: 0, stdout: output }));
 
-      const result = await bashExecutor.execute('npm run build', 'task-123', 'tool-456');
+        const result = await bashExecutor.execute('my-custom-command', 'task-123', 'tool-456');
 
-      expect(result.success).toBe(false);
-      expect(result.error).toBeUndefined();
-      expect(result.errorFile).toBe('/test/root/.talkcody/output/task-123/tool-456_error.log');
-      expect(mockSaveOutput).toHaveBeenCalledWith(
-        'task-123',
-        'tool-456',
-        largeError,
-        'error'
-      );
+        expect(result.success).toBe(true);
+        expect(result.output).toBe(output);
+      });
+
+      it('should truncate large output for unknown commands', async () => {
+        const output = generateChars(15000);
+        mockInvoke.mockResolvedValue(createMockShellResult({ code: 0, stdout: output }));
+
+        const result = await bashExecutor.execute('my-custom-command', 'task-123', 'tool-456');
+
+        expect(result.success).toBe(true);
+        expect(result.output).toContain('chars truncated');
+      });
     });
 
-    it('should handle both large stdout and large stderr', async () => {
-      const largeStdout = generateLines(150);
-      const largeStderr = generateLines(110);
-      mockInvoke.mockResolvedValue(createMockShellResult({ code: 1, stdout: largeStdout, stderr: largeStderr }));
-      mockSaveOutput
-        .mockResolvedValueOnce('/test/root/.talkcody/output/task-123/tool-456_stdout.log')
-        .mockResolvedValueOnce('/test/root/.talkcody/output/task-123/tool-456_error.log');
+    describe('failure handling', () => {
+      it('should return full error for failed commands', async () => {
+        const errorOutput = 'Error: command not found';
+        mockInvoke.mockResolvedValue(createMockShellResult({ code: 1, stderr: errorOutput }));
 
-      const result = await bashExecutor.execute('npm run build', 'task-123', 'tool-456');
+        const result = await bashExecutor.execute('invalid-cmd', 'task-123', 'tool-456');
 
-      expect(result.success).toBe(false);
-      expect(result.outputFile).toBe('/test/root/.talkcody/output/task-123/tool-456_stdout.log');
-      expect(result.errorFile).toBe('/test/root/.talkcody/output/task-123/tool-456_error.log');
-      expect(mockSaveOutput).toHaveBeenCalledTimes(2);
+        expect(result.success).toBe(false);
+        expect(result.error).toBe(errorOutput);
+      });
+
+      it('should include both stdout and stderr on failure', async () => {
+        const stdout = 'Partial output before error';
+        const stderr = 'Fatal error occurred';
+        mockInvoke.mockResolvedValue(createMockShellResult({ code: 1, stdout, stderr }));
+
+        const result = await bashExecutor.execute('failing-cmd', 'task-123', 'tool-456');
+
+        expect(result.success).toBe(false);
+        expect(result.output).toBe(stdout);
+        expect(result.error).toBe(stderr);
+      });
+
+      it('should truncate large error output to 10000 chars', async () => {
+        const errorOutput = generateChars(15000);
+        mockInvoke.mockResolvedValue(createMockShellResult({ code: 1, stderr: errorOutput }));
+
+        const result = await bashExecutor.execute('failing-cmd', 'task-123', 'tool-456');
+
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('chars truncated');
+        expect(result.error?.length).toBeLessThanOrEqual(10100);
+      });
     });
 
-    it('should handle mixed output (small stdout, large stderr)', async () => {
-      const smallStdout = 'Build started';
-      const largeError = generateLines(150);
-      mockInvoke.mockResolvedValue(createMockShellResult({ code: 1, stdout: smallStdout, stderr: largeError }));
-      mockSaveOutput.mockResolvedValue('/test/root/.talkcody/output/task-123/tool-456_error.log');
+    describe('edge cases', () => {
+      it('should handle empty stdout and stderr', async () => {
+        mockInvoke.mockResolvedValue(createMockShellResult({ code: 0, stdout: '', stderr: '' }));
 
-      const result = await bashExecutor.execute('npm run build', 'task-123', 'tool-456');
+        const result = await bashExecutor.execute('cd /tmp', 'task-123', 'tool-456');
 
-      expect(result.success).toBe(false);
-      expect(result.output).toBe(smallStdout);
-      expect(result.outputFile).toBeUndefined();
-      expect(result.errorFile).toBe('/test/root/.talkcody/output/task-123/tool-456_error.log');
-    });
+        expect(result.success).toBe(true);
+        expect(result.output).toBeUndefined();
+        expect(result.error).toBeUndefined();
+      });
 
-    it('should handle mixed output (large stdout, small stderr)', async () => {
-      const largeStdout = generateLines(150);
-      const smallError = 'Warning: deprecated';
-      mockInvoke.mockResolvedValue(createMockShellResult({ code: 0, stdout: largeStdout, stderr: smallError }));
-      mockSaveOutput.mockResolvedValue('/test/root/.talkcody/output/task-123/tool-456_stdout.log');
+      it('should handle whitespace-only output', async () => {
+        mockInvoke.mockResolvedValue(createMockShellResult({ code: 0, stdout: '   \n   \n   ' }));
 
-      const result = await bashExecutor.execute('npm run build', 'task-123', 'tool-456');
+        const result = await bashExecutor.execute('echo', 'task-123', 'tool-456');
 
-      expect(result.success).toBe(true);
-      expect(result.outputFile).toBe('/test/root/.talkcody/output/task-123/tool-456_stdout.log');
-      expect(result.error).toBe(smallError);
-      expect(result.errorFile).toBeUndefined();
-    });
+        expect(result.success).toBe(true);
+        expect(result.output).toBeUndefined();
+      });
 
-    it('should truncate inline output to 1000 lines for safety', async () => {
-      const outputWithMoreThan1000Lines = generateLines(1500);
-      mockInvoke.mockResolvedValue(createMockShellResult({ code: 0, stdout: outputWithMoreThan1000Lines }));
-      mockSaveOutput.mockResolvedValue('/test/root/.talkcody/output/task-123/tool-456_stdout.log');
+      it('should handle idle timeout with output', async () => {
+        const output = 'Server started on port 3000';
+        mockInvoke.mockResolvedValue(
+          createMockShellResult({
+            code: -1,
+            stdout: output,
+            idle_timed_out: true,
+            pid: 12345,
+          })
+        );
 
-      const result = await bashExecutor.execute('ls -la', 'task-123', 'tool-456');
+        const result = await bashExecutor.execute('bun run dev', 'task-123', 'tool-456');
 
-      // Since it's > 100 lines, should write to file
-      expect(result.outputFile).toBeDefined();
-      expect(mockSaveOutput).toHaveBeenCalled();
-      // The content passed to saveOutput should be the full content
-      const savedContent = mockSaveOutput.mock.calls[0][2];
-      expect(savedContent.split('\n').length).toBe(1500);
-    });
+        expect(result.success).toBe(true);
+        expect(result.idle_timed_out).toBe(true);
+        expect(result.pid).toBe(12345);
+        expect(result.output).toBe(output);
+      });
 
-    it('should fallback to inline output when file save fails', async () => {
-      const largeOutput = generateLines(150);
-      mockInvoke.mockResolvedValue(createMockShellResult({ code: 0, stdout: largeOutput }));
-      mockSaveOutput.mockRejectedValue(new Error('Write failed'));
+      it('should handle max timeout with output', async () => {
+        const output = 'Partial output before timeout';
+        mockInvoke.mockResolvedValue(
+          createMockShellResult({
+            code: -1,
+            stdout: output,
+            timed_out: true,
+            pid: 67890,
+          })
+        );
 
-      const result = await bashExecutor.execute('ls -la', 'task-123', 'tool-456');
+        const result = await bashExecutor.execute('long-running-cmd', 'task-123', 'tool-456');
 
-      expect(result.success).toBe(true);
-      expect(result.outputFile).toBeUndefined();
-      expect(result.output).toBeDefined();
-      expect(mockSaveOutput).toHaveBeenCalled();
-    });
-
-    it('should generate default toolUseId when not provided', async () => {
-      const smallOutput = 'test output';
-      mockInvoke.mockResolvedValue(createMockShellResult({ code: 0, stdout: smallOutput }));
-
-      const result = await bashExecutor.execute('echo test', 'task-123', '');
-
-      expect(result.success).toBe(true);
-      // Default toolUseId should be generated
-      expect(mockInvoke).toHaveBeenCalled();
-    });
-
-    it('should handle empty stdout and stderr', async () => {
-      mockInvoke.mockResolvedValue(createMockShellResult({ code: 0, stdout: '', stderr: '' }));
-
-      const result = await bashExecutor.execute('cd /tmp', 'task-123', 'tool-456');
-
-      expect(result.success).toBe(true);
-      expect(result.output).toBeUndefined();
-      expect(result.error).toBeUndefined();
-      expect(result.outputFile).toBeUndefined();
-      expect(result.errorFile).toBeUndefined();
-      expect(mockSaveOutput).not.toHaveBeenCalled();
-    });
-
-    it('should handle whitespace-only output', async () => {
-      mockInvoke.mockResolvedValue(createMockShellResult({ code: 0, stdout: '   \n   \n   ' }));
-
-      const result = await bashExecutor.execute('echo', 'task-123', 'tool-456');
-
-      expect(result.success).toBe(true);
-      expect(result.output).toBeUndefined();
-      expect(mockSaveOutput).not.toHaveBeenCalled();
-    });
-
-    it('should handle command with exactly 100 lines (boundary)', async () => {
-      const exactly100Lines = generateLines(100);
-      mockInvoke.mockResolvedValue(createMockShellResult({ code: 0, stdout: exactly100Lines }));
-
-      const result = await bashExecutor.execute('ls -la', 'task-123', 'tool-456');
-
-      // Exactly 100 lines should NOT be written to file (must be > 100)
-      expect(result.outputFile).toBeUndefined();
-      expect(result.output).toBe(exactly100Lines);
-      expect(mockSaveOutput).not.toHaveBeenCalled();
-    });
-
-    it('should handle command with 101 lines (boundary)', async () => {
-      const lines101 = generateLines(101);
-      mockInvoke.mockResolvedValue(createMockShellResult({ code: 0, stdout: lines101 }));
-      mockSaveOutput.mockResolvedValue('/test/root/.talkcody/output/task-123/tool-456_stdout.log');
-
-      const result = await bashExecutor.execute('ls -la', 'task-123', 'tool-456');
-
-      // 101 lines should be written to file
-      expect(result.outputFile).toBeDefined();
-      expect(result.output).toBeUndefined();
-      expect(mockSaveOutput).toHaveBeenCalled();
-    });
-
-    it('should handle background process with large output', async () => {
-      const largeOutput = generateLines(150);
-      mockInvoke.mockResolvedValue(
-        createMockShellResult({
-          code: -1,
-          stdout: largeOutput,
-          idle_timed_out: true,
-          pid: 12345,
-        })
-      );
-      mockSaveOutput.mockResolvedValue('/test/root/.talkcody/output/task-123/tool-456_stdout.log');
-
-      const result = await bashExecutor.execute('bun run dev', 'task-123', 'tool-456');
-
-      expect(result.success).toBe(true);
-      expect(result.idle_timed_out).toBe(true);
-      expect(result.pid).toBe(12345);
-      expect(result.outputFile).toBe('/test/root/.talkcody/output/task-123/tool-456_stdout.log');
-    });
-
-    it('should handle timed out command with large output', async () => {
-      const largeOutput = generateLines(150);
-      mockInvoke.mockResolvedValue(
-        createMockShellResult({
-          code: -1,
-          stdout: largeOutput,
-          timed_out: true,
-          pid: 67890,
-        })
-      );
-      mockSaveOutput.mockResolvedValue('/test/root/.talkcody/output/task-123/tool-456_stdout.log');
-
-      const result = await bashExecutor.execute('long-running-command', 'task-123', 'tool-456');
-
-      expect(result.success).toBe(true);
-      expect(result.timed_out).toBe(true);
-      expect(result.pid).toBe(67890);
-      expect(result.outputFile).toBe('/test/root/.talkcody/output/task-123/tool-456_stdout.log');
+        expect(result.success).toBe(true);
+        expect(result.timed_out).toBe(true);
+        expect(result.output).toBe(output);
+      });
     });
   });
 

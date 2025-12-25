@@ -4,55 +4,31 @@ import { z } from 'zod';
 import { LLMService } from '../services/agents/llm-service';
 import type { AgentLoopOptions, UIMessage } from '../types/agent';
 
-// Mock additional dependencies
-vi.mock('@/providers/models/model-service', () => ({
-  modelService: {
-    isModelAvailableSync: vi.fn().mockReturnValue(true),
-    getBestProviderForModelSync: vi.fn().mockReturnValue('test-provider'),
-  },
-}));
-
-vi.mock('@/providers/core/provider-factory', () => ({
-  aiProviderService: {
-    getProviderModel: vi.fn().mockReturnValue({
-      provider: {
-        apiKey: 'test-key',
-        baseUrl: 'https://test.example.com',
-      },
-      model: {
-        key: 'test-model',
-        name: 'Test Model',
-      },
-    }),
-  },
-}));
-
-// Mock provider store
-const mockProviderStore = {
-  getProviderModel: vi.fn(() => ({
-    languageModel: {
-      provider: 'test',
-      modelId: 'test-model',
+vi.mock('@/providers/stores/provider-store', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/providers/stores/provider-store')>();
+  return {
+    ...actual,
+    useProviderStore: {
+      getState: vi.fn(() => ({
+        getProviderModel: vi.fn(() => ({
+          languageModel: { provider: 'test', modelId: 'test-model' },
+          modelConfig: { name: 'Test Model', context_length: 128000 },
+          providerId: 'test-provider',
+          modelKey: 'test-model',
+        })),
+        isModelAvailable: vi.fn(() => true),
+        availableModels: [],
+        apiKeys: {},
+        providers: new Map(),
+        customProviders: {},
+      })),
     },
-    modelConfig: {
-      name: 'Test Model',
-      context_length: 128000,
+    modelService: {
+      isModelAvailableSync: vi.fn().mockReturnValue(true),
+      getBestProviderForModelSync: vi.fn().mockReturnValue('test-provider'),
     },
-    providerId: 'test-provider',
-    modelKey: 'test-model',
-  })),
-  isModelAvailable: vi.fn(() => true),
-  availableModels: [],
-  apiKeys: {},
-  providers: new Map(),
-  customProviders: {},
-};
-
-vi.mock('../stores/provider-store', () => ({
-  useProviderStore: {
-    getState: vi.fn(() => mockProviderStore),
-  },
-}));
+  };
+});
 
 vi.mock('../stores/settings-store', () => ({
   settingsManager: {
@@ -73,7 +49,7 @@ vi.mock('../services/workspace-root-service', () => ({
   getEffectiveWorkspaceRoot: vi.fn().mockResolvedValue('/test/path'),
 }));
 
-vi.mock('../services/ai-pricing-service', () => ({
+vi.mock('../services/ai/ai-pricing-service', () => ({
   aiPricingService: {
     calculateCost: vi.fn().mockResolvedValue(0.001),
   },
@@ -117,21 +93,31 @@ describe('ChatService.runManualAgentLoop', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
 
-    // Re-establish mocks after clearing
-    const { modelService } = await import('@/providers/models/model-service');
+    // Re-establish mock implementations after clearing
+    // Import the mocked module to access mock functions
+    const { modelService } = await import('@/providers/stores/provider-store');
     vi.mocked(modelService.isModelAvailableSync).mockReturnValue(true);
     vi.mocked(modelService.getBestProviderForModelSync).mockReturnValue('test-provider');
 
-    const { aiProviderService } = await import('@/providers/core/provider-factory');
-    vi.mocked(aiProviderService.getProviderModel).mockReturnValue({
-      provider: {
-        apiKey: 'test-key',
-        baseUrl: 'https://test.example.com',
-      },
-      model: {
-        key: 'test-model',
-        name: 'Test Model',
-      },
+    const { useProviderStore } = await import('@/providers/stores/provider-store');
+    vi.mocked(useProviderStore.getState).mockReturnValue({
+      getProviderModel: vi.fn().mockReturnValue({
+        languageModel: {
+          provider: 'test',
+          modelId: 'test-model',
+        },
+        modelConfig: {
+          name: 'Test Model',
+          context_length: 128000,
+        },
+        providerId: 'test-provider',
+        modelKey: 'test-model',
+      }),
+      isModelAvailable: vi.fn(() => true),
+      availableModels: [],
+      apiKeys: {},
+      providers: new Map(),
+      customProviders: {},
     });
 
     const { convertMessages, formatReasoningText } = await import('../lib/llm-utils');
@@ -717,12 +703,16 @@ describe('ChatService.runManualAgentLoop', () => {
 
     it('should handle model unavailable error', async () => {
       // Make provider store throw error for unavailable model
-      const { useProviderStore } = await import('../stores/provider-store');
+      const { useProviderStore } = await import('@/providers/stores/provider-store');
       vi.mocked(useProviderStore.getState).mockReturnValueOnce({
-        ...mockProviderStore,
         getProviderModel: vi.fn(() => {
           throw new Error('No available provider for model: unavailable-model');
         }),
+        isModelAvailable: vi.fn(() => true),
+        availableModels: [],
+        apiKeys: {},
+        providers: new Map(),
+        customProviders: {},
       });
 
       const options = createBasicOptions({ model: 'unavailable-model' });
@@ -793,7 +783,7 @@ describe('ChatService.runManualAgentLoop', () => {
     });
 
     it('should handle pricing service error gracefully', async () => {
-      const { aiPricingService } = await import('../services/ai-pricing-service');
+      const { aiPricingService } = await import('../services/ai/ai-pricing-service');
       vi.mocked(aiPricingService.calculateCost).mockRejectedValue(new Error('Pricing error'));
 
       const mockFullStream = [

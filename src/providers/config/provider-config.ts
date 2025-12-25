@@ -165,6 +165,28 @@ export const PROVIDER_CONFIGS: ProviderRegistry = {
       }),
   },
 
+  openai: {
+    id: 'openai',
+    name: 'OpenAI',
+    apiKeyName: 'OPENAI_API_KEY',
+    required: false,
+    type: 'openai',
+    createProvider: (apiKey: string, baseUrl?: string) => {
+      if (baseUrl) {
+        return createOpenAICompatible({
+          apiKey,
+          name: 'openai',
+          baseURL: baseUrl,
+          fetch: streamFetch as typeof fetch,
+        });
+      }
+      return createOpenAI({
+        apiKey,
+        fetch: streamFetch as typeof fetch,
+      });
+    },
+  },
+
   MiniMax: {
     id: 'MiniMax',
     name: 'MiniMax',
@@ -235,28 +257,6 @@ export const PROVIDER_CONFIGS: ProviderRegistry = {
         apiKey,
         fetch: streamFetch as typeof fetch,
       }),
-  },
-
-  openai: {
-    id: 'openai',
-    name: 'OpenAI',
-    apiKeyName: 'OPENAI_API_KEY',
-    required: false,
-    type: 'openai',
-    createProvider: (apiKey: string, baseUrl?: string) => {
-      if (baseUrl) {
-        return createOpenAICompatible({
-          apiKey,
-          name: 'openai',
-          baseURL: baseUrl,
-          fetch: streamFetch as typeof fetch,
-        });
-      }
-      return createOpenAI({
-        apiKey,
-        fetch: streamFetch as typeof fetch,
-      });
-    },
   },
 
   deepseek: {

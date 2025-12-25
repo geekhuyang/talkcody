@@ -210,3 +210,63 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
+
+  build-macos-intel:
+    name: Build macOS Intel
+    needs: create-release
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          targets: x86_64-apple-darwin
+
+      - name: Install frontend dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build frontend
+        run: bun run build
+
+      - name: Build Tauri app (Intel only, unsigned)
+        run: |
+          echo "Building Tauri app for x86_64-apple-darwin (unsigned)..."
+          
+          # Build without signing and notarization (will be done locally)
+          bun run tauri build --target x86_64-apple-darwin
+
+          # List generated files
+          echo ""
+          echo "Generated files in macos directory:"
+          ls -la src-tauri/target/release/bundle/macos/ || echo "Directory not found"
+          echo ""
+          echo "Generated files in dmg directory:"
+          ls -la src-tauri/target/release/bundle/dmg/ || echo "Directory not found"
+
+      - name: Upload Intel DMG to Release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: src-tauri/target/release/bundle/dmg/TalkCody_*.dmg
+          asset_name: TalkCody-intel.dmg
+          asset_content_type: application/x-apple-diskimage
+
+      - name: Upload Intel updater bundle to Release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: src-tauri/target/release/bundle/macos/*.app.tar.gz
+          asset_name: TalkCody-x86_64.app.tar.gz
+          asset_content_type: application/gzip

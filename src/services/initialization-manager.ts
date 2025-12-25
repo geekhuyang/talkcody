@@ -1,12 +1,12 @@
 // src/services/initialization-manager.ts
 import { logger } from '@/lib/logger';
+import { useProviderStore } from '@/providers/stores/provider-store';
 import { commandRegistry } from '@/services/commands/command-registry';
 import { terminalService } from '@/services/terminal-service';
 import { useAgentStore } from '@/stores/agent-store';
 import { useAuthStore } from '@/stores/auth-store';
 import { initializeLspSettings } from '@/stores/lsp-store';
 import { usePlanModeStore } from '@/stores/plan-mode-store';
-import { useProviderStore } from '@/stores/provider-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import { useSkillsStore } from '@/stores/skills-store';
 

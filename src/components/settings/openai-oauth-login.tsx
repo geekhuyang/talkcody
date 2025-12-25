@@ -6,19 +6,31 @@ import { Check, Copy, ExternalLink, Loader2, LogOut, X } from 'lucide-react';
 import { useCallback, useEffect, useId, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useLocale } from '@/hooks/use-locale';
 import { logger } from '@/lib/logger';
 import { getRedirectUri } from '@/providers/oauth/openai-oauth-service';
 import { useOpenAIOAuthStore } from '@/providers/oauth/openai-oauth-store';
-import { useProviderStore } from '@/stores/provider-store';
+import { useProviderStore } from '@/providers/stores/provider-store';
 
 type FlowState = 'idle' | 'waiting-for-callback' | 'waiting-for-code' | 'exchanging' | 'connected';
+
+const OPENAI_OAUTH_DISCLAIMER_KEY = 'openai-oauth-disclaimer-agreed';
 
 export function OpenAIOAuthLogin() {
   const { t } = useLocale();
   const authCodeId = useId();
+  const disclaimerCheckboxId = useId();
   const [flowState, setFlowState] = useState<FlowState>('idle');
   const [authInput, setAuthInput] = useState('');
   const [authUrl, setAuthUrl] = useState('');
@@ -35,6 +47,10 @@ export function OpenAIOAuthLogin() {
     disconnect,
     cleanupCallbackListener,
   } = useOpenAIOAuthStore();
+
+  // Disclaimer dialog state
+  const [showDisclaimer, setShowDisclaimer] = useState(false);
+  const [disclaimerAgreed, setDisclaimerAgreed] = useState(false);
 
   // Initialize OAuth store on mount
   useEffect(() => {
@@ -56,8 +72,8 @@ export function OpenAIOAuthLogin() {
     }
   }, [isConnected, flowState, t]);
 
-  // Handle starting OAuth flow with auto callback
-  const handleStartOAuth = useCallback(async () => {
+  // Perform the actual OAuth flow
+  const performOAuth = useCallback(async () => {
     setError(null);
     setAuthInput('');
     setAuthUrl('');
@@ -77,6 +93,33 @@ export function OpenAIOAuthLogin() {
       setFlowState('idle');
     }
   }, [startOAuthWithAutoCallback, t]);
+
+  // Handle starting OAuth flow with auto callback
+  const handleStartOAuth = useCallback(async () => {
+    // Check if user has already agreed to the disclaimer
+    const hasAgreed = localStorage.getItem(OPENAI_OAUTH_DISCLAIMER_KEY) === 'true';
+
+    if (hasAgreed) {
+      // User has agreed, proceed with OAuth
+      await performOAuth();
+    } else {
+      // Show disclaimer dialog
+      setShowDisclaimer(true);
+      setDisclaimerAgreed(false);
+    }
+  }, [performOAuth]);
+
+  // Handle disclaimer confirmation
+  const handleDisclaimerConfirm = useCallback(async () => {
+    if (!disclaimerAgreed) return;
+
+    // Save agreement to localStorage
+    localStorage.setItem(OPENAI_OAUTH_DISCLAIMER_KEY, 'true');
+    setShowDisclaimer(false);
+
+    // Proceed with OAuth
+    await performOAuth();
+  }, [disclaimerAgreed, performOAuth]);
 
   // Handle submitting authorization code/URL
   const handleSubmitCode = useCallback(async () => {
@@ -294,23 +337,74 @@ export function OpenAIOAuthLogin() {
 
   // Idle state - show sign in button
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <div className="space-y-1">
-          <p className="text-sm font-medium">{t.Settings.openaiOAuth.title}</p>
-          <p className="text-xs text-muted-foreground">{t.Settings.openaiOAuth.description}</p>
+    <>
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="space-y-1">
+            <p className="text-sm font-medium">{t.Settings.openaiOAuth.title}</p>
+            <p className="text-xs text-muted-foreground">{t.Settings.openaiOAuth.description}</p>
+          </div>
+          <Button onClick={handleStartOAuth} disabled={isLoading}>
+            {isLoading ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <ExternalLink className="mr-2 h-4 w-4" />
+            )}
+            {t.Settings.openaiOAuth.signIn}
+          </Button>
         </div>
-        <Button onClick={handleStartOAuth} disabled={isLoading}>
-          {isLoading ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            <ExternalLink className="mr-2 h-4 w-4" />
-          )}
-          {t.Settings.openaiOAuth.signIn}
-        </Button>
+
+        {(error || storeError) && <p className="text-sm text-red-500">{error || storeError}</p>}
       </div>
 
-      {(error || storeError) && <p className="text-sm text-red-500">{error || storeError}</p>}
-    </div>
+      {/* Disclaimer Dialog */}
+      <Dialog open={showDisclaimer} onOpenChange={setShowDisclaimer}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{t.Settings.openaiOAuth.disclaimer.dialogTitle}</DialogTitle>
+            <DialogDescription>
+              {t.Settings.openaiOAuth.disclaimer.dialogDescription}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="rounded-md bg-muted p-4 text-sm space-y-3">
+              <p>
+                Please read the{' '}
+                <a
+                  href={t.Settings.openaiOAuth.disclaimer.termsLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline font-medium"
+                >
+                  Terms of Use & Disclaimer
+                </a>{' '}
+                before proceeding.
+              </p>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id={disclaimerCheckboxId}
+                checked={disclaimerAgreed}
+                onCheckedChange={(checked) => setDisclaimerAgreed(checked === true)}
+              />
+              <label
+                htmlFor={disclaimerCheckboxId}
+                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+              >
+                {t.Settings.openaiOAuth.disclaimer.checkboxLabel}
+              </label>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDisclaimer(false)}>
+              {t.Settings.openaiOAuth.disclaimer.cancelButton}
+            </Button>
+            <Button onClick={handleDisclaimerConfirm} disabled={!disclaimerAgreed}>
+              {t.Settings.openaiOAuth.disclaimer.confirmButton}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

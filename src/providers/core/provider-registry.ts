@@ -86,18 +86,6 @@ export class ProviderRegistry {
     this.providers.delete(providerId);
   }
 
-  async refreshCustomProviders(): Promise<void> {
-    this.customProvidersLoaded = false;
-    // Remove existing custom providers
-    for (const [id, definition] of this.providers.entries()) {
-      if (definition.isCustom) {
-        this.providers.delete(id);
-      }
-    }
-    // Reload custom providers
-    await this.loadCustomProviders();
-  }
-
   getProvider(id: string): ProviderDefinition | undefined {
     return this.providers.get(id);
   }

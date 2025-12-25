@@ -259,6 +259,16 @@ const en: LocaleDefinition = {
       useApiKeyInstead: 'Use API key instead',
       connectionFailed: 'Connection failed. Please try again.',
       tokenRefreshFailed: 'Session expired. Please reconnect.',
+      disclaimer: {
+        dialogTitle: 'Terms of Use & Disclaimer',
+        dialogDescription:
+          'Before connecting your Claude account, please read and agree to the following terms:',
+        termsLink:
+          'https://www.talkcody.com/docs/features/claude-pro-plan#terms-of-use--disclaimer',
+        confirmButton: 'I have read and agree',
+        cancelButton: 'Cancel',
+        checkboxLabel: 'I have read and agree to the Terms of Use and Disclaimer',
+      },
     },
     openaiOAuth: {
       title: 'ChatGPT Plus/Pro',
@@ -282,6 +292,16 @@ const en: LocaleDefinition = {
       redirectUriNote: 'Note: The redirect URI is',
       redirectUriHint:
         'The browser will show "connection failed" after authorization - this is normal. Just copy the full URL from the address bar.',
+      disclaimer: {
+        dialogTitle: 'Terms of Use & Disclaimer',
+        dialogDescription:
+          'Before connecting your ChatGPT account, please read and agree to the following terms:',
+        termsLink:
+          'https://www.talkcody.com/docs/features/openai-plus-plan#terms-of-use--disclaimer',
+        confirmButton: 'I have read and agree',
+        cancelButton: 'Cancel',
+        checkboxLabel: 'I have read and agree to the Terms of Use and Disclaimer',
+      },
     },
     models: {
       title: 'Model Configuration',
@@ -458,12 +478,18 @@ const en: LocaleDefinition = {
     terminal: {
       title: 'Windows Terminal',
       description: 'Configure default shell for the integrated terminal',
+      tooltipTitle: 'Terminal',
+      tooltipDescription:
+        'Configure terminal appearance, font, and shell settings for the integrated terminal.',
       defaultShell: 'Default Shell',
       shellHint: 'Changes will take effect on the next terminal session. Windows only.',
     },
     worktree: {
       title: 'Worktree Settings',
       description: 'Configure where worktree directories are stored',
+      tooltipTitle: 'Git Worktree',
+      tooltipDescription:
+        'Configure worktree settings for parallel task isolation. Worktrees provide isolated directories for running multiple AI tasks simultaneously without conflicts.',
       rootPath: 'Worktree Root Directory',
       selectDirectory: 'Select Worktree Directory',
       customPathHint: 'Using custom path. Click reset to use default.',
@@ -768,7 +794,7 @@ const en: LocaleDefinition = {
       modified: 'Modified',
       selected: 'selected',
       reset: 'Reset',
-      noServersAvailable: 'No MCP servers available',
+      noServersAvailable: 'No MCP servers available, please add a mcp server first in mcp page',
       connected: 'Connected',
       error: 'Error',
       allToolsAlreadySelected: 'All tools from this server are already selected',
@@ -1250,6 +1276,9 @@ const en: LocaleDefinition = {
     settings: {
       title: 'Lint Settings',
       description: 'Configure syntax checking and code quality diagnostics in the editor',
+      tooltipTitle: 'Code Linting',
+      tooltipDescription:
+        'Configure code linting and quality diagnostics for real-time error detection in your editor.',
       resetToDefaults: 'Reset to Defaults',
       currentStatus: 'Current Status',
       viewStatistics: 'View current diagnostic statistics',
@@ -1333,6 +1362,9 @@ const en: LocaleDefinition = {
     settings: {
       title: 'LSP Settings',
       description: 'Configure Language Server Protocol settings for intelligent code features',
+      tooltipTitle: 'LSP (Language Server Protocol)',
+      tooltipDescription:
+        'Configure language server protocol settings for intelligent code features including diagnostics, code navigation, and auto-completion.',
       enableLsp: 'Enable LSP',
       enableLspDesc: 'Enable Language Server Protocol for code intelligence features',
       supportedLanguages: 'Supported Languages',

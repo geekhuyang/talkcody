@@ -62,9 +62,7 @@ Output can be read using \`cat\` or \`tail -f\` on the output file path returned
   renderToolResult: (result) => (
     <BashToolResult
       output={result?.output}
-      outputFile={result?.outputFile}
       error={result?.error}
-      errorFile={result?.errorFile}
       success={result?.success ?? false}
       exitCode={result?.exit_code}
       idleTimedOut={result?.idle_timed_out}

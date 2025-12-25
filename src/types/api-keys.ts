@@ -26,6 +26,7 @@ export interface AvailableModel {
   imageInput: boolean;
   imageOutput: boolean;
   audioInput: boolean;
+  inputPricing?: string;
 }
 
 // Custom provider API key mapping

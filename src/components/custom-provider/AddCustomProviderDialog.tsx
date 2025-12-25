@@ -30,7 +30,7 @@ import { useTranslation } from '@/hooks/use-locale';
 import { logger } from '@/lib/logger';
 import { customModelService, type FetchedModel } from '@/providers/custom/custom-model-service';
 import { customProviderService } from '@/providers/custom/custom-provider-service';
-import { useProviderStore } from '@/stores/provider-store';
+import { useProviderStore } from '@/providers/stores/provider-store';
 import type {
   CustomProviderConfig,
   CustomProviderTestResult,

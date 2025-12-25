@@ -1,8 +1,7 @@
-// src/services/ai-task-title-service.ts
 import { streamText } from 'ai';
 import { logger } from '@/lib/logger';
-import { aiProviderService } from '@/providers/core/provider-factory';
 import { modelTypeService } from '@/providers/models/model-type-service';
+import { useProviderStore } from '@/providers/stores/provider-store';
 import { settingsManager } from '@/stores/settings-store';
 import { ModelType } from '@/types/model-types';
 
@@ -56,7 +55,7 @@ ${languageInstruction}
 Provide ONLY the title without any quotes, explanations, or additional formatting.`;
 
       const { textStream } = await streamText({
-        model: aiProviderService.getProviderModel(modelIdentifier),
+        model: useProviderStore.getState().getProviderModel(modelIdentifier),
         prompt,
       });
 

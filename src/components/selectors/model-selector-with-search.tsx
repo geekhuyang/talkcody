@@ -7,7 +7,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useLocale } from '@/hooks/use-locale';
 import { useModelSearch } from '@/hooks/use-model-search';
-import { useProviderStore } from '@/stores/provider-store';
+import { useProviderStore } from '@/providers/stores/provider-store';
 import type { AvailableModel } from '@/types/api-keys';
 import { ModelListItem } from './model-list-item';
 import { ModelSearchInput } from './model-search-input';

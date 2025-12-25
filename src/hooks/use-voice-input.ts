@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { useTranslation } from '@/hooks/use-locale';
 import { logger } from '@/lib/logger';
-import { aiTranscriptionService } from '@/services/ai-transcription-service';
+import { aiTranscriptionService } from '@/services/ai/ai-transcription-service';
 import { ElevenLabsRealtimeService } from '@/services/elevenlabs-realtime-service';
 import { useSettingsStore } from '@/stores/settings-store';
 

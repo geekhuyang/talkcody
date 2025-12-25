@@ -251,6 +251,15 @@ const zh: LocaleDefinition = {
       useApiKeyInstead: '使用 API 密钥',
       connectionFailed: '连接失败。请重试。',
       tokenRefreshFailed: '会话已过期。请重新连接。',
+      disclaimer: {
+        dialogTitle: '使用条款与免责声明',
+        dialogDescription: '在连接您的 Claude 账户之前，请先阅读并同意以下条款：',
+        termsLink:
+          'https://www.talkcody.com/zh/docs/features/claude-pro-plan#%E4%BD%BF%E7%94%A8%E6%9D%A1%E6%AC%BE%E4%B8%8E%E5%85%8D%E8%B4%A3%E5%A3%B0%E6%98%8E',
+        confirmButton: '我已阅读并同意',
+        cancelButton: '取消',
+        checkboxLabel: '我已阅读并同意使用条款与免责声明',
+      },
     },
     openaiOAuth: {
       title: 'ChatGPT Plus/Pro',
@@ -272,6 +281,15 @@ const zh: LocaleDefinition = {
       redirectUriNote: '注意：回调地址是',
       redirectUriHint:
         '授权完成后浏览器会显示"连接失败"，这是正常的。只需复制地址栏中的完整 URL 即可。',
+      disclaimer: {
+        dialogTitle: '使用条款与免责声明',
+        dialogDescription: '在连接您的 ChatGPT 账户之前，请先阅读并同意以下条款：',
+        termsLink:
+          'https://www.talkcody.com/zh/docs/features/openai-plus-plan#%E4%BD%BF%E7%94%A8%E6%9D%A1%E6%AC%BE%E4%B8%8E%E5%85%8D%E8%B4%A3%E5%A3%B0%E6%98%8E',
+        confirmButton: '我已阅读并同意',
+        cancelButton: '取消',
+        checkboxLabel: '我已阅读并同意使用条款与免责声明',
+      },
     },
     models: {
       title: '模型配置',
@@ -446,12 +464,17 @@ const zh: LocaleDefinition = {
     terminal: {
       title: 'Windows 终端',
       description: '配置集成终端的默认 Shell',
+      tooltipTitle: '终端',
+      tooltipDescription: '配置集成终端的外观、字体和 Shell 设置。',
       defaultShell: '默认 Shell',
       shellHint: '更改将在下次打开终端时生效。仅限 Windows。',
     },
     worktree: {
       title: 'Worktree 设置',
       description: '配置 worktree 目录的存储位置',
+      tooltipTitle: 'Git Worktree',
+      tooltipDescription:
+        '配置 worktree 设置以实现并行任务隔离。工作树提供隔离的目录，允许同时运行多个 AI 任务而不会产生冲突。',
       rootPath: 'Worktree 根目录',
       selectDirectory: '选择目录',
       customPathHint: '正在使用自定义路径。点击重置以使用默认路径。',
@@ -748,7 +771,7 @@ const zh: LocaleDefinition = {
       modified: '已修改',
       selected: '已选择',
       reset: '重置',
-      noServersAvailable: '没有可用的 MCP 服务器',
+      noServersAvailable: '没有可用的 MCP 服务器, 请在 MCP 页面启用或者添加 MCP 服务器。',
       connected: '已连接',
       error: '错误',
       allToolsAlreadySelected: '此服务器的所有工具都已被选中',
@@ -1221,6 +1244,8 @@ const zh: LocaleDefinition = {
     settings: {
       title: '代码检查设置',
       description: '配置编辑器中的语法检查和代码质量诊断',
+      tooltipTitle: '代码检查',
+      tooltipDescription: '配置代码检查和质量诊断设置，实现编辑器中的实时错误检测。',
       resetToDefaults: '重置为默认',
       currentStatus: '当前状态',
       viewStatistics: '查看当前的诊断统计信息',
@@ -1303,6 +1328,8 @@ const zh: LocaleDefinition = {
     settings: {
       title: 'LSP 设置',
       description: '配置语言服务器协议设置以获得智能代码功能',
+      tooltipTitle: 'LSP（语言服务器协议）',
+      tooltipDescription: '配置语言服务器协议设置，以获得诊断、代码导航和自动补全等智能代码功能。',
       enableLsp: '启用 LSP',
       enableLspDesc: '启用语言服务器协议以获得代码智能功能',
       supportedLanguages: '支持的语言',

@@ -3,7 +3,7 @@
 import { useMemo } from 'react';
 import { useAppSettings } from '@/hooks/use-settings';
 import { logger } from '@/lib/logger';
-import { useProviderStore } from '@/stores/provider-store';
+import { useProviderStore } from '@/providers/stores/provider-store';
 import type { AvailableModel } from '@/types/api-keys';
 import { BaseSelector } from './base-selector';
 

@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # TalkCody Unified Release Script
-# Supports both Linux and Windows platforms
-# Usage: PLATFORM=linux|windows ARCH=x86_64|aarch64 ./.github/scripts/release.sh
+# Supports Linux, Windows and macOS platforms
+# Usage: PLATFORM=linux|windows|macos ARCH=x86_64|aarch64 ./.github/scripts/release.sh
 
 set -e  # Exit on error
 
@@ -27,9 +27,9 @@ echo -e "${BLUE}Architecture: ${ARCH}${NC}"
 echo ""
 
 # Validate platform
-if [ "$PLATFORM" != "linux" ] && [ "$PLATFORM" != "windows" ]; then
+if [ "$PLATFORM" != "linux" ] && [ "$PLATFORM" != "windows" ] && [ "$PLATFORM" != "macos" ]; then
     echo -e "${RED}❌ Error: Unsupported platform: $PLATFORM${NC}"
-    echo "   Supported platforms: linux, windows"
+    echo "   Supported platforms: linux, windows, macos"
     exit 1
 fi
 
@@ -54,6 +54,20 @@ case "$PLATFORM" in
             WIN_ARCH="aarch64"
         else
             echo -e "${RED}❌ Error: Unsupported Windows architecture: $ARCH${NC}"
+            exit 1
+        fi
+        UPDATER_PREFIX="talkcody"
+        ;;
+    macos)
+        BUNDLE_DIR="src-tauri/target/release/bundle/macos"
+        ARTIFACT_PATTERN="*.app.tar.gz"
+        ARTIFACT_EXT="app.tar.gz"
+        if [ "$ARCH" = "x86_64" ]; then
+            PLATFORM_ID="darwin-x86_64"
+        elif [ "$ARCH" = "aarch64" ]; then
+            PLATFORM_ID="darwin-aarch64"
+        else
+            echo -e "${RED}❌ Error: Unsupported macOS architecture: $ARCH${NC}"
             exit 1
         fi
         UPDATER_PREFIX="talkcody"

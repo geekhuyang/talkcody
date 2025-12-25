@@ -14,7 +14,7 @@ import { useLocale } from '@/hooks/use-locale';
 import { logger } from '@/lib/logger';
 import { MODEL_CONFIGS, refreshModelConfigs } from '@/providers/config/model-config';
 import { modelTypeService } from '@/providers/models/model-type-service';
-import { useProviderStore } from '@/stores/provider-store';
+import { useProviderStore } from '@/providers/stores/provider-store';
 import { settingsManager } from '@/stores/settings-store';
 import { DEFAULT_MODELS_BY_TYPE, MODEL_TYPE_SETTINGS_KEYS, ModelType } from '@/types/model-types';
 

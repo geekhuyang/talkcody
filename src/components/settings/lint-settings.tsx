@@ -5,11 +5,13 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { HelpTooltip } from '@/components/ui/help-tooltip';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import { LINT_SUPPORTED_LANGUAGES_DISPLAY } from '@/constants/lint';
 import { useLocale } from '@/hooks/use-locale';
+import { getDocLinks } from '@/lib/doc-links';
 import { useLintStore } from '@/stores/lint-store';
 
 interface RuntimeStatus {
@@ -38,7 +40,14 @@ export function LintSettings() {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>{t.Lint.settings.title}</CardTitle>
+          <div className="flex items-center gap-2">
+            <CardTitle className="text-lg">{t.Lint.settings.title}</CardTitle>
+            <HelpTooltip
+              title={t.Lint.settings.tooltipTitle}
+              description={t.Lint.settings.tooltipDescription}
+              docUrl={getDocLinks().features.codeLint}
+            />
+          </div>
           <CardDescription>{t.Lint.settings.description}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

@@ -1,10 +1,12 @@
 import { AlertCircle, AlertTriangle, Info, Lightbulb } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { HelpTooltip } from '@/components/ui/help-tooltip';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import { useLocale } from '@/hooks/use-locale';
+import { getDocLinks } from '@/lib/doc-links';
 import { useLspStore } from '@/stores/lsp-store';
 
 const LSP_SUPPORTED_LANGUAGES = [
@@ -38,7 +40,14 @@ export function LspSettings() {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>{t.Lsp.settings.title}</CardTitle>
+          <div className="flex items-center gap-2">
+            <CardTitle className="text-lg">{t.Lsp.settings.title}</CardTitle>
+            <HelpTooltip
+              title={t.Lsp.settings.tooltipTitle}
+              description={t.Lsp.settings.tooltipDescription}
+              docUrl={getDocLinks().features.lsp}
+            />
+          </div>
           <CardDescription>{t.Lsp.settings.description}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

@@ -11,10 +11,3 @@ import codexInstructions from './codex-instructions.md?raw';
 export async function getCodexInstructions(_normalizedModel = 'gpt-5.1-codex'): Promise<string> {
   return codexInstructions;
 }
-
-/**
- * Clear the instructions cache (no-op, kept for API compatibility)
- */
-export function clearCodexInstructionsCache(): void {
-  // No-op - instructions are now bundled at build time
-}

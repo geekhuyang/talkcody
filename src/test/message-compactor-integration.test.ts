@@ -23,45 +23,31 @@ vi.mock('../lib/logger', () => ({
   },
 }));
 
-vi.mock('@/providers/models/model-service', () => ({
-  modelService: {
-    isModelAvailableSync: vi.fn().mockReturnValue(true),
-    getBestProviderForModelSync: vi.fn().mockReturnValue('test-provider'),
-  },
-}));
-
-vi.mock('@/providers/core/provider-factory', () => ({
-  aiProviderService: {
-    getProviderModel: vi.fn(),
-  },
-}));
-
-// Mock provider store
-const mockProviderStore = {
-  getProviderModel: vi.fn(() => ({
-    languageModel: {
-      provider: 'test',
-      modelId: 'test-model',
+vi.mock('@/providers/stores/provider-store', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/providers/stores/provider-store')>();
+  return {
+    ...actual,
+    useProviderStore: {
+      getState: vi.fn(() => ({
+        getProviderModel: vi.fn(() => ({
+          languageModel: { provider: 'test', modelId: 'test-model' },
+          modelConfig: { name: 'Test Model', context_length: 128000 },
+          providerId: 'test-provider',
+          modelKey: 'test-model',
+        })),
+        isModelAvailable: vi.fn(() => true),
+        availableModels: [],
+        apiKeys: {},
+        providers: new Map(),
+        customProviders: {},
+      })),
     },
-    modelConfig: {
-      name: 'Test Model',
-      context_length: 128000,
+    modelService: {
+      isModelAvailableSync: vi.fn().mockReturnValue(true),
+      getBestProviderForModelSync: vi.fn().mockReturnValue('test-provider'),
     },
-    providerId: 'test-provider',
-    modelKey: 'test-model',
-  })),
-  isModelAvailable: vi.fn(() => true),
-  availableModels: [],
-  apiKeys: {},
-  providers: new Map(),
-  customProviders: {},
-};
-
-vi.mock('../stores/provider-store', () => ({
-  useProviderStore: {
-    getState: vi.fn(() => mockProviderStore),
-  },
-}));
+  };
+});
 
 vi.mock('../stores/settings-store', () => ({
   settingsManager: {
@@ -352,13 +338,11 @@ describe('MessageCompactor Integration Tests with MockLanguageModelV2', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
 
-    // Re-establish mocks after clearing
-    const { modelService } = await import('@/providers/models/model-service');
+    // Re-establish mock implementations after clearing
+    // Import the mocked module to access mock functions
+    const { modelService } = await import('@/providers/stores/provider-store');
     vi.mocked(modelService.isModelAvailableSync).mockReturnValue(true);
     vi.mocked(modelService.getBestProviderForModelSync).mockReturnValue('test-provider');
-
-    const { aiProviderService } = await import('@/providers/core/provider-factory');
-    vi.mocked(aiProviderService.getProviderModel).mockReturnValue({});
 
     const { convertMessages, formatReasoningText } = await import('../lib/llm-utils');
     vi.mocked(convertMessages).mockImplementation((messages) => Promise.resolve(messages || []));
@@ -682,12 +666,16 @@ describe('MessageCompactor Integration Tests with MockLanguageModelV2', () => {
 
     it('should handle model unavailable error', async () => {
       // Make provider store throw error for unavailable model
-      const { useProviderStore } = await import('../stores/provider-store');
+      const { useProviderStore } = await import('@/providers/stores/provider-store');
       vi.mocked(useProviderStore.getState).mockReturnValueOnce({
-        ...mockProviderStore,
         getProviderModel: vi.fn(() => {
           throw new Error('No available provider for model: unavailable-model');
         }),
+        isModelAvailable: vi.fn(() => true),
+        availableModels: [],
+        apiKeys: {},
+        providers: new Map(),
+        customProviders: {},
       });
 
       const callbacks = {

@@ -21,8 +21,8 @@ import { PROVIDER_CONFIGS, PROVIDERS_WITH_CODING_PLAN } from '@/providers';
 import { customModelService, isLocalProvider } from '@/providers/custom/custom-model-service';
 import { useClaudeOAuthStore } from '@/providers/oauth/claude-oauth-store';
 import { useOpenAIOAuthStore } from '@/providers/oauth/openai-oauth-store';
+import { useProviderStore } from '@/providers/stores/provider-store';
 import { databaseService } from '@/services/database-service';
-import { useProviderStore } from '@/stores/provider-store';
 import { settingsManager } from '@/stores/settings-store';
 import type { ApiKeySettings } from '@/types/api-keys';
 

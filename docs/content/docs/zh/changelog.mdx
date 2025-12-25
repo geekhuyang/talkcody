@@ -8,6 +8,30 @@ import { Callout } from 'fumadocs-ui/components/callout';
 
 TalkCody 的所有重要更新都记录在这里。
 
+## [0.2.0] - 2025-12-25
+
+### 新增
+
+- **支持 通过 Claude Pro/Max 订阅，在 TalkCody 中使用 Claude 模型**
+- **通过 ChatGPT Plus/Pro 订阅，在 TalkCody 中使用 OpenAI 模型**
+- **LSP 支持**：完整实现语言服务器协议，提供代码导航、代码补全、跳转到定义、查找引用等核心功能，大幅提升代码理解和编辑体验
+- **Exa 免费网页搜索**：新增 Exa 搜索引擎提供商，让网页搜索开箱即用
+- **终端字体自定义**：支持自定义终端字体和字号设置
+- 支持 MiniMax 2.1 模型 （**可以通过 TalkCody Provider 免费使用**）
+- 支持 GLM 4.7 模型 （TalkCody 支持模型热更新，一般最新的优秀 Coding 模型12小时会自动更新）
+
+### 优化
+
+- 优化 write file 和 edit file tool 的结果展示
+- 优化 Prompt Cache，进一步节省成本
+
+### 修复
+
+- 修复 Windows 终端相关 bug
+- 修复模型选择器列表重复显示 bug
+- 修复 write file tool 在某些情况下无法正确写入文件的 bug
+- 修复多窗口下，git status 显示不对的 bug 
+
 ## [0.1.20] - 2025-12-19
 
 ### 新增

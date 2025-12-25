@@ -1,7 +1,7 @@
 // src/components/selectors/provider-selector.tsx
 
 import { useMemo } from 'react';
-import { useProviderStore } from '@/stores/provider-store';
+import { useProviderStore } from '@/providers/stores/provider-store';
 import { BaseSelector } from './base-selector';
 
 interface ProviderSelectorProps {

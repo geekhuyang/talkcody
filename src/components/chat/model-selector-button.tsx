@@ -13,7 +13,7 @@ import { useLocale } from '@/hooks/use-locale';
 import { useModelSearch } from '@/hooks/use-model-search';
 import { getDocLinks } from '@/lib/doc-links';
 import { logger } from '@/lib/logger';
-import { useProviderStore } from '@/stores/provider-store';
+import { useProviderStore } from '@/providers/stores/provider-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import type { AvailableModel } from '@/types/api-keys';
 

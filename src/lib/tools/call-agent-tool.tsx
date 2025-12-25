@@ -124,7 +124,7 @@ export const callAgent = createTool({
           message: 'Model not resolved for agent. Please configure models in settings.',
         };
       }
-      const modelService = await import('@/providers/models/model-service').then(
+      const modelService = await import('@/providers/stores/provider-store').then(
         (m) => m.modelService
       );
       const isModelAvailable = modelService.isModelAvailableSync(resolvedModel);

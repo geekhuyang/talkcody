@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { useLocale } from '@/hooks/use-locale';
 import { logger } from '@/lib/logger';
-import { useProviderStore } from '@/stores/provider-store';
+import { useProviderStore } from '@/providers/stores/provider-store';
 
 interface ImageSupportAlertProps {
   open: boolean;

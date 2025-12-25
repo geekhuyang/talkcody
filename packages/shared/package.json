@@ -1,6 +1,6 @@
 {
   "name": "@talkcody/shared",
-  "version": "0.1.20",
+  "version": "0.2.0",
   "type": "module",
   "description": "Shared types and utilities for TalkCody",
   "main": "./src/index.ts",

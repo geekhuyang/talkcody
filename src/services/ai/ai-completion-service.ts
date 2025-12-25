@@ -1,8 +1,7 @@
-// src/services/ai-completion-service.ts
 import { streamText } from 'ai';
 import { logger } from '@/lib/logger';
 import { CODE_STARL } from '@/providers/config/model-config';
-import { aiProviderService } from '@/providers/core/provider-factory';
+import { useProviderStore } from '@/providers/stores/provider-store';
 
 export interface CompletionContext {
   fileContent: string;
@@ -62,7 +61,7 @@ Response should be plain text without markdown formatting.
 Keep the completion concise and relevant to the current context.`;
 
       const { textStream } = await streamText({
-        model: aiProviderService.getProviderModel(CODE_STARL),
+        model: useProviderStore.getState().getProviderModel(CODE_STARL),
         prompt,
       });
 

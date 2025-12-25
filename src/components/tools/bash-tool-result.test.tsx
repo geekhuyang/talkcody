@@ -79,56 +79,6 @@ describe('BashToolResult', () => {
     });
   });
 
-  describe('outputFile handling', () => {
-    it('should show file notification when outputFile is provided', () => {
-      const { container } = render(
-        <BashToolResult
-          outputFile="/path/to/output.log"
-          success={true}
-        />
-      );
-
-      expect(container.textContent).toContain('Full output saved to file');
-      expect(container.textContent).toContain('/path/to/output.log');
-    });
-
-    it('should show file notification when errorFile is provided', () => {
-      const { container } = render(
-        <BashToolResult
-          errorFile="/path/to/error.log"
-          success={false}
-        />
-      );
-
-      expect(container.textContent).toContain('Full output saved to file');
-      expect(container.textContent).toContain('/path/to/error.log');
-    });
-
-    it('should display outputFile notification icon', () => {
-      const { container } = render(
-        <BashToolResult
-          outputFile="/path/to/output.log"
-          success={true}
-        />
-      );
-
-      // Should have an SVG icon (FileText)
-      const svgIcons = container.querySelectorAll('svg');
-      expect(svgIcons.length).toBeGreaterThan(0);
-    });
-
-    it('should not show file notification when no outputFile/errorFile', () => {
-      const { container } = render(
-        <BashToolResult
-          output="Short output"
-          success={true}
-        />
-      );
-
-      expect(container.textContent).not.toContain('Full output saved to file');
-    });
-  });
-
   describe('idle timeout handling', () => {
     it('should show running in background message when idle timed out', () => {
       const { container } = render(
@@ -228,41 +178,6 @@ describe('BashToolResult', () => {
       expect(preElement?.textContent).toContain('Command executed successfully');
     });
 
-    it('should handle both outputFile and errorFile', () => {
-      const { container } = render(
-        <BashToolResult
-          outputFile="/path/to/output.log"
-          errorFile="/path/to/error.log"
-          success={false}
-        />
-      );
-
-      // outputFile is always shown, errorFile is shown as file notification
-      // The component shows: outputFile takes precedence for file notification
-      expect(container.textContent).toContain('/path/to/output.log');
-    });
-
-    it('should handle outputFile only', () => {
-      const { container } = render(
-        <BashToolResult
-          outputFile="/path/to/output.log"
-          success={true}
-        />
-      );
-
-      expect(container.textContent).toContain('/path/to/output.log');
-    });
-
-    it('should handle errorFile only', () => {
-      const { container } = render(
-        <BashToolResult
-          errorFile="/path/to/error.log"
-          success={false}
-        />
-      );
-
-      expect(container.textContent).toContain('/path/to/error.log');
-    });
   });
 
   describe('large output message', () => {

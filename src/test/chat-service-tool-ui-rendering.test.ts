@@ -48,7 +48,7 @@ const mockProviderStore = {
   customProviders: {},
 };
 
-vi.mock('@/stores/provider-store', () => ({
+vi.mock('@/providers/stores/provider-store', () => ({
   useProviderStore: {
     getState: vi.fn(() => mockProviderStore),
   },

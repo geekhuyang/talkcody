@@ -128,18 +128,6 @@ impl LspRegistry {
     pub fn list(&self) -> Vec<String> {
         self.servers.keys().cloned().collect()
     }
-
-    /// Find an existing server by language and root path
-    /// Returns the server_id if found, None otherwise
-    /// This is now O(1) using the index instead of O(n) with locks
-    pub fn find_by_language_and_root(&self, language: &str, root_path: &str) -> Option<String> {
-        self.server_index.get(&(language.to_string(), root_path.to_string())).cloned()
-    }
-
-    /// Check if a server exists for the given language and root path
-    pub fn exists(&self, language: &str, root_path: &str) -> bool {
-        self.find_by_language_and_root(language, root_path).is_some()
-    }
 }
 
 /// Global LSP registry state
@@ -619,27 +607,6 @@ fn validate_root_path(root_path: &str) -> Result<PathBuf, String> {
         .map_err(|e| format!("Failed to resolve root_path: {}", e))?;
 
     Ok(canonical)
-}
-
-/// Find an existing LSP server by language and root path
-#[tauri::command]
-pub async fn lsp_find_server(
-    state: tauri::State<'_, LspState>,
-    language: String,
-    root_path: String,
-) -> Result<Option<String>, String> {
-    // Validate root_path first
-    let validated_root = validate_root_path(&root_path)?;
-    let root_path_str = validated_root.to_string_lossy().to_string();
-
-    let registry = state.0.lock().await;
-    let server_id = registry.find_by_language_and_root(&language, &root_path_str);
-
-    if let Some(id) = &server_id {
-        log::info!("Found existing LSP server for {} in {}: {}", language, root_path_str, id);
-    }
-
-    Ok(server_id)
 }
 
 /// Start an LSP server for a specific language
@@ -1169,24 +1136,12 @@ mod tests {
         assert_eq!(registry.list().len(), 1);
         assert!(registry.list().contains(&"test_id".to_string()));
 
-        // Test find_by_language_and_root
-        let found = registry.find_by_language_and_root("rust", "/test/path");
-        assert_eq!(found, Some("test_id".to_string()));
-
-        // Test exists
-        assert!(registry.exists("rust", "/test/path"));
-        assert!(!registry.exists("typescript", "/test/path"));
-        assert!(!registry.exists("rust", "/other/path"));
-
         let retrieved = registry.get("test_id");
         assert!(retrieved.is_some());
 
         let removed = registry.remove("test_id");
         assert!(removed.is_some());
         assert!(registry.list().is_empty());
-
-        // After removal, find should return None
-        assert!(registry.find_by_language_and_root("rust", "/test/path").is_none());
     }
 
     #[test]
@@ -1273,13 +1228,6 @@ mod tests {
 
         // Pending should be cleared
         assert!(!registry.is_creation_pending("rust", "/project"));
-
-        // Server should be registered
-        assert!(registry.exists("rust", "/project"));
-        assert_eq!(
-            registry.find_by_language_and_root("rust", "/project"),
-            Some("new_server".to_string())
-        );
 
         // Subsequent reservation should return existing server
         let result2 = registry.try_reserve_creation("rust", "/project");

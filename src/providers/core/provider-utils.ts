@@ -279,6 +279,7 @@ export function computeAvailableModels(
         imageInput: modelConfig.imageInput ?? false,
         imageOutput: modelConfig.imageOutput ?? false,
         audioInput: modelConfig.audioInput ?? false,
+        inputPricing: modelConfig.pricing?.input,
       });
     }
   }
@@ -314,6 +315,7 @@ export function computeAvailableModels(
           imageInput: modelConfig.imageInput ?? false,
           imageOutput: modelConfig.imageOutput ?? false,
           audioInput: modelConfig.audioInput ?? false,
+          inputPricing: modelConfig.pricing?.input,
         });
       }
     }

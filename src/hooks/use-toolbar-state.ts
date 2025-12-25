@@ -5,7 +5,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { logger } from '@/lib/logger';
-import { modelService, useProviderStore } from '@/stores/provider-store';
+import { modelService, useProviderStore } from '@/providers/stores/provider-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import { useTaskStore } from '@/stores/task-store';
 

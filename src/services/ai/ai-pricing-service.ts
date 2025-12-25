@@ -1,5 +1,3 @@
-// src/services/ai-pricing-service.ts
-
 import { logger } from '@/lib/logger';
 import { MODEL_CONFIGS } from '@/providers/config/model-config';
 

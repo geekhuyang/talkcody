@@ -250,6 +250,14 @@ export interface LocaleDefinition {
       useApiKeyInstead: string;
       connectionFailed: string;
       tokenRefreshFailed: string;
+      disclaimer: {
+        dialogTitle: string;
+        dialogDescription: string;
+        termsLink: string;
+        confirmButton: string;
+        cancelButton: string;
+        checkboxLabel: string;
+      };
     };
     openaiOAuth: {
       title: string;
@@ -270,6 +278,14 @@ export interface LocaleDefinition {
       tokenRefreshFailed: string;
       redirectUriNote: string;
       redirectUriHint: string;
+      disclaimer: {
+        dialogTitle: string;
+        dialogDescription: string;
+        termsLink: string;
+        confirmButton: string;
+        cancelButton: string;
+        checkboxLabel: string;
+      };
     };
     models: {
       title: string;
@@ -443,12 +459,16 @@ export interface LocaleDefinition {
     terminal: {
       title: string;
       description: string;
+      tooltipTitle: string;
+      tooltipDescription: string;
       defaultShell: string;
       shellHint: string;
     };
     worktree: {
       title: string;
       description: string;
+      tooltipTitle: string;
+      tooltipDescription: string;
       rootPath: string;
       selectDirectory: string;
       customPathHint: string;
@@ -1211,6 +1231,8 @@ export interface LocaleDefinition {
     settings: {
       title: string;
       description: string;
+      tooltipTitle: string;
+      tooltipDescription: string;
       resetToDefaults: string;
       currentStatus: string;
       viewStatistics: string;
@@ -1293,6 +1315,8 @@ export interface LocaleDefinition {
     settings: {
       title: string;
       description: string;
+      tooltipTitle: string;
+      tooltipDescription: string;
       enableLsp: string;
       enableLspDesc: string;
       supportedLanguages: string;

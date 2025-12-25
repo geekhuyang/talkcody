@@ -3,7 +3,7 @@
  */
 
 import { logger } from '@/lib/logger';
-import { modelService } from '@/providers/models/model-service';
+import { modelService } from '@/providers/stores/provider-store';
 import { settingsManager } from '@/stores/settings-store';
 import {
   DEFAULT_MODELS_BY_TYPE,

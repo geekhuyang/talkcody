@@ -1,6 +1,6 @@
 // src/test/byok-implementation.test.ts
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { modelService as ModelServiceType } from '@/stores/provider-store';
+import type { modelService as ModelServiceType } from '@/providers/stores/provider-store';
 import type { ApiKeySettings, AvailableModel } from '@/types/api-keys';
 
 // Mock the model service
@@ -21,7 +21,7 @@ const mockModelService = {
   })),
 };
 
-vi.mock('@/stores/provider-store', () => ({
+vi.mock('@/providers/stores/provider-store', () => ({
   modelService: mockModelService,
   useProviderStore: {
     getState: () => ({
@@ -46,7 +46,7 @@ describe('BYOK Implementation', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
-    modelService = (await import('@/stores/provider-store')).modelService;
+    modelService = (await import('@/providers/stores/provider-store')).modelService;
     _settingsManager = (await import('@/stores/settings-store')).settingsManager;
   });
 

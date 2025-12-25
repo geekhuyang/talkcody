@@ -5,7 +5,7 @@ import { generateConversationTitle, generateId } from '@/lib/utils';
 import { databaseService, type StoredMessage } from '@/services/database-service';
 import { settingsManager } from '@/stores/settings-store';
 import type { MessageAttachment, UIMessage } from '@/types/agent';
-import { aiTaskTitleService } from './ai-task-title-service';
+import { aiTaskTitleService } from './ai/ai-task-title-service';
 
 /**
  * TaskManager - Provides a unified interface for task operations for the service layer

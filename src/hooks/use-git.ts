@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { aiGitMessagesService } from '@/services/ai-git-messages-service';
+import { aiGitMessagesService } from '@/services/ai/ai-git-messages-service';
 import { gitService } from '@/services/git-service';
 import { useGitStore } from '@/stores/git-store';
 import { type GitResult, gitAddAndCommit } from '@/utils/git-utils';

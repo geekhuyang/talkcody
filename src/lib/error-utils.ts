@@ -1,5 +1,5 @@
 import { InvalidToolInputError, NoSuchToolError } from 'ai';
-import { useProviderStore } from '@/stores/provider-store';
+import { useProviderStore } from '@/providers/stores/provider-store';
 
 // HTTP status codes for error handling
 export const HTTP_STATUS = {

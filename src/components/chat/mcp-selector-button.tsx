@@ -83,11 +83,6 @@ export function McpSelectorButton() {
     return filteredTools;
   }, [currentAgent, toolOverrides, servers, allTools]);
 
-  // Check if any servers are enabled
-  const hasEnabledServers = useMemo(() => {
-    return servers.some((serverData) => serverData.server.is_enabled);
-  }, [servers]);
-
   // Group tools by enabled server
   const serverGroups = useMemo(() => {
     // Only include enabled servers
@@ -226,7 +221,7 @@ export function McpSelectorButton() {
               variant="ghost"
               size="icon"
               className="h-7 w-7 relative"
-              disabled={!currentAgent || !hasEnabledServers}
+              disabled={!currentAgent}
             >
               <Server className="h-4 w-4" />
               {totalSelectedCount > 0 && (

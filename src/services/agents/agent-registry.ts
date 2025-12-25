@@ -137,6 +137,8 @@ class AgentRegistry {
       const getSkill = await getTool('getSkill');
       const exitPlanMode = await getTool('exitPlanMode');
       const askUserQuestions = await getTool('askUserQuestions');
+      const webSearch = await getTool('webSearch');
+      const webFetch = await getTool('webFetch');
 
       return (await mergeWithMCPTools({
         bash,
@@ -151,6 +153,8 @@ class AgentRegistry {
         getSkill,
         exitPlanMode,
         askUserQuestions,
+        webSearch,
+        webFetch,
       })) as AgentToolSet;
     } catch (error) {
       logger.error('buildPlannerTools: Failed to load MCP tools, using local tools only:', error);
@@ -170,6 +174,8 @@ class AgentRegistry {
       const getSkill = await getTool('getSkill');
       const exitPlanMode = await getTool('exitPlanMode');
       const askUserQuestions = await getTool('askUserQuestions');
+      const webSearch = await getTool('webSearch');
+      const webFetch = await getTool('webFetch');
 
       return {
         bash,
@@ -184,6 +190,8 @@ class AgentRegistry {
         getSkill,
         exitPlanMode,
         askUserQuestions,
+        webSearch,
+        webFetch,
       } as AgentToolSet;
     }
   }

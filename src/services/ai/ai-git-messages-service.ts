@@ -1,8 +1,7 @@
-// src/services/ai-git-messages-service.ts
 import { streamText } from 'ai';
 import { logger } from '@/lib/logger';
 import { GEMINI_25_FLASH_LITE } from '@/providers/config/model-config';
-import { aiProviderService } from '@/providers/core/provider-factory';
+import { useProviderStore } from '@/providers/stores/provider-store';
 
 export interface GitMessageContext {
   userInput?: string;
@@ -51,8 +50,26 @@ Examples:
 
 Provide ONLY the commit message without any explanations or formatting.`;
 
+      // Get the preferred model, fallback to lowest cost available model if not configured
+      const preferredModel = GEMINI_25_FLASH_LITE;
+      let modelIdentifier = preferredModel;
+
+      // Check if preferred model is available
+      if (!useProviderStore.getState().isModelAvailable(preferredModel)) {
+        const fallbackModel = useProviderStore.getState().getAvailableModel();
+        if (fallbackModel) {
+          modelIdentifier = `${fallbackModel.key}@${fallbackModel.provider}`;
+          logger.info(
+            `[GitMessage] Preferred model ${preferredModel} not available, using fallback: ${modelIdentifier}`
+          );
+        } else {
+          logger.error('No available model for git message generation');
+          return null;
+        }
+      }
+
       const { textStream } = await streamText({
-        model: aiProviderService.getProviderModel(GEMINI_25_FLASH_LITE),
+        model: useProviderStore.getState().getProviderModel(modelIdentifier),
         prompt,
       });
 

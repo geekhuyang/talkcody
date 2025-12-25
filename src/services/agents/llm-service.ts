@@ -31,7 +31,7 @@ import type {
   MessageAttachment,
   UIMessage,
 } from '../../types/agent';
-import { aiPricingService } from '../ai-pricing-service';
+import { aiPricingService } from '../ai/ai-pricing-service';
 import { buildOpenAIProviderOptions } from './openai-provider-options';
 
 /**
@@ -55,7 +55,7 @@ export interface AgentLoopCallbacks {
   onAttachment?: (attachment: MessageAttachment) => void;
 }
 
-import { useProviderStore } from '@/stores/provider-store';
+import { useProviderStore } from '@/providers/stores/provider-store';
 import { fileService } from '../file-service';
 import { MessageCompactor } from '../message-compactor';
 import { ErrorHandler } from './error-handler';

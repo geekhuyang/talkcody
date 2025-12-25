@@ -20,60 +20,49 @@ export interface ChangelogEntry {
 // Only include the most recent versions that users care about
 export const CHANGELOG_DATA: ChangelogEntry[] = [
   {
-    version: '0.1.20',
-    date: '2025-12-19',
+    version: '0.2.0',
+    date: '2025-12-25',
     en: {
       added: [
-        'MiniMax M2.1 beta model support - all users can try it for free. Select MiniMax M2.1 Beta model with talkcody provider.',
-      ],
-      changed: ['Improved Plan Mode approval and Diff Review UI'],
-    },
-    zh: {
-      added: [
-        'MiniMax M2.1 内测模型支持，所有用户均可免费体验。模型选择 MiniMax M2.1 Beta，提供商选择 talkcody 即可使用。',
-      ],
-      changed: ['优化 Plan Mode 审批和 Diff Review UI'],
-    },
-  },
-  {
-    version: '0.1.19',
-    date: '2025-12-18',
-    en: {
-      added: [
-        'Multi-Agent parallel execution (experimental), supporting multiple agents executing tasks simultaneously',
-        'Git Worktree-based parallel task execution (experimental), supporting multiple tasks running in isolated working directories',
-        'One-click Git Commit: Added Commit button in file changes summary, AI automatically generates commit message',
-        'One-click Code Review: Added Review button in file changes summary to invoke Code Review Agent',
+        'Claude model support via Claude Pro/Max subscription',
+        'OpenAI model support via ChatGPT Plus/Pro subscription',
+        'LSP Support: Complete Language Server Protocol implementation with code navigation, code completion, go-to-definition, find references, and other core features, significantly improving code understanding and editing experience',
+        'Exa Free Web Search: New Exa search engine provider for out-of-the-box web search',
+        'Custom Terminal Font: Support for custom terminal font and font size settings',
+        'MiniMax 2.1 model support (free to use via TalkCody Provider)',
+        'GLM 4.7 model support (TalkCody supports hot model updates, latest excellent coding models are usually auto-updated within 12 hours)',
       ],
       changed: [
-        'Improved MCP tool selection button',
-        'Optimized local Agent loading performance',
-        'Improved Edit File tool',
-        'Improved dangerous command detection in Bash tool',
-        'Optimized Context Compaction logic',
-        'Optimized AI request retry strategy',
+        'Improved write file and edit file tool result display',
+        'Optimized Prompt Cache for further cost savings',
       ],
       fixed: [
-        'Fixed Windows terminal bug',
-        'Fixed global content search exiting immediately when pressing space',
+        'Fixed Windows terminal related bug',
+        'Fixed model selector list duplicate display bug',
+        'Fixed write file tool failing to write files correctly in some cases',
+        'Fixed incorrect git status display in multi-window scenarios',
       ],
     },
     zh: {
       added: [
-        '多 Agent 并行执行（实验版本），支持多个 Agent 同时执行任务',
-        '基于 Git Worktree 的 Task 并行执行（实验版本），支持多个 Task 在独立工作目录中并行运行',
-        '一键 Git Commit：在文件变更摘要中新增 Commit 按钮，AI 自动生成提交信息',
-        '一键 Code Review：在文件变更摘要中新增 Review 按钮，一键调用 Code Review Agent',
+        '支持通过 Claude Pro/Max 订阅，在 TalkCody 中使用 Claude 模型',
+        '通过 ChatGPT Plus/Pro 订阅，在 TalkCody 中使用 OpenAI 模型',
+        'LSP 支持：完整实现语言服务器协议，提供代码导航、代码补全、跳转到定义、查找引用等核心功能，大幅提升代码理解和编辑体验',
+        'Exa 免费网页搜索：新增 Exa 搜索引擎提供商，让网页搜索开箱即用',
+        '终端字体自定义：支持自定义终端字体和字号设置',
+        '支持 MiniMax 2.1 模型（可以通过 TalkCody Provider 免费使用）',
+        '支持 GLM 4.7 模型（TalkCody 支持模型热更新，一般最新的优秀 Coding 模型 12 小时会自动更新）',
       ],
       changed: [
-        '优化 MCP 工具选择按钮',
-        '优化本地 Agent 加载性能',
-        '改进 Edit File 工具',
-        '改进 Bash 工具的危险命令检测',
-        '优化 Context Compaction 逻辑',
-        '优化 AI 请求的重试策略',
+        '优化 write file 和 edit file tool 的结果展示',
+        '优化 Prompt Cache，进一步节省成本',
       ],
-      fixed: ['修复 Windows 终端的 bug', '修复全局内容搜索空格直接退出的 bug'],
+      fixed: [
+        '修复 Windows 终端相关 bug',
+        '修复模型选择器列表重复显示 bug',
+        '修复 write file tool 在某些情况下无法正确写入文件的 bug',
+        '修复多窗口下，git status 显示不对的 bug',
+      ],
     },
   },
 ];

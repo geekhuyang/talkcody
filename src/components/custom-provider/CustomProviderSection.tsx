@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Switch } from '@/components/ui/switch';
 import { useTranslation } from '@/hooks/use-locale';
 import { customProviderService } from '@/providers/custom/custom-provider-service';
-import { useProviderStore } from '@/stores/provider-store';
+import { useProviderStore } from '@/providers/stores/provider-store';
 import type { CustomProviderConfig } from '@/types/custom-provider';
 
 export function CustomProviderSection() {

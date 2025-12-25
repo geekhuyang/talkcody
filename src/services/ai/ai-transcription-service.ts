@@ -1,4 +1,3 @@
-// src/services/ai-transcription-service.ts
 import { logger } from '@/lib/logger';
 import { simpleFetch } from '@/lib/tauri-fetch';
 import type { ModelKey, ProviderType } from '@/providers/config/model-config';

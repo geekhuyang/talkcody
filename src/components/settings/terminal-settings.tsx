@@ -2,6 +2,7 @@ import { platform } from '@tauri-apps/plugin-os';
 import { Terminal } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { HelpTooltip } from '@/components/ui/help-tooltip';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -12,6 +13,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useLocale } from '@/hooks/use-locale';
+import { getDocLinks } from '@/lib/doc-links';
 import { useSettingsStore } from '@/stores/settings-store';
 
 // Shell options for Windows
@@ -70,6 +72,11 @@ export function TerminalSettings() {
           <div className="flex items-center gap-2">
             <Terminal className="h-5 w-5" />
             <CardTitle className="text-lg">{t.Settings.terminal?.title || 'Terminal'}</CardTitle>
+            <HelpTooltip
+              title={t.Settings.terminal?.tooltipTitle}
+              description={t.Settings.terminal?.tooltipDescription}
+              docUrl={getDocLinks().features.terminal}
+            />
           </div>
           <CardDescription>
             {t.Settings.terminal?.description || 'Configure terminal appearance and behavior'}

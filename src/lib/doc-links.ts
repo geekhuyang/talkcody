@@ -23,6 +23,9 @@ export function getDocLinks() {
       models: `${BASE_URL}/configuration/model-settings`,
       planMode: `${BASE_URL}/features/plan-mode`,
       worktree: `${BASE_URL}/features/worktree`,
+      codeLint: `${BASE_URL}/features/code-lint`,
+      lsp: `${BASE_URL}/features/lsp`,
+      terminal: `${BASE_URL}/features/terminal`,
     },
 
     // Configuration

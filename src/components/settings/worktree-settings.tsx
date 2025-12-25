@@ -4,9 +4,11 @@ import { FolderOpen, GitBranch } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { HelpTooltip } from '@/components/ui/help-tooltip';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useLocale } from '@/hooks/use-locale';
+import { getDocLinks } from '@/lib/doc-links';
 import { useSettingsStore } from '@/stores/settings-store';
 
 export function WorktreeSettings() {
@@ -45,6 +47,11 @@ export function WorktreeSettings() {
             <CardTitle className="text-lg">
               {t.Settings.worktree?.title || 'Worktree Settings'}
             </CardTitle>
+            <HelpTooltip
+              title={t.Settings.worktree?.tooltipTitle}
+              description={t.Settings.worktree?.tooltipDescription}
+              docUrl={getDocLinks().features.worktree}
+            />
           </div>
           <CardDescription>
             {t.Settings.worktree?.description || 'Configure where worktree directories are stored'}

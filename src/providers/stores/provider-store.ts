@@ -3,7 +3,7 @@
 
 import { create } from 'zustand';
 import { logger } from '@/lib/logger';
-import { ensureModelsInitialized, MODEL_CONFIGS } from '@/providers/config/model-config';
+import { ensureModelsInitialized } from '@/providers/config/model-config';
 import { PROVIDER_CONFIGS, PROVIDERS_WITH_CODING_PLAN } from '@/providers/config/provider-config';
 import {
   buildProviderConfigs,
@@ -19,6 +19,7 @@ import {
 import { modelSyncService } from '@/providers/models/model-sync-service';
 import type { ProviderDefinition } from '@/types';
 import type { AvailableModel } from '@/types/api-keys';
+
 import type { CustomProviderConfig } from '@/types/custom-provider';
 import { isValidModelType, type ModelType } from '@/types/model-types';
 import type { ModelConfig } from '@/types/models';
@@ -67,6 +68,7 @@ interface ProviderStoreActions {
   getProviderModel: (modelIdentifier: string) => ReturnType<ProviderFactory>;
   isModelAvailable: (modelIdentifier: string) => boolean;
   getBestProviderForModel: (modelKey: string) => string | null;
+  getAvailableModel: () => AvailableModel | null;
 
   // Async mutations
   setApiKey: (providerId: string, apiKey: string) => Promise<void>;
@@ -337,6 +339,28 @@ export const useProviderStore = create<ProviderStore>((set, get) => ({
     return getBestProvider(modelKey, state.apiKeys, state.customProviders, state.oauthConfig);
   },
 
+  // Get the lowest cost available model (synchronous)
+  // Used for fallback when a specific model is not configured
+  getAvailableModel: () => {
+    const state = get();
+    const models = state.availableModels;
+
+    // Filter models with input pricing info
+    const modelsWithPricing = models.filter((m) => m.inputPricing !== undefined);
+
+    if (modelsWithPricing.length === 0) {
+      return null;
+    }
+
+    // Sort by input price (ascending) and return the cheapest
+    const sorted = modelsWithPricing.sort((a, b) => {
+      const priceA = Number.parseFloat(a.inputPricing ?? 'Infinity') || 0;
+      const priceB = Number.parseFloat(b.inputPricing ?? 'Infinity') || 0;
+      return priceA - priceB;
+    });
+    return sorted[0] ?? null;
+  },
+
   // Set API key and rebuild providers
   setApiKey: async (providerId: string, apiKey: string) => {
     // Persist to database
@@ -523,47 +547,14 @@ export const useProviderStore = create<ProviderStore>((set, get) => ({
 // ===== Backward Compatibility Exports =====
 
 /**
- * aiProviderService compatibility layer
- * @deprecated Use useProviderStore directly
- */
-export const aiProviderService = {
-  getProviderModel: (modelIdentifier: string) =>
-    useProviderStore.getState().getProviderModel(modelIdentifier),
-
-  getProviderModelAsync: async (modelIdentifier: string) => {
-    // Ensure initialized before getting provider
-    await useProviderStore.getState().initialize();
-    return useProviderStore.getState().getProviderModel(modelIdentifier);
-  },
-
-  refreshProviders: () => useProviderStore.getState().refresh(),
-
-  refreshCustomProviders: () => useProviderStore.getState().refresh(),
-
-  getProvider: (providerId: string) => useProviderStore.getState().providers.get(providerId),
-};
-
-/**
  * modelService compatibility layer
  * @deprecated Use useProviderStore directly
  */
 export const modelService = {
-  initialize: () => useProviderStore.getState().initialize(),
-
   getAvailableModels: async () => {
     await useProviderStore.getState().initialize();
     return useProviderStore.getState().availableModels;
   },
-
-  getAvailableModelsSync: () => useProviderStore.getState().availableModels,
-
-  getBestProviderForModel: async (modelKey: string) => {
-    await useProviderStore.getState().initialize();
-    return useProviderStore.getState().getBestProviderForModel(modelKey);
-  },
-
-  getBestProviderForModelSync: (modelKey: string) =>
-    useProviderStore.getState().getBestProviderForModel(modelKey),
 
   isModelAvailable: async (modelIdentifier: string) => {
     await useProviderStore.getState().initialize();
@@ -572,11 +563,6 @@ export const modelService = {
 
   isModelAvailableSync: (modelIdentifier: string) =>
     useProviderStore.getState().isModelAvailable(modelIdentifier),
-
-  refreshModels: async () => {
-    await useProviderStore.getState().refresh();
-    return modelSyncService.manualRefresh();
-  },
 
   // Methods that need agent/settings integration - import dynamically to avoid cycles
   getCurrentModel: async () => {
@@ -639,17 +625,5 @@ export const modelService = {
 
     await settingsManager.set(settingsKey, modelIdentifier);
     logger.info(`Model updated to ${modelIdentifier} for modelType ${modelType}`);
-  },
-
-  getAllProviders: () => PROVIDER_CONFIGS,
-
-  getModelWithProvider: async (modelKey: string) => {
-    const modelConfig = MODEL_CONFIGS[modelKey as keyof typeof MODEL_CONFIGS];
-    if (!modelConfig) return null;
-
-    const provider = useProviderStore.getState().getBestProviderForModel(modelKey);
-    if (!provider) return null;
-
-    return { model: modelConfig, provider };
   },
 };

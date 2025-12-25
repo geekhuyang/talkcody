@@ -3,7 +3,7 @@ import { useCallback, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { AI_COMPLETION_DELAY } from '@/constants/editor';
 import { logger } from '@/lib/logger';
-import { aiCompletionService } from '@/services/ai-completion-service';
+import { aiCompletionService } from '@/services/ai/ai-completion-service';
 import { settingsManager } from '@/stores/settings-store';
 import type { AICompletionState } from '@/types/file-editor';
 import { cleanAICompletion } from '@/utils/monaco-utils';

@@ -2,7 +2,6 @@ import { invoke } from '@tauri-apps/api/core';
 import { isAbsolute, join } from '@tauri-apps/api/path';
 import { logger } from '@/lib/logger';
 import { isPathWithinProjectDirectory } from '@/lib/utils/path-security';
-import { taskFileService } from '@/services/task-file-service';
 import { getEffectiveWorkspaceRoot } from '@/services/workspace-root-service';
 
 // Result from Rust backend execute_user_shell command
@@ -28,16 +27,65 @@ export interface BashResult {
   success: boolean;
   message: string;
   command: string;
-  output?: string; // Short output (inline return)
-  outputFile?: string; // Output file path (used when > 100 lines)
-  error?: string; // Short error message
-  errorFile?: string; // Error output file path (used when > 100 lines)
+  output?: string;
+  error?: string;
   exit_code?: number;
   timed_out?: boolean;
   idle_timed_out?: boolean;
   pid?: number | null;
   taskId?: string; // Background task ID if running in background
   isBackground?: boolean; // Whether command is running in background
+}
+
+// Commands where output IS the result - need full output (max 10000 chars)
+const OUTPUT_IS_RESULT_PATTERNS = [
+  /^git\s+(status|log|diff|show|branch|remote|config|rev-parse|ls-files|blame|describe|tag)/,
+  /^(ls|dir|find|tree|exa|lsd)\b/,
+  /^(cat|head|tail|grep|rg|ag|ack|sed|awk)\b/,
+  /^(curl|wget|http|httpie)\b/,
+  /^(echo|printf)\b/,
+  /^(pwd|whoami|hostname|uname|id|groups)\b/,
+  /^(env|printenv|set)\b/,
+  /^(which|where|type|command)\b/,
+  /^(jq|yq|xq)\b/, // JSON/YAML processors
+  /^(wc|sort|uniq|cut|tr|column)\b/, // Text processing
+  /^(date|cal|uptime)\b/,
+  /^(df|du|free|top|ps|lsof)\b/, // System info
+  /^(npm\s+(list|ls|outdated|view|info|search))\b/,
+  /^(yarn\s+(list|info|why))\b/,
+  /^(bun\s+(pm\s+ls|pm\s+cache))\b/,
+  /^(cargo\s+(tree|metadata|search))\b/,
+  /^(pip\s+(list|show|freeze))\b/,
+  /^(docker\s+(ps|images|inspect|logs))\b/,
+];
+
+// Build/test commands - minimal output on success
+const BUILD_TEST_PATTERNS = [
+  /^(npm|yarn|pnpm|bun)\s+(run\s+)?(test|build|lint|check|typecheck|tsc|compile)/,
+  /^(cargo|rustc)\s+(test|build|check|clippy)/,
+  /^(go)\s+(test|build|vet)/,
+  /^(pytest|jest|vitest|mocha|ava|tap)\b/,
+  /^(make|cmake|ninja)\b/,
+  /^(tsc|eslint|prettier|biome)\b/,
+  /^(gradle|mvn|ant)\b/,
+  /^(dotnet)\s+(build|test|run)/,
+];
+
+type OutputStrategy = 'full' | 'minimal' | 'default';
+
+/**
+ * Determine output strategy based on command type
+ */
+function getOutputStrategy(command: string): OutputStrategy {
+  const trimmedCommand = command.trim();
+
+  if (OUTPUT_IS_RESULT_PATTERNS.some((re) => re.test(trimmedCommand))) {
+    return 'full';
+  }
+  if (BUILD_TEST_PATTERNS.some((re) => re.test(trimmedCommand))) {
+    return 'minimal';
+  }
+  return 'default';
 }
 
 // List of dangerous command patterns that should be blocked
@@ -595,12 +643,7 @@ export class BashExecutor {
       const result = await this.executeCommand(command, rootPath || null);
       this.logger.info('Command result:', result);
 
-      // Generate tool use ID if not provided or empty
-      const effectiveToolUseId = toolId?.trim()
-        ? toolId.trim()
-        : `bash_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-
-      return this.formatResult(result, command, taskId, effectiveToolUseId);
+      return this.formatResult(result, command);
     } catch (error) {
       return this.handleError(error, command);
     }
@@ -628,46 +671,54 @@ export class BashExecutor {
   }
 
   /**
-   * Format execution result
-   * - Output > 100 lines: write to file, return file path
-   * - Output <= 100 lines: return inline (truncated to 1000 lines as safety)
+   * Format execution result based on command type strategy
    */
-  private async formatResult(
-    result: TauriShellResult,
-    command: string,
-    taskId: string,
-    toolUseId: string
-  ): Promise<BashResult> {
+  private formatResult(result: TauriShellResult, command: string): BashResult {
     const isSuccess = result.idle_timed_out || result.timed_out || result.code === 0;
+    const strategy = getOutputStrategy(command);
 
     let message: string;
     let output: string | undefined;
-    let outputFile: string | undefined;
     let error: string | undefined;
-    let errorFile: string | undefined;
 
     if (result.idle_timed_out) {
       message = `Command running in background (idle timeout after 5s). PID: ${result.pid ?? 'unknown'}`;
+      output = this.truncateByChars(result.stdout, 10000);
+      error = result.stderr || undefined;
     } else if (result.timed_out) {
       message = `Command timed out after max timeout. PID: ${result.pid ?? 'unknown'}`;
+      output = this.truncateByChars(result.stdout, 10000);
+      error = result.stderr || undefined;
     } else if (result.code === 0) {
       message = 'Command executed successfully';
+
+      switch (strategy) {
+        case 'full':
+          // Output IS the result - return up to 10000 chars
+          output = this.truncateByChars(result.stdout, 10000);
+          break;
+        case 'minimal':
+          // Build/test success - minimal output
+          output = result.stdout.trim() ? '(output truncated on success)' : undefined;
+          break;
+        default:
+          // Default: return up to 10000 chars
+          output = this.truncateByChars(result.stdout, 10000);
+          break;
+      }
+      error = result.stderr || undefined;
     } else {
+      // Failure: always show full error information
       message = `Command failed with exit code ${result.code}`;
-    }
-
-    // Process stdout
-    if (result.stdout?.trim()) {
-      const processed = await this.processOutput(result.stdout, taskId, toolUseId, 'stdout');
-      output = processed.inline;
-      outputFile = processed.file;
-    }
-
-    // Process stderr
-    if (result.stderr?.trim()) {
-      const processed = await this.processOutput(result.stderr, taskId, toolUseId, 'error');
-      error = processed.inline;
-      errorFile = processed.file;
+      if (result.stderr?.trim()) {
+        error = this.truncateByChars(result.stderr, 10000);
+        // Also include stdout if it contains useful info
+        if (result.stdout.trim()) {
+          output = this.truncateByChars(result.stdout, 5000);
+        }
+      } else {
+        output = this.truncateByChars(result.stdout, 10000);
+      }
     }
 
     return {
@@ -675,9 +726,7 @@ export class BashExecutor {
       command,
       message,
       output,
-      outputFile,
       error,
-      errorFile,
       exit_code: result.code,
       timed_out: result.timed_out,
       idle_timed_out: result.idle_timed_out,
@@ -686,62 +735,17 @@ export class BashExecutor {
   }
 
   /**
-   * Process output: write to file if large, otherwise return inline
+   * Truncate output to max N characters (from the end)
    */
-  private async processOutput(
-    content: string,
-    taskId: string,
-    toolUseId: string,
-    type: 'stdout' | 'error'
-  ): Promise<{ inline?: string; file?: string }> {
-    if (!content.trim()) {
-      return {};
-    }
-
-    if (this.shouldWriteToFile(content)) {
-      try {
-        const filePath = await taskFileService.saveOutput(taskId, toolUseId, content, type);
-        return { file: filePath };
-      } catch (fileError) {
-        this.logger.error(`Failed to write ${type} to file, keeping inline:`, fileError);
-        return { inline: this.truncateOutput(content, 1000) };
-      }
-    }
-
-    return { inline: this.truncateOutput(content, 1000) };
-  }
-
-  /**
-   * Truncate output to last N lines
-   */
-  private truncateOutput(stdout: string, maxLines: number): string | undefined {
-    if (!stdout.trim()) {
+  private truncateByChars(text: string, maxChars: number): string | undefined {
+    if (!text.trim()) {
       return undefined;
     }
-    const lines = stdout.split('\n');
-    if (lines.length > maxLines) {
-      return `... (${lines.length - maxLines} lines truncated)\n${lines.slice(-maxLines).join('\n')}`;
+    if (text.length > maxChars) {
+      const truncatedCount = text.length - maxChars;
+      return `... (${truncatedCount} chars truncated)\n${text.slice(-maxChars)}`;
     }
-    return stdout;
-  }
-
-  /**
-   * Count the number of lines in text (optimized to avoid large array allocation)
-   */
-  private countLines(text: string): number {
-    if (!text.trim()) return 0;
-    let count = 1;
-    for (let i = 0; i < text.length; i++) {
-      if (text[i] === '\n') count++;
-    }
-    return count;
-  }
-
-  /**
-   * Check if text should be written to file based on line count
-   */
-  private shouldWriteToFile(text: string): boolean {
-    return this.countLines(text) > 100;
+    return text;
   }
 
   /**

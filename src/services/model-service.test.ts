@@ -4,11 +4,20 @@ import type { AgentDefinition } from '@/types/agent';
 import { settingsManager } from '@/stores/settings-store';
 import { agentRegistry } from './agents/agent-registry';
 import { logger } from '@/lib/logger';
-import { modelService } from '@/providers/models/model-service';
+
+// Import the modelService from provider-store (new location)
+const { modelService } = await import('@/providers/stores/provider-store');
 
 // Mock dependencies
 vi.mock('@/providers/config/model-config', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/providers/config/model-config')>();
+  return {
+    ...actual,
+  };
+});
+
+vi.mock('@/providers/config/provider-config', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/providers/config/provider-config')>();
   return {
     ...actual,
   };
@@ -37,9 +46,10 @@ vi.mock('@/lib/logger', () => ({
   },
 }));
 
-vi.mock('./model-sync-service', () => ({
+vi.mock('@/providers/models/model-sync-service', () => ({
   modelSyncService: {
     initialize: vi.fn().mockResolvedValue(undefined),
+    manualRefresh: vi.fn().mockResolvedValue(undefined),
   },
 }));
 
@@ -49,7 +59,43 @@ vi.mock('@/providers/models/model-type-service', () => ({
   },
 }));
 
-describe('ModelService - getCurrentModel', () => {
+vi.mock('@/providers/core/provider-utils', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/providers/core/provider-utils')>();
+  return {
+    ...actual,
+    createProviders: vi.fn().mockReturnValue(new Map()),
+    computeAvailableModels: vi.fn().mockReturnValue([]),
+    buildProviderConfigs: vi.fn().mockReturnValue(new Map()),
+  };
+});
+
+vi.mock('@/providers/custom/custom-provider-service', () => ({
+  customProviderService: {
+    getEnabledCustomProviders: vi.fn().mockResolvedValue([]),
+  },
+}));
+
+vi.mock('@/providers/custom/custom-model-service', () => ({
+  customModelService: {
+    getCustomModels: vi.fn().mockResolvedValue({ models: {} }),
+  },
+}));
+
+vi.mock('@/providers/oauth/claude-oauth-store', () => ({
+  getClaudeOAuthAccessToken: vi.fn().mockResolvedValue(null),
+  useClaudeOAuthStore: {
+    getState: vi.fn().mockReturnValue({ accessToken: null }),
+  },
+}));
+
+vi.mock('@/providers/oauth/openai-oauth-store', () => ({
+  getOpenAIOAuthAccessToken: vi.fn().mockResolvedValue(null),
+  useOpenAIOAuthStore: {
+    getState: vi.fn().mockReturnValue({ accessToken: null, accountId: null }),
+  },
+}));
+
+describe('ModelService (provider-store compat) - getCurrentModel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -90,8 +136,8 @@ describe('ModelService - getCurrentModel', () => {
 
     vi.mocked(settingsManager.getAgentId).mockResolvedValue('non-existent');
     vi.mocked(agentRegistry.getWithResolvedTools)
-      .mockResolvedValueOnce(undefined) // First call returns undefined
-      .mockResolvedValueOnce(mockAgent); // Second call returns planner
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(mockAgent);
     vi.mocked(modelTypeService.resolveModelType).mockResolvedValue('claude-3@anthropic');
 
     const result = await modelService.getCurrentModel();
@@ -111,7 +157,7 @@ describe('ModelService - getCurrentModel', () => {
     const result = await modelService.getCurrentModel();
 
     expect(result).toBe('');
-    expect(logger.error).toHaveBeenCalledWith('Unable to resolve any agent, including fallback planner agent');
+    expect(logger.error).toHaveBeenCalledWith('Unable to resolve any agent');
   });
 
   it('should return empty string if agent has no modelType', async () => {
@@ -120,7 +166,6 @@ describe('ModelService - getCurrentModel', () => {
       name: 'Coding Agent',
       systemPrompt: 'Test prompt',
       isDefault: true,
-      // modelType is missing
     } as AgentDefinition;
 
     vi.mocked(settingsManager.getAgentId).mockResolvedValue('coding');
@@ -132,8 +177,6 @@ describe('ModelService - getCurrentModel', () => {
     expect(logger.warn).toHaveBeenCalledWith('Agent has no modelType defined');
   });
 
-  // BUG FIX TEST: This test verifies the fix for the "No available provider for model" issue
-  // where new users with empty model settings get the default model instead of empty string
   it('should return default model when settings are empty (bug fix for new users)', async () => {
     const { modelTypeService } = await import('@/providers/models/model-type-service');
 
@@ -147,17 +190,14 @@ describe('ModelService - getCurrentModel', () => {
 
     vi.mocked(settingsManager.getAgentId).mockResolvedValue('coding');
     vi.mocked(agentRegistry.getWithResolvedTools).mockResolvedValue(mockAgent);
-    // Simulate new user scenario: modelTypeService resolves to default GLM 4.6
     vi.mocked(modelTypeService.resolveModelType).mockResolvedValue('glm-4.6@aiGateway');
 
     const result = await modelService.getCurrentModel();
 
-    // Should return the default model, not empty string
     expect(result).toBe('glm-4.6@aiGateway');
     expect(modelTypeService.resolveModelType).toHaveBeenCalledWith(ModelType.MAIN);
   });
 
-  // Additional test to ensure resolveModelType is called for all model types
   it('should use resolveModelType for different model types', async () => {
     const { modelTypeService } = await import('@/providers/models/model-type-service');
 
