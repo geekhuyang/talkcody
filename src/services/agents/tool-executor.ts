@@ -468,7 +468,6 @@ export class ToolExecutor {
             taskId: options.taskId,
           };
           onToolMessage(toolResultMessage);
-          logger.info('[ToolExecutor] ✅ Tool-result message sent successfully');
         } else {
           logger.warn(
             '[ToolExecutor] ⚠️ onToolMessage callback is undefined, skipping tool-result message'

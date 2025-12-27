@@ -49,7 +49,6 @@ updates.get('/:target/:arch/:currentVersion', async (c) => {
       return c.json({ error: 'Update service not configured' }, 500);
     }
 
-    // Fetch latest.json from R2
     const latestObject = await bucket.get('latest.json');
 
     if (!latestObject) {
@@ -70,7 +69,6 @@ updates.get('/:target/:arch/:currentVersion', async (c) => {
       return c.body(null, 204);
     }
 
-    // Fetch the manifest for the latest version
     const manifestPath = `releases/v${latestData.version}/manifest.json`;
     const manifestObject = await bucket.get(manifestPath);
 

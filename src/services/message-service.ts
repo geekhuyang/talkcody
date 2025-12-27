@@ -150,7 +150,6 @@ class MessageService {
     // 3. Persist to database
     try {
       await databaseService.updateMessage(messageId, content);
-      logger.info('[MessageService] Message finalized and persisted', { taskId, messageId });
     } catch (error) {
       logger.error('[MessageService] Failed to persist finalized message:', error);
     }
@@ -220,11 +219,6 @@ class MessageService {
         undefined,
         toolMessage.id
       );
-      logger.info('[MessageService] Tool message persisted', {
-        taskId,
-        messageId: toolMessage.id,
-        toolName: toolContent.toolName,
-      });
     } catch (error) {
       logger.error('[MessageService] Failed to persist tool message:', error);
     }

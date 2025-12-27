@@ -21,6 +21,8 @@ vi.mock('@/providers/custom/custom-provider-service', () => ({
 
 vi.mock('@/lib/logger', () => ({
   logger: {
+    trace: vi.fn(),
+    debug: vi.fn(),
     info: vi.fn(),
     warn: vi.fn(),
     error: vi.fn(),
@@ -165,7 +167,6 @@ describe('CustomModelService - fetchProviderModels with custom base URL', () => 
 describe('CustomModelService - addCustomModel provider merging', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
-    vi.resetModules();
   });
 
   it('should merge providers when adding a model with same ID via addCustomModel', async () => {
@@ -431,7 +432,6 @@ describe('CustomModelService - addCustomModel provider merging', () => {
 describe('CustomModelService - cache invalidation after write operations', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
-    vi.resetModules();
   });
 
   it('should clear cache after addCustomModel so next read gets fresh data', async () => {

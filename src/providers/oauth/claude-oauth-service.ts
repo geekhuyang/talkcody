@@ -1,8 +1,11 @@
 // src/providers/oauth/claude-oauth-service.ts
 // Core OAuth service for Claude Pro/Max authentication
 
+import { createAnthropic } from '@ai-sdk/anthropic';
 import { logger } from '@/lib/logger';
-import { simpleFetch } from '@/lib/tauri-fetch';
+import { simpleFetch, streamFetch } from '@/lib/tauri-fetch';
+
+type FetchFn = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
 // OAuth constants from opencode-anthropic-auth
 const CLIENT_ID = '9d1c250a-e61b-44d9-88ed-5944d1962f5e';
@@ -207,4 +210,59 @@ export function isTokenExpired(expiresAt: number): boolean {
  */
 export function getClientId(): string {
   return CLIENT_ID;
+}
+
+/**
+ * Create a custom fetch function for Claude OAuth that:
+ * 1. Dynamically gets the latest access token (with auto-refresh)
+ * 2. Adds Authorization: Bearer header
+ * 3. Removes x-api-key header
+ * 4. Adds OAuth beta headers
+ * 5. Adds Claude Code User-Agent header (required for OAuth)
+ */
+function createClaudeOAuthFetch(): FetchFn {
+  return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    // Dynamically get the latest access token (with auto-refresh)
+    // Using dynamic import to avoid circular dependencies
+    const { getClaudeOAuthAccessToken } = await import('./claude-oauth-store');
+    const accessToken = await getClaudeOAuthAccessToken();
+
+    if (!accessToken) {
+      throw new Error(
+        'Claude OAuth access token not available. Please connect your Claude account in settings.'
+      );
+    }
+
+    const headers = new Headers(init?.headers);
+
+    // Remove x-api-key header (SDK adds this automatically)
+    headers.delete('x-api-key');
+
+    // Add Bearer token authorization
+    headers.set('Authorization', `Bearer ${accessToken}`);
+
+    // Merge beta headers
+    const existingBeta = headers.get('anthropic-beta') || '';
+    const existingBetaList = existingBeta
+      .split(',')
+      .map((b) => b.trim())
+      .filter(Boolean);
+    const oauthBetaList = CLAUDE_OAUTH_BETA_HEADERS.split(',').map((b) => b.trim());
+    const mergedBetas = [...new Set([...oauthBetaList, ...existingBetaList])].join(',');
+    headers.set('anthropic-beta', mergedBetas);
+
+    return streamFetch(input, { ...init, headers });
+  };
+}
+
+/**
+ * Create an Anthropic provider that uses OAuth authentication
+ * The provider will automatically refresh tokens on each request
+ * @deprecated accessToken parameter - token is now dynamically fetched
+ */
+export function createAnthropicOAuthProvider(_accessToken?: string) {
+  return createAnthropic({
+    apiKey: 'oauth-placeholder', // SDK requires this but we override with Bearer token
+    fetch: createClaudeOAuthFetch() as typeof fetch,
+  });
 }

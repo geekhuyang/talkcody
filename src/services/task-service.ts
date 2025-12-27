@@ -15,6 +15,7 @@ import { logger } from '@/lib/logger';
 import { mapStoredMessagesToUI } from '@/lib/message-mapper';
 import { generateConversationTitle, generateId } from '@/lib/utils';
 import { databaseService } from '@/services/database-service';
+import { taskFileService } from '@/services/task-file-service';
 import { useEditReviewStore } from '@/stores/edit-review-store';
 import { useExecutionStore } from '@/stores/execution-store';
 import { useFileChangesStore } from '@/stores/file-changes-store';
@@ -228,6 +229,14 @@ class TaskService {
     } catch (error) {
       logger.error('[TaskService] Failed to delete task from database:', error);
       throw error;
+    }
+
+    // 5. Clean up compacted messages file
+    try {
+      await taskFileService.cleanupType('context', taskId);
+      logger.info('[TaskService] Cleaned up compacted messages file', { taskId });
+    } catch (error) {
+      logger.warn('[TaskService] Failed to clean up compacted messages file:', error);
     }
   }
 

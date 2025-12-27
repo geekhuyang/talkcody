@@ -14,14 +14,15 @@ interface IconProps {
 }
 
 // Image-based icon component for providers without simple-icons
-function createImageIcon(src: string, alt: string) {
+function createImageIcon(src: string, alt: string, invertOnDark = false) {
   return function ImageIcon({ size = 16, className }: IconProps) {
+    const darkModeClass = invertOnDark ? 'dark:invert dark:brightness-0 dark:contrast-100' : '';
     return (
       <img
         src={src}
         width={size}
         height={size}
-        className={className}
+        className={`${className || ''} ${darkModeClass}`.trim()}
         alt={alt}
         style={{ objectFit: 'contain' }}
       />
@@ -46,10 +47,12 @@ export const PROVIDER_ICONS: Record<string, ComponentType<IconProps>> = {
   MiniMax: createImageIcon('/icons/providers/minimax.svg', 'Minimax'),
   openRouter: createImageIcon('/icons/providers/openrouter.svg', 'OpenRouter'),
   tavily: createImageIcon('/icons/providers/tavily.svg', 'Tavily'),
+  qwen_code: createImageIcon('/icons/providers/qwen.svg', 'Qwen Code'),
 
   // Providers with downloaded favicon images
   serper: createImageIcon('/icons/providers/serpser.jpeg', 'Serper'),
   zhipu: createImageIcon('/icons/providers/zhipu.png', 'Zhipu AI'),
+  github_copilot: createImageIcon('/icons/providers/github-copilot.svg', 'GitHub Copilot', true),
 };
 
 // Provider icon component

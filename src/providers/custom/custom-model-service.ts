@@ -6,6 +6,7 @@ import { logger } from '@/lib/logger';
 import type { ProxyRequest, ProxyResponse } from '@/lib/tauri-fetch';
 import { PROVIDER_CONFIGS, type ProviderIds } from '@/providers/config/provider-config';
 import { customProviderService } from '@/providers/custom/custom-provider-service';
+import { useProviderStore } from '@/providers/stores/provider-store';
 import { settingsManager } from '@/stores/settings-store';
 import type { ModelConfig, ModelsConfiguration } from '@/types/models';
 
@@ -254,6 +255,9 @@ class CustomModelService {
    * Fetch available models from a provider
    */
   async fetchProviderModels(providerId: string): Promise<FetchedModel[]> {
+    // Ensure provider store is initialized to get OAuth config
+    await useProviderStore.getState().initialize();
+
     let endpoint = this.getModelsEndpoint(providerId);
     let apiKey: string | undefined;
     let isCustomProvider = false;
@@ -290,6 +294,7 @@ class CustomModelService {
     }
 
     // For local providers (ollama, lmstudio), API key is optional
+    // OAuth providers also don't need API key
     if (!apiKey && !isLocalProvider(providerId) && !isCustomProvider) {
       throw new Error(`No API key configured for provider ${providerId}`);
     }
@@ -300,7 +305,6 @@ class CustomModelService {
         Accept: 'application/json',
       };
 
-      // Provider-specific authentication
       if (isCustomProvider && customProviderType === 'anthropic' && apiKey) {
         // Custom Anthropic provider uses x-api-key header
         headers['x-api-key'] = apiKey;
@@ -374,44 +378,29 @@ class CustomModelService {
   }
 
   /**
-   * Get list of providers that support models fetching and have API keys configured
-   * Includes both built-in providers and custom providers
+   * Get list of providers that support models fetching.
+   * Uses provider-store which includes OAuth providers.
    */
   async getAvailableProvidersForFetch(): Promise<Array<{ id: string; name: string }>> {
+    // Ensure provider store is initialized
+    await useProviderStore.getState().initialize();
+
+    const { providers: availableProviders, providerConfigs } = useProviderStore.getState();
     const providers: Array<{ id: string; name: string }> = [];
 
-    // Add built-in providers
-    for (const [providerId, endpoint] of Object.entries(PROVIDER_MODELS_ENDPOINTS)) {
-      if (endpoint === null) continue;
-
-      const providerConfig = PROVIDER_CONFIGS[providerId as ProviderIds];
-      if (!providerConfig) continue;
-
-      // Check if API key is configured (or local provider is enabled)
-      const apiKey = settingsManager.getProviderApiKey(providerId);
-
-      // Local providers need to be enabled, remote providers need API key
-      const isAvailable = isLocalProvider(providerId) ? apiKey === 'enabled' : !!apiKey;
-
-      if (isAvailable) {
-        providers.push({
-          id: providerId,
-          name: providerConfig.name,
-        });
+    // Add built-in and custom providers from provider-store (includes OAuth support)
+    for (const providerId of availableProviders.keys()) {
+      // Skip providers that don't support models fetching
+      if (!this.supportsModelsFetch(providerId)) {
+        continue;
       }
-    }
 
-    // Add custom providers (they all support models fetching via /v1/models)
-    try {
-      const customProviders = await customProviderService.getEnabledCustomProviders();
-      for (const customProvider of customProviders) {
-        providers.push({
-          id: customProvider.id,
-          name: customProvider.name,
-        });
-      }
-    } catch (error) {
-      logger.warn('Failed to load custom providers for model fetch:', error);
+      // Get provider name from configs
+      const providerDef = providerConfigs.get(providerId);
+      const name =
+        providerDef?.name || PROVIDER_CONFIGS[providerId as ProviderIds]?.name || providerId;
+
+      providers.push({ id: providerId, name });
     }
 
     return providers;

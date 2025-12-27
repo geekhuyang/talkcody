@@ -2,8 +2,7 @@ import { ChevronDown, ChevronRight, ExternalLink, Eye, EyeOff, Loader2 } from 'l
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { CustomProviderSection } from '@/components/custom-provider/CustomProviderSection';
-import { ClaudeOAuthLogin } from '@/components/settings/claude-oauth-login';
-import { OpenAIOAuthLogin } from '@/components/settings/openai-oauth-login';
+import { OAuthProviderInput } from '@/components/settings/oauth-provider-input';
 import { ProviderIcon } from '@/components/settings/provider-icons';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,14 +12,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useLocale } from '@/hooks/use-locale';
+import { useOAuthStatus } from '@/hooks/use-oauth-status';
 import { getDocLinks } from '@/lib/doc-links';
 import { logger } from '@/lib/logger';
 import { simpleFetch } from '@/lib/tauri-fetch';
 import { cn } from '@/lib/utils';
 import { PROVIDER_CONFIGS, PROVIDERS_WITH_CODING_PLAN } from '@/providers';
 import { customModelService, isLocalProvider } from '@/providers/custom/custom-model-service';
-import { useClaudeOAuthStore } from '@/providers/oauth/claude-oauth-store';
-import { useOpenAIOAuthStore } from '@/providers/oauth/openai-oauth-store';
 import { useProviderStore } from '@/providers/stores/provider-store';
 import { databaseService } from '@/services/database-service';
 import { settingsManager } from '@/stores/settings-store';
@@ -45,11 +43,10 @@ export function ApiKeysSettings() {
   }>({});
   const [baseUrlExpanded, setBaseUrlExpanded] = useState<Record<string, boolean>>({});
   const [expandedProviders, setExpandedProviders] = useState<Record<string, boolean>>({});
-  const [showApiKeyFallback, setShowApiKeyFallback] = useState<Record<string, boolean>>({});
 
   // OAuth state
-  const isClaudeOAuthConnected = useClaudeOAuthStore((state) => state.isConnected);
-  const isOpenAIOAuthConnected = useOpenAIOAuthStore((state) => state.isConnected);
+  // OAuth state (unified hook)
+  const oauthStatus = useOAuthStatus();
 
   // Sync API key to Coding Plan MCP servers when enabled
   const syncCodingPlanMcpApiKey = useCallback(async (providerId: string, apiKey: string) => {
@@ -364,16 +361,14 @@ export function ApiKeysSettings() {
               const currentKey = apiKeys[providerId as keyof ApiKeySettings] || '';
               const isVisible = apiKeyVisibility[providerId] || false;
               const isLocal = isLocalProvider(providerId);
-              const isAnthropic = providerId === 'anthropic';
-              const isOpenAI = providerId === 'openai';
-              // For Anthropic and OpenAI, check both OAuth and API key
+
+              // Check if provider is OAuth-connected (unified check)
+              const isOAuthConnected = oauthStatus[providerId as keyof typeof oauthStatus] || false;
+
+              // Determine if provider has valid credentials (API key or OAuth)
               const hasKey = isLocal
                 ? currentKey === 'enabled'
-                : isAnthropic
-                  ? isClaudeOAuthConnected || currentKey.trim().length > 0
-                  : isOpenAI
-                    ? isOpenAIOAuthConnected || currentKey.trim().length > 0
-                    : currentKey.trim().length > 0;
+                : isOAuthConnected || currentKey.trim().length > 0;
               const isExpanded = expandedProviders[providerId] ?? false;
               const docLink =
                 getDocLinks().apiKeysProviders[
@@ -473,137 +468,20 @@ export function ApiKeysSettings() {
                             </Button>
                           )}
                         </div>
-                      ) : isAnthropic ? (
-                        // Special UI for Anthropic: OAuth first, API key as fallback
-                        <div className="space-y-4">
-                          {/* Claude OAuth Login */}
-                          <ClaudeOAuthLogin />
-
-                          {/* API Key fallback (collapsible) */}
-                          <Collapsible
-                            open={showApiKeyFallback[providerId] ?? false}
-                            onOpenChange={(open) =>
-                              setShowApiKeyFallback((prev) => ({
-                                ...prev,
-                                [providerId]: open,
-                              }))
-                            }
-                          >
-                            <CollapsibleTrigger className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
-                              {showApiKeyFallback[providerId] ? (
-                                <ChevronDown size={14} />
-                              ) : (
-                                <ChevronRight size={14} />
-                              )}
-                              {t.Settings.claudeOAuth.useApiKeyInstead}
-                            </CollapsibleTrigger>
-                            <CollapsibleContent className="pt-2">
-                              <div className="flex gap-2">
-                                <div className="relative flex-1">
-                                  <Input
-                                    id={`api-key-${providerId}`}
-                                    type={isVisible ? 'text' : 'password'}
-                                    placeholder={t.Settings.apiKeys.enterKey(config.name)}
-                                    value={currentKey}
-                                    onChange={(e) => handleApiKeyChange(providerId, e.target.value)}
-                                    className="pr-10"
-                                  />
-                                  <button
-                                    type="button"
-                                    onClick={() => toggleApiKeyVisibility(providerId)}
-                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
-                                  >
-                                    {isVisible ? <EyeOff size={16} /> : <Eye size={16} />}
-                                  </button>
-                                </div>
-                                {currentKey.trim().length > 0 && (
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => handleTestConnection(providerId)}
-                                    disabled={testingProvider !== null}
-                                  >
-                                    {testingProvider === providerId ? (
-                                      <>
-                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                        {t.Settings.apiKeys.testing}
-                                      </>
-                                    ) : (
-                                      t.Settings.apiKeys.testConnection
-                                    )}
-                                  </Button>
-                                )}
-                              </div>
-                            </CollapsibleContent>
-                          </Collapsible>
-                        </div>
-                      ) : isOpenAI ? (
-                        // Special UI for OpenAI: OAuth first, API key as fallback
-                        <div className="space-y-4">
-                          {/* OpenAI OAuth Login */}
-                          <OpenAIOAuthLogin />
-
-                          {/* API Key fallback (collapsible) */}
-                          <Collapsible
-                            open={showApiKeyFallback[providerId] ?? false}
-                            onOpenChange={(open) =>
-                              setShowApiKeyFallback((prev) => ({
-                                ...prev,
-                                [providerId]: open,
-                              }))
-                            }
-                          >
-                            <CollapsibleTrigger className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
-                              {showApiKeyFallback[providerId] ? (
-                                <ChevronDown size={14} />
-                              ) : (
-                                <ChevronRight size={14} />
-                              )}
-                              {t.Settings.claudeOAuth.useApiKeyInstead}
-                            </CollapsibleTrigger>
-                            <CollapsibleContent className="pt-2">
-                              <div className="flex gap-2">
-                                <div className="relative flex-1">
-                                  <Input
-                                    id={`api-key-${providerId}`}
-                                    type={isVisible ? 'text' : 'password'}
-                                    placeholder={t.Settings.apiKeys.enterKey(config.name)}
-                                    value={currentKey}
-                                    onChange={(e) => handleApiKeyChange(providerId, e.target.value)}
-                                    className="pr-10"
-                                  />
-                                  <button
-                                    type="button"
-                                    onClick={() => toggleApiKeyVisibility(providerId)}
-                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
-                                  >
-                                    {isVisible ? <EyeOff size={16} /> : <Eye size={16} />}
-                                  </button>
-                                </div>
-                                {currentKey.trim().length > 0 && (
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => handleTestConnection(providerId)}
-                                    disabled={testingProvider !== null}
-                                  >
-                                    {testingProvider === providerId ? (
-                                      <>
-                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                        {t.Settings.apiKeys.testing}
-                                      </>
-                                    ) : (
-                                      t.Settings.apiKeys.testConnection
-                                    )}
-                                  </Button>
-                                )}
-                              </div>
-                            </CollapsibleContent>
-                          </Collapsible>
-                        </div>
+                      ) : config.supportsOAuth ? (
+                        // OAuth provider with API key fallback
+                        <OAuthProviderInput
+                          providerId={providerId}
+                          config={config}
+                          currentKey={currentKey}
+                          isVisible={isVisible}
+                          onApiKeyChange={handleApiKeyChange}
+                          onTestConnection={handleTestConnection}
+                          toggleVisibility={toggleApiKeyVisibility}
+                          testingProvider={testingProvider}
+                        />
                       ) : (
+                        // Standard API key input for other providers
                         // Standard API key input for other providers
                         <div className="flex gap-2">
                           <div className="relative flex-1">

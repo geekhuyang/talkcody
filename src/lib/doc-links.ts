@@ -46,6 +46,8 @@ export function getDocLinks() {
       MiniMax: `${BASE_URL}/configuration/api-keys#minimax`,
       zhipu: `${BASE_URL}/configuration/api-keys#zhipu-ai`,
       anthropic: `${BASE_URL}/configuration/api-keys#anthropic`,
+      github_copilot: `${BASE_URL}/features/github-copilot`,
+      qwen_code: `${BASE_URL}/guides/free-use`,
       google: `${BASE_URL}/configuration/api-keys#google-ai`,
       deepseek: `${BASE_URL}/configuration/api-keys#deepseek`,
       ollama: `${BASE_URL}/configuration/api-keys#ollama`,

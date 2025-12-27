@@ -1,6 +1,7 @@
 // src/services/agents/llm-service.ts
 import {
   type AssistantModelMessage,
+  type ModelMessage,
   smoothStream,
   stepCountIs,
   streamText,
@@ -58,6 +59,7 @@ export interface AgentLoopCallbacks {
 import { useProviderStore } from '@/providers/stores/provider-store';
 import { fileService } from '../file-service';
 import { MessageCompactor } from '../message-compactor';
+import { taskFileService } from '../task-file-service';
 import { ErrorHandler } from './error-handler';
 import { StreamProcessor } from './stream-processor';
 import { ToolExecutor } from './tool-executor';
@@ -68,6 +70,8 @@ export class LLMService {
   private readonly errorHandler: ErrorHandler;
   /** Task ID for this LLM service instance (used for parallel task execution) */
   private readonly taskId: string;
+  /** File name for compacted messages storage */
+  private static readonly COMPACTED_MESSAGES_FILE = 'compacted-messages.json';
 
   private getDefaultCompressionConfig(): CompressionConfig {
     return {
@@ -107,6 +111,130 @@ export class LLMService {
   /** Get the task ID for this instance */
   getTaskId(): string | undefined {
     return this.taskId;
+  }
+
+  /**
+   * Load compacted messages from file.
+   * Returns null if no compacted file exists or file is invalid.
+   */
+  private async loadCompactedMessages(): Promise<{
+    messages: ModelMessage[];
+    lastRequestTokens: number;
+    sourceUIMessageCount: number;
+  } | null> {
+    if (!this.taskId || this.taskId === 'nested') {
+      return null;
+    }
+
+    try {
+      const json = await taskFileService.readFile(
+        'context',
+        this.taskId,
+        LLMService.COMPACTED_MESSAGES_FILE
+      );
+      if (!json) {
+        return null;
+      }
+
+      // Parse JSON with separate try-catch to distinguish parse errors from other errors
+      let data: unknown;
+      try {
+        data = JSON.parse(json);
+      } catch (parseError) {
+        logger.warn('Failed to parse compacted messages JSON', parseError);
+        return null;
+      }
+
+      // Validate data structure
+      if (
+        typeof data !== 'object' ||
+        data === null ||
+        !('messages' in data) ||
+        !Array.isArray(data.messages) ||
+        data.messages.length === 0
+      ) {
+        return null;
+      }
+
+      const dataRecord = data as Record<string, unknown>;
+
+      // Validate sourceUIMessageCount
+      const sourceUIMessageCount =
+        typeof dataRecord.sourceUIMessageCount === 'number' ? dataRecord.sourceUIMessageCount : -1;
+      if (sourceUIMessageCount < 0) {
+        logger.warn('Invalid sourceUIMessageCount in compacted messages', {
+          taskId: this.taskId,
+        });
+        return null;
+      }
+
+      return {
+        messages: data.messages as ModelMessage[],
+        lastRequestTokens:
+          typeof dataRecord.lastRequestTokens === 'number' ? dataRecord.lastRequestTokens : 0,
+        sourceUIMessageCount,
+      };
+    } catch (error) {
+      logger.warn('Failed to load compacted messages', error);
+      return null;
+    }
+  }
+
+  /**
+   * Save compacted messages to file.
+   * Only called when message compression is actually triggered.
+   */
+  private async saveCompactedMessages(
+    messages: ModelMessage[],
+    sourceUIMessageCount: number,
+    lastRequestTokens: number
+  ): Promise<void> {
+    if (!this.taskId || this.taskId === 'nested') {
+      return;
+    }
+
+    // Validate inputs
+    if (!Array.isArray(messages) || messages.length === 0) {
+      return;
+    }
+
+    if (typeof sourceUIMessageCount !== 'number' || sourceUIMessageCount < 0) {
+      logger.warn('Invalid sourceUIMessageCount for save', {
+        sourceUIMessageCount,
+      });
+      return;
+    }
+
+    if (typeof lastRequestTokens !== 'number' || lastRequestTokens < 0) {
+      logger.warn('Invalid lastRequestTokens for save', {
+        lastRequestTokens,
+      });
+      return;
+    }
+
+    const data = {
+      messages,
+      sourceUIMessageCount,
+      lastRequestTokens: typeof lastRequestTokens === 'number' ? lastRequestTokens : 0,
+      updatedAt: Date.now(),
+    };
+
+    try {
+      await taskFileService.writeFile(
+        'context',
+        this.taskId,
+        LLMService.COMPACTED_MESSAGES_FILE,
+        JSON.stringify(data)
+      );
+      logger.info('Saved compacted messages to file', {
+        taskId: this.taskId,
+        modelMessageCount: messages.length,
+        sourceUIMessageCount,
+        lastRequestTokens,
+      });
+    } catch (error) {
+      logger.warn('Failed to save compacted messages', error);
+    }
   }
 
   private getTranslations() {
@@ -200,26 +328,102 @@ export class LLMService {
           lastRequestTokens: 0,
         };
 
-        // Convert initial messages to model format
+        // Lazy load: only try to load compacted messages if we have enough messages
+        // to potentially benefit from caching
+        let compacted = null;
+        if (inputMessages.length > compressionConfig.preserveRecentMessages) {
+          compacted = await this.loadCompactedMessages();
+        }
         const { providerId } = parseModelIdentifier(model);
-        const modelMessages = await convertMessages(inputMessages, {
-          rootPath,
-          systemPrompt,
-          model,
-          providerId: providerId ?? undefined,
-        });
 
-        // Validate and convert to Anthropic-compliant format
-        const validationResult = validateAnthropicMessages(modelMessages);
-        if (!validationResult.valid) {
-          logger.warn('[LLMService] Initial message validation issues:', {
-            issues: validationResult.issues,
+        if (compacted) {
+          // Check inputMessages count vs sourceUIMessageCount
+          if (inputMessages.length > compacted.sourceUIMessageCount) {
+            // Have new UI messages (more than when compacted)
+            logger.info('Found new input messages after compaction', {
+              sourceUIMessageCount: compacted.sourceUIMessageCount,
+              currentInputCount: inputMessages.length,
+              newMessageCount: inputMessages.length - compacted.sourceUIMessageCount,
+            });
+
+            // Process only new messages starting from sourceUIMessageCount
+            const newMessages = inputMessages.slice(compacted.sourceUIMessageCount);
+            const newModelMessages = await convertMessages(newMessages, {
+              rootPath,
+              systemPrompt: undefined, // Don't add system message again, compacted.messages already has it
+              model,
+              providerId: providerId ?? undefined,
+            });
+
+            const validationResult = validateAnthropicMessages(newModelMessages);
+            if (!validationResult.valid) {
+              logger.warn('[LLMService] New message validation issues:', {
+                issues: validationResult.issues,
+              });
+            }
+
+            loopState.messages = [
+              ...compacted.messages,
+              ...convertToAnthropicFormat(newModelMessages, {
+                autoFix: true,
+                trimAssistantWhitespace: true,
+              }),
+            ];
+            loopState.lastRequestTokens = compacted.lastRequestTokens;
+          } else if (inputMessages.length === compacted.sourceUIMessageCount) {
+            // UI message count same, use compacted directly
+            logger.info('No new input messages, using compacted directly', {
+              sourceUIMessageCount: compacted.sourceUIMessageCount,
+              currentInputCount: inputMessages.length,
+            });
+            loopState.messages = compacted.messages;
+            loopState.lastRequestTokens = compacted.lastRequestTokens;
+          } else {
+            // inputMessages count decreased (user may have deleted messages), reprocess all
+            logger.warn('Input message count decreased, reprocessing all', {
+              sourceUIMessageCount: compacted.sourceUIMessageCount,
+              currentInputCount: inputMessages.length,
+            });
+            const modelMessages = await convertMessages(inputMessages, {
+              rootPath,
+              systemPrompt,
+              model,
+              providerId: providerId ?? undefined,
+            });
+
+            const validationResult = validateAnthropicMessages(modelMessages);
+            if (!validationResult.valid) {
+              logger.warn('[LLMService] Message validation issues:', {
+                issues: validationResult.issues,
+              });
+            }
+
+            loopState.messages = convertToAnthropicFormat(modelMessages, {
+              autoFix: true,
+              trimAssistantWhitespace: true,
+            });
+          }
+        } else {
+          // No compacted messages - convert all input messages
+          const modelMessages = await convertMessages(inputMessages, {
+            rootPath,
+            systemPrompt,
+            model,
+            providerId: providerId ?? undefined,
+          });
+
+          // Validate and convert to Anthropic-compliant format
+          const validationResult = validateAnthropicMessages(modelMessages);
+          if (!validationResult.valid) {
+            logger.warn('[LLMService] Initial message validation issues:', {
+              issues: validationResult.issues,
+            });
+          }
+          loopState.messages = convertToAnthropicFormat(modelMessages, {
+            autoFix: true,
+            trimAssistantWhitespace: true,
           });
         }
-        loopState.messages = convertToAnthropicFormat(modelMessages, {
-          autoFix: true,
-          trimAssistantWhitespace: true,
-        });
 
         // Create a new StreamProcessor instance for each agent loop
         // This ensures nested agent calls (e.g., callAgent) don't interfere with parent agent's state
@@ -236,24 +440,10 @@ export class LLMService {
           loopState.currentIteration++;
 
           const filteredTools = { ...tools };
-          let isPlanModeEnabled = false;
+          const isPlanModeEnabled = usePlanModeStore.getState().isPlanModeEnabled;
           if (!isImageGenerator) {
-            // Dynamically filter tools based on current plan mode state
-            // This allows tools to change when plan mode is toggled during the loop
-            // (e.g., when user approves a plan, plan mode becomes false and writeFile/editFile become available)
-            isPlanModeEnabled = usePlanModeStore.getState().isPlanModeEnabled;
-            if (!isPlanModeEnabled) {
-              // In normal mode: remove plan-specific tools
-              delete filteredTools.exitPlanMode;
-              delete filteredTools.askUserQuestions;
-              logger.info('[Normal Mode] Removed exitPlanMode and askUserQuestions', {
-                iteration: loopState.currentIteration,
-              });
-            }
-
             // By default, remove executeSkillScript (only add when needed)
             delete filteredTools.executeSkillScript;
-
             // Dynamically add executeSkillScript if skills with scripts have been loaded
             if (loopState.hasSkillScripts) {
               filteredTools.executeSkillScript =
@@ -300,6 +490,22 @@ export class LLMService {
               onStatus?.(
                 t.LLMService.status.compressed(compressionResult.result.compressionRatio.toFixed(2))
               );
+
+              // Save compacted messages to file (only when compression is triggered)
+              if (this.taskId && !isSubagent) {
+                // Query taskStore for current UI message count
+                const currentUIMessageCount = useTaskStore
+                  .getState()
+                  .getMessages(this.taskId).length;
+
+                this.saveCompactedMessages(
+                  loopState.messages,
+                  currentUIMessageCount,
+                  loopState.lastRequestTokens
+                ).catch((err) => {
+                  logger.warn('Failed to save compacted messages', err);
+                });
+              }
             }
           } catch (error) {
             // Extract and format error using utility

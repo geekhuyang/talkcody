@@ -3,23 +3,28 @@
 
 import { logger } from '@/lib/logger';
 import { getProvidersForModel, MODEL_CONFIGS } from '@/providers/config/model-config';
+import { getOAuthToken } from '@/providers/config/oauth-config';
 import { isLocalProvider } from '@/providers/custom/custom-model-service';
 import { createCustomProvider } from '@/providers/custom/custom-provider-factory';
 import type { ProviderDefinition } from '@/types';
 import type { AvailableModel } from '@/types/api-keys';
 import type { CustomProviderConfig } from '@/types/custom-provider';
 import type { ModelConfig } from '@/types/models';
-import {
-  createAnthropicOAuthProvider,
-  createOpenAIOAuthProvider,
-  PROVIDER_CONFIGS,
-} from '../config/provider-config';
+import { PROVIDER_CONFIGS } from '../config/provider-config';
+import { createAnthropicOAuthProvider } from '../oauth/claude-oauth-service';
+import { createGitHubCopilotOAuthProvider } from '../oauth/github-copilot-oauth-service';
+import { createOpenAIOAuthProvider } from '../oauth/openai-oauth-service';
+import { createQwenCodeOAuthProvider } from '../oauth/qwen-code-oauth-service';
 
 // OAuth configuration for provider creation
 export interface OAuthConfig {
   anthropicAccessToken?: string | null;
   openaiAccessToken?: string | null;
   openaiAccountId?: string | null;
+  qwenAccessToken?: string | null;
+  githubCopilotAccessToken?: string | null;
+  githubCopilotCopilotToken?: string | null;
+  githubCopilotEnterpriseUrl?: string | null;
 }
 
 // Type for provider factory function (returns a function that creates model instances)
@@ -70,16 +75,13 @@ export function hasApiKeyForProvider(
     return apiKeys[providerId] === 'enabled';
   }
 
-  // Check OAuth for Anthropic
-  if (providerId === 'anthropic' && oauthConfig?.anthropicAccessToken) {
+  // Check OAuth for providers that support it (unified check using configuration)
+  const oauthToken = getOAuthToken(providerId, oauthConfig);
+  if (oauthToken) {
     return true;
   }
 
-  // Check OAuth for OpenAI
-  if (providerId === 'openai' && oauthConfig?.openaiAccessToken) {
-    return true;
-  }
-
+  // Check regular API key
   const apiKey = apiKeys[providerId];
   return !!(apiKey && typeof apiKey === 'string' && apiKey.trim());
 }
@@ -135,6 +137,49 @@ export function createProviderDefinitionFromCustomConfig(
 }
 
 /**
+ * Helper function to create OAuth provider by provider ID
+ * Centralizes OAuth provider creation logic
+ */
+function createOAuthProviderByType(
+  providerId: string,
+  oauthConfig?: OAuthConfig
+): ProviderFactory | null {
+  if (!oauthConfig) return null;
+
+  switch (providerId) {
+    case 'anthropic':
+      if (oauthConfig.anthropicAccessToken) {
+        logger.info('Creating Anthropic provider with OAuth (dynamic token refresh enabled)');
+        return createAnthropicOAuthProvider();
+      }
+      break;
+    case 'openai':
+      if (oauthConfig.openaiAccessToken) {
+        logger.info('Creating OpenAI provider with OAuth (dynamic token refresh enabled)');
+        return createOpenAIOAuthProvider();
+      }
+      break;
+    case 'qwen_code':
+      if (oauthConfig.qwenAccessToken) {
+        logger.info('Creating Qwen provider with OAuth');
+        return createQwenCodeOAuthProvider();
+      }
+      break;
+    case 'github_copilot':
+      if (oauthConfig.githubCopilotCopilotToken) {
+        logger.info('Creating GitHub Copilot provider with OAuth');
+        return createGitHubCopilotOAuthProvider(
+          oauthConfig.githubCopilotCopilotToken,
+          oauthConfig.githubCopilotEnterpriseUrl || undefined
+        );
+      }
+      break;
+  }
+
+  return null;
+}
+
+/**
  * Create all provider factory instances based on API keys and configs
  */
 export function createProviders(
@@ -157,17 +202,9 @@ export function createProviders(
     // TalkCody Free uses JWT auth, not API key - always create it
     const isTalkCody = providerId === 'talkcody';
 
-    // Check if this provider uses OAuth (e.g., Anthropic with Claude Pro/Max, OpenAI with ChatGPT Plus/Pro)
-    const useAnthropicOAuth =
-      providerId === 'anthropic' &&
-      providerDef.supportsOAuth &&
-      oauthConfig?.anthropicAccessToken &&
-      !baseUrls.has(providerId); // Don't use OAuth if custom base URL is set
-
-    const useOpenAIOAuth =
-      providerId === 'openai' && oauthConfig?.openaiAccessToken && !baseUrls.has(providerId); // Don't use OAuth if custom base URL is set
-
-    const useOAuth = useAnthropicOAuth || useOpenAIOAuth;
+    // Check if this provider uses OAuth (unified check using configuration)
+    const oauthToken = getOAuthToken(providerId, oauthConfig);
+    const useOAuth = providerDef.supportsOAuth && !!oauthToken && !baseUrls.has(providerId); // Don't use OAuth if custom base URL is set
 
     // Skip if no API key and no OAuth (except for special providers)
     if (!apiKey && !isTalkCody && !useOAuth) {
@@ -182,23 +219,13 @@ export function createProviders(
 
     // Create provider using OAuth or API key
     try {
-      if (useAnthropicOAuth && oauthConfig?.anthropicAccessToken) {
-        // Use OAuth provider for Anthropic
-        logger.info(`Creating Anthropic provider with OAuth`);
-        const createdProvider = createAnthropicOAuthProvider(oauthConfig.anthropicAccessToken);
-        providers.set(providerId, createdProvider);
-        continue;
-      }
-
-      if (useOpenAIOAuth && oauthConfig?.openaiAccessToken) {
-        // Use OAuth provider for OpenAI
-        logger.info(`Creating OpenAI provider with OAuth`);
-        const createdProvider = createOpenAIOAuthProvider(
-          oauthConfig.openaiAccessToken,
-          oauthConfig.openaiAccountId
-        );
-        providers.set(providerId, createdProvider);
-        continue;
+      // Try to create OAuth provider if applicable
+      if (useOAuth) {
+        const createdProvider = createOAuthProviderByType(providerId, oauthConfig);
+        if (createdProvider) {
+          providers.set(providerId, createdProvider);
+          continue;
+        }
       }
 
       // Create provider using the definition's factory function

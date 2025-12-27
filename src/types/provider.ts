@@ -1,7 +1,4 @@
 // src/types/provider.ts
-/**
- * Provider type definitions
- */
 
 import type { CustomProviderConfig } from './custom-provider';
 

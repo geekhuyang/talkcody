@@ -468,7 +468,7 @@ describe('MessageCompactor Integration Tests with MockLanguageModelV2', () => {
       const result = await messageCompactor.compactMessages({
         messages: createModelMessages(4),
         config: createCompressionConfig({ preserveRecentMessages: 1 }),
-      });
+      }, 0);
 
       expect(result.sections.length).toBeGreaterThanOrEqual(8);
       expect(result.sections.some((s) => s.title.includes('Primary Request'))).toBe(true);
@@ -486,7 +486,7 @@ describe('MessageCompactor Integration Tests with MockLanguageModelV2', () => {
       const result = await messageCompactor.compactMessages({
         messages: [{ role: 'user', content: 'Test' }, { role: 'assistant', content: 'Response' }],
         config: createCompressionConfig({ preserveRecentMessages: 0 }),
-      });
+      }, 0);
 
       const analysisSection = result.sections.find((s) => s.title === 'Analysis');
       expect(analysisSection).toBeDefined();
@@ -503,7 +503,7 @@ describe('MessageCompactor Integration Tests with MockLanguageModelV2', () => {
       const result = await messageCompactor.compactMessages({
         messages: createModelMessages(4),
         config: createCompressionConfig({ preserveRecentMessages: 1 }),
-      });
+      }, 0);
 
       // Should create a fallback Summary section
       expect(result.sections.length).toBeGreaterThan(0);
@@ -558,7 +558,7 @@ describe('MessageCompactor Integration Tests with MockLanguageModelV2', () => {
       await messageCompactor.compactMessages({
         messages: createModelMessages(4),
         config: createCompressionConfig({ preserveRecentMessages: 1 }),
-      });
+      }, 0);
 
       const statsAfterFirst = messageCompactor.getCompressionStats();
       expect(statsAfterFirst.totalCompressions).toBe(1);
@@ -715,12 +715,13 @@ describe('MessageCompactor Integration Tests with MockLanguageModelV2', () => {
         },
       });
 
-      // The compactMessages method accepts abortController as second param
+      // The compactMessages method accepts lastTokenCount as second param and abortController as third param
       await messageCompactor.compactMessages(
         {
           messages: [{ role: 'user', content: 'Test' }, { role: 'assistant', content: 'Response' }],
           config: createCompressionConfig({ preserveRecentMessages: 0 }),
         },
+        0,
         abortController
       );
 
@@ -739,13 +740,16 @@ describe('MessageCompactor Integration Tests with MockLanguageModelV2', () => {
         },
       });
 
-      // The performCompression method rejects when onError is called
-      await expect(
-        messageCompactor.compactMessages({
-          messages: createModelMessages(4),
-          config: createCompressionConfig({ preserveRecentMessages: 1 }),
-        })
-      ).rejects.toThrow('Compression failed');
+      // The performCompression method now returns a fallback result when onError is called
+      const result = await messageCompactor.compactMessages({
+        messages: createModelMessages(4),
+        config: createCompressionConfig({ preserveRecentMessages: 1 }),
+      }, 0);
+
+      // Should return fallback result
+      expect(result.compressedSummary).toBe('');
+      expect(result.sections).toEqual([]);
+      expect(result.preservedMessages.length).toBeGreaterThan(0);
     });
   });
 
@@ -764,7 +768,7 @@ describe('MessageCompactor Integration Tests with MockLanguageModelV2', () => {
       const result1 = await messageCompactor.compactMessages({
         messages: createModelMessages(4),
         config: createCompressionConfig({ preserveRecentMessages: 1 }),
-      });
+      }, 0);
 
       expect(result1.compressedSummary).toBeTruthy();
 
@@ -782,7 +786,7 @@ describe('MessageCompactor Integration Tests with MockLanguageModelV2', () => {
       const result2 = await messageCompactor.compactMessages({
         messages: extendedMessages,
         config: createCompressionConfig({ preserveRecentMessages: 1 }),
-      });
+      }, 0);
 
       expect(result2.compressedSummary).toBeTruthy();
 
@@ -856,7 +860,7 @@ describe('MessageCompactor Integration Tests with MockLanguageModelV2', () => {
       await messageCompactor.compactMessages({
         messages: createModelMessages(4),
         config: createCompressionConfig({ preserveRecentMessages: 1 }),
-      });
+      }, 0);
 
       const statsAfterFirst = messageCompactor.getCompressionStats();
       expect(statsAfterFirst.totalCompressions).toBe(1);
@@ -865,7 +869,7 @@ describe('MessageCompactor Integration Tests with MockLanguageModelV2', () => {
       await messageCompactor.compactMessages({
         messages: createModelMessages(4),
         config: createCompressionConfig({ preserveRecentMessages: 1 }),
-      });
+      }, 0);
 
       const statsAfterSecond = messageCompactor.getCompressionStats();
       expect(statsAfterSecond.totalCompressions).toBe(2);
@@ -889,7 +893,7 @@ describe('MessageCompactor Integration Tests with MockLanguageModelV2', () => {
       const result = await messageCompactor.compactMessages({
         messages: messagesWithTools,
         config: createCompressionConfig({ preserveRecentMessages: 3 }),
-      });
+      }, 0);
 
       // Validate that preserved messages maintain tool pairs
       const compressedMessages = messageCompactor.createCompressedMessages(result);
@@ -933,7 +937,7 @@ describe('MessageCompactor Integration Tests with MockLanguageModelV2', () => {
       const result = await messageCompactor.compactMessages({
         messages,
         config: createCompressionConfig({ preserveRecentMessages: 1 }),
-      });
+      }, 0);
 
       // Should preserve more than 1 to keep tool pair together
       expect(result.preservedMessages.length).toBeGreaterThanOrEqual(1);

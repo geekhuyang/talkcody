@@ -166,10 +166,24 @@ async function loadOAuthConfig(): Promise<OAuthConfig> {
     const openaiStoreState = useOpenAIOAuthStore.getState();
     const openaiAccountId = openaiStoreState.accountId;
 
+    // Load Qwen Code OAuth
+    const { getQwenCodeOAuthAccessToken } = await import('@/providers/oauth/qwen-code-oauth-store');
+    const qwenAccessToken = await getQwenCodeOAuthAccessToken();
+
+    // Load GitHub Copilot OAuth
+    const { getGitHubCopilotOAuthTokens } = await import(
+      '@/providers/oauth/github-copilot-oauth-store'
+    );
+    const githubCopilotTokens = await getGitHubCopilotOAuthTokens();
+
     return {
       anthropicAccessToken,
       openaiAccessToken,
       openaiAccountId,
+      qwenAccessToken,
+      githubCopilotAccessToken: githubCopilotTokens?.accessToken || null,
+      githubCopilotCopilotToken: githubCopilotTokens?.copilotToken || null,
+      githubCopilotEnterpriseUrl: githubCopilotTokens?.enterpriseUrl || null,
     };
   } catch (error) {
     logger.warn('Failed to load OAuth config:', error);

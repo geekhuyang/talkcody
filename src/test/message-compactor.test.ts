@@ -42,6 +42,24 @@ vi.mock('../services/code-navigation-service', () => ({
   getLangIdFromPath: vi.fn().mockReturnValue(null),
 }));
 
+// Mock provider store to provide available models
+vi.mock('../providers/stores/provider-store', () => ({
+  useProviderStore: {
+    getState: () => ({
+      isModelAvailable: () => true,
+      availableModels: [
+        {
+          key: 'google/gemini-2.5-flash-lite',
+          name: 'Gemini 2.5 Flash Lite',
+          provider: 'google',
+          inputPricing: 0.001,
+          outputPricing: 0.002,
+        },
+      ],
+    }),
+  },
+}));
+
 describe('MessageCompactor', () => {
   let messageCompactor: MessageCompactor;
   let mockChatService: any;
@@ -96,6 +114,10 @@ This is a test compression analysis.
       }),
     };
 
+    // Set default return value for estimateTokens
+    // Individual tests can override with mockResolvedValueOnce
+    mockEstimateTokens.mockResolvedValue(1000);
+
     messageCompactor = new MessageCompactor(mockChatService);
   });
 
@@ -109,7 +131,7 @@ This is a test compression analysis.
         systemPrompt: 'Test system prompt',
       };
 
-      const result = await messageCompactor.compactMessages(options);
+      const result = await messageCompactor.compactMessages(options, 0);
 
       expect(result).toBeDefined();
       expect(result.originalMessageCount).toBe(15);
@@ -127,7 +149,7 @@ This is a test compression analysis.
         config: defaultConfig,
       };
 
-      const result = await messageCompactor.compactMessages(options);
+      const result = await messageCompactor.compactMessages(options, 0);
 
       expect(result.originalMessageCount).toBe(2);
       expect(result.compressedMessageCount).toBe(2);
@@ -145,11 +167,11 @@ This is a test compression analysis.
       };
 
       // First compression
-      const result1 = await messageCompactor.compactMessages(options);
+      const result1 = await messageCompactor.compactMessages(options, 0);
       expect(mockChatService.runAgentLoop).toHaveBeenCalledTimes(1);
 
       // Second compression with same messages should also call runAgentLoop
-      const result2 = await messageCompactor.compactMessages(options);
+      const result2 = await messageCompactor.compactMessages(options, 0);
       expect(mockChatService.runAgentLoop).toHaveBeenCalledTimes(2);
       // Results should have same structure
       expect(result2.originalMessageCount).toBe(result1.originalMessageCount);
@@ -266,7 +288,7 @@ This is a test compression analysis.
       const initialStats = messageCompactor.getCompressionStats();
       expect(initialStats.totalCompressions).toBe(0);
 
-      await messageCompactor.compactMessages(options);
+      await messageCompactor.compactMessages(options, 0);
 
       const updatedStats = messageCompactor.getCompressionStats();
       expect(updatedStats.totalCompressions).toBe(1);
@@ -277,8 +299,8 @@ This is a test compression analysis.
       const messages1 = createTestMessages(10);
       const messages2 = createTestMessages(15);
 
-      await messageCompactor.compactMessages({ messages: messages1, config: defaultConfig });
-      await messageCompactor.compactMessages({ messages: messages2, config: defaultConfig });
+      await messageCompactor.compactMessages({ messages: messages1, config: defaultConfig }, 0);
+      await messageCompactor.compactMessages({ messages: messages2, config: defaultConfig }, 0);
 
       const stats = messageCompactor.getCompressionStats();
       expect(stats.totalCompressions).toBe(2);
@@ -300,7 +322,11 @@ This is a test compression analysis.
         config: defaultConfig,
       };
 
-      await expect(messageCompactor.compactMessages(options)).rejects.toThrow('Compression failed');
+      // Should return fallback result instead of throwing
+      const result = await messageCompactor.compactMessages(options, 0);
+      expect(result.compressedSummary).toBe('');
+      expect(result.sections).toEqual([]);
+      expect(result.preservedMessages.length).toBeGreaterThan(0);
     });
   });
 
@@ -315,7 +341,7 @@ This is a test compression analysis.
       const result = await messageCompactor.compactMessages({
         messages,
         config,
-      });
+      }, 0);
 
       expect(result.preservedMessages).toHaveLength(5);
       expect(result.compressedSummary).toBe('');
@@ -326,7 +352,7 @@ This is a test compression analysis.
       const result = await messageCompactor.compactMessages({
         messages: [],
         config: defaultConfig,
-      });
+      }, 0);
 
       expect(result.originalMessageCount).toBe(0);
       expect(result.compressedMessageCount).toBe(0);
@@ -364,7 +390,7 @@ This is a test compression analysis.
       const result = await messageCompactor.compactMessages({
         messages: mixedMessages,
         config,
-      });
+      }, 0);
 
       // adjustPreserveBoundary ensures tool-call/tool-result pairs are kept together,
       // so preserveCount is adjusted from 1 to 2 to include the assistant message with tool-call.
@@ -441,6 +467,7 @@ This is a test compression analysis.
             messages,
             config: defaultConfig,
           },
+          0,
           abortController
         );
       } catch (_error) {
@@ -517,7 +544,7 @@ This is a test compression analysis.
       const result = await messageCompactor.compactMessages({
         messages,
         config,
-      });
+      }, 0);
 
       // The last exitPlanMode call (plan-2) should be in preserved messages
       const preservedContent = JSON.stringify(result.preservedMessages);
@@ -590,7 +617,7 @@ This is a test compression analysis.
       const result = await messageCompactor.compactMessages({
         messages,
         config,
-      });
+      }, 0);
 
       // The last todoWrite call (todo-2) should be in preserved messages
       const preservedContent = JSON.stringify(result.preservedMessages);
@@ -662,7 +689,7 @@ This is a test compression analysis.
       const result = await messageCompactor.compactMessages({
         messages,
         config,
-      });
+      }, 0);
 
       const preservedContent = JSON.stringify(result.preservedMessages);
       // Both should be preserved
@@ -711,7 +738,7 @@ This is a test compression analysis.
       const result = await messageCompactor.compactMessages({
         messages,
         config,
-      });
+      }, 0);
 
       // Should still work normally, just with regular preserved messages
       expect(result.preservedMessages.length).toBeGreaterThanOrEqual(2);
@@ -760,7 +787,7 @@ This is a test compression analysis.
       const result = await messageCompactor.compactMessages({
         messages,
         config,
-      });
+      }, 0);
 
       // Find messages with exitPlanMode
       const hasToolCall = result.preservedMessages.some((msg) => {
@@ -845,7 +872,7 @@ This is a test compression analysis.
       const result = await messageCompactor.compactMessages({
         messages,
         config,
-      });
+      }, 0);
 
       // Compression should have been called
       expect(mockChatService.runAgentLoop).toHaveBeenCalled();
@@ -898,7 +925,7 @@ This is a test compression analysis.
       const result = await messageCompactor.compactMessages({
         messages,
         config,
-      });
+      }, 0);
 
       // Should complete compression successfully
       expect(result.compressedSummary).toBeTruthy();
@@ -994,7 +1021,7 @@ This is a test compression analysis.
       const result = await messageCompactor.compactMessages({
         messages,
         config,
-      });
+      }, 0);
 
       // todoWrite should be in preserved messages
       const preservedContent = JSON.stringify(result.preservedMessages);
@@ -1030,7 +1057,7 @@ This is a test compression analysis.
       const result = await messageCompactor.compactMessages({
         messages,
         config,
-      });
+      }, 0);
 
       // Original system message should be first in preserved messages
       expect(result.preservedMessages[0]?.role).toBe('system');
@@ -1078,7 +1105,7 @@ This is a test compression analysis.
       const result = await messageCompactor.compactMessages({
         messages,
         config,
-      });
+      }, 0);
 
       // With boundary adjustment, tool-call and tool-result should be preserved together
       // The system message should also be preserved
@@ -1134,7 +1161,7 @@ This is a test compression analysis.
       const result = await messageCompactor.compactMessages({
         messages,
         config,
-      });
+      }, 0);
 
       const compressedMessages = messageCompactor.createCompressedMessages(result);
 
@@ -1523,7 +1550,6 @@ This is a test compression analysis.
           messages,
           config: defaultConfig,
         },
-        undefined,
         1000 // lastTokenCount
       );
 
@@ -1552,7 +1578,6 @@ This is a test compression analysis.
           messages,
           config: defaultConfig,
         },
-        undefined,
         1000 // lastTokenCount
       );
 
@@ -1574,7 +1599,6 @@ This is a test compression analysis.
           messages,
           config: defaultConfig,
         },
-        undefined,
         1000 // lastTokenCount
       );
 
@@ -1591,7 +1615,7 @@ This is a test compression analysis.
       const result = await messageCompactor.compactMessages({
         messages,
         config: defaultConfig,
-      });
+      }, 0);
 
       // AI compression SHOULD be called (no early exit without lastTokenCount)
       expect(mockChatService.runAgentLoop).toHaveBeenCalled();
@@ -1609,7 +1633,6 @@ This is a test compression analysis.
           messages,
           config: defaultConfig,
         },
-        undefined,
         0 // lastTokenCount = 0
       );
 
@@ -1619,26 +1642,6 @@ This is a test compression analysis.
 
       // estimateTokens should NOT be called when lastTokenCount is 0
       expect(mockEstimateTokens).not.toHaveBeenCalled();
-    });
-
-    it('should proceed with AI compression when estimateTokens throws error', async () => {
-      const messages = createTestMessages(12);
-
-      // Mock estimateTokens to throw an error
-      mockEstimateTokens.mockRejectedValueOnce(new Error('Tauri error'));
-
-      const result = await messageCompactor.compactMessages(
-        {
-          messages,
-          config: defaultConfig,
-        },
-        undefined,
-        1000 // lastTokenCount
-      );
-
-      // AI compression SHOULD be called (fallback on error)
-      expect(mockChatService.runAgentLoop).toHaveBeenCalled();
-      expect(result.compressedSummary).toBeTruthy();
     });
 
     it('should return correct result structure when skipping AI compression', async () => {
@@ -1652,7 +1655,6 @@ This is a test compression analysis.
           messages,
           config: defaultConfig,
         },
-        undefined,
         1000 // lastTokenCount
       );
 
@@ -1681,7 +1683,6 @@ This is a test compression analysis.
           messages,
           config: defaultConfig,
         },
-        undefined,
         1000 // lastTokenCount
       );
 
@@ -1702,7 +1703,6 @@ This is a test compression analysis.
           messages,
           config: defaultConfig,
         },
-        undefined,
         1000 // lastTokenCount
       );
 

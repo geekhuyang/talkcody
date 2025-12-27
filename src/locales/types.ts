@@ -287,6 +287,57 @@ export interface LocaleDefinition {
         checkboxLabel: string;
       };
     };
+    qwenOAuth: {
+      title: string;
+      description: string;
+      tokenPathLabel: string;
+      pathPlaceholder: string;
+      browseTitle: string;
+      testConnection: string;
+      testing: string;
+      connected: string;
+      disconnect: string;
+      disconnected: string;
+      pathRequired: string;
+      fileNotFound: string;
+      invalidToken: string;
+      testFailed: string;
+      disconnectFailed: string;
+      helpText: string;
+      tokenPath: string;
+      useDefault: string;
+      defaultLocation: string;
+    };
+    githubCopilotOAuth: {
+      title: string;
+      description: string;
+      signIn: string;
+      step1: string;
+      step1Hint: string;
+      step2: string;
+      step2Hint: string;
+      userCode: string;
+      codePlaceholder: string;
+      connect: string;
+      connected: string;
+      connectedWithPlan: string;
+      disconnect: string;
+      disconnected: string;
+      pasteCode: string;
+      connectionFailed: string;
+      tokenRefreshFailed: string;
+      waitingForAuth: string;
+      exchangingCode: string;
+      exchangingCodeHint: string;
+      disclaimer?: {
+        dialogTitle: string;
+        dialogDescription: string;
+        termsLink: string;
+        confirmButton: string;
+        cancelButton: string;
+        checkboxLabel: string;
+      };
+    };
     models: {
       title: string;
       description: string;

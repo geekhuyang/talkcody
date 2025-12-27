@@ -2,8 +2,12 @@
 // Core OAuth service for OpenAI ChatGPT Plus/Pro authentication
 // Reference: opencode-openai-codex-auth project
 
+import { createOpenAI } from '@ai-sdk/openai';
 import { logger } from '@/lib/logger';
-import { simpleFetch } from '@/lib/tauri-fetch';
+import { simpleFetch, streamFetch } from '@/lib/tauri-fetch';
+import { type CodexRequestBody, transformRequestBody } from '@/services/openai-codex-transformer';
+
+type FetchFn = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
 // OAuth constants from opencode-openai-codex-auth (openai/codex CLI)
 const CLIENT_ID = 'app_EMoamEEZ73f0CkXaXp7hrann';
@@ -350,4 +354,96 @@ export function getClientId(): string {
  */
 export function getRedirectUri(): string {
   return OAUTH_REDIRECT_URI;
+}
+
+/**
+ * Create a custom fetch function for OpenAI ChatGPT OAuth that:
+ * 1. Dynamically gets the latest access token and account ID (with auto-refresh)
+ * 2. Uses ChatGPT backend API base URL
+ * 3. Adds Authorization: Bearer header
+ * 4. Adds required headers for Codex API
+ * 5. Transforms request body with Codex instructions
+ */
+function createOpenAIOAuthFetch(): FetchFn {
+  return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    // Dynamically get the latest access token and account ID (with auto-refresh)
+    // Using dynamic import to avoid circular dependencies
+    const { getOpenAIOAuthAccessToken, getOpenAIOAuthAccountId } = await import(
+      './openai-oauth-store'
+    );
+    const accessToken = await getOpenAIOAuthAccessToken();
+    const accountId = await getOpenAIOAuthAccountId();
+
+    if (!accessToken) {
+      throw new Error(
+        'OpenAI OAuth access token not available. Please connect your OpenAI account in settings.'
+      );
+    }
+
+    const headers = new Headers(init?.headers);
+
+    // Add Bearer token authorization
+    headers.set('Authorization', `Bearer ${accessToken}`);
+
+    // Add required headers for ChatGPT backend API
+    headers.set('OpenAI-Beta', 'responses=experimental');
+    headers.set('originator', 'codex_cli_rs');
+
+    // Add account ID if available
+    if (accountId) {
+      headers.set('chatgpt-account-id', accountId);
+    }
+
+    // Add SSE stream support
+    headers.set('accept', 'text/event-stream');
+
+    // Transform the URL to use ChatGPT backend API
+    let url = typeof input === 'string' ? input : input.toString();
+
+    // Replace standard OpenAI API paths with ChatGPT backend paths
+    if (url.includes('/v1/chat/completions')) {
+      url = url.replace(
+        /https:\/\/api\.openai\.com\/v1\/chat\/completions/,
+        'https://chatgpt.com/backend-api/codex/responses'
+      );
+    } else if (url.includes('/v1/responses')) {
+      url = url.replace(
+        /https:\/\/api\.openai\.com\/v1\/responses/,
+        'https://chatgpt.com/backend-api/codex/responses'
+      );
+    }
+
+    // Transform request body for Codex API
+    let transformedInit = init;
+    if (init?.body && typeof init.body === 'string') {
+      try {
+        const originalBody = JSON.parse(init.body) as CodexRequestBody;
+        const transformedBody = await transformRequestBody(originalBody);
+        transformedInit = {
+          ...init,
+          body: JSON.stringify(transformedBody),
+        };
+        logger.info('[OpenAIOAuthFetch] Request body transformed for Codex API', {
+          transformedBody,
+        });
+      } catch (error) {
+        logger.error('[OpenAIOAuthFetch] Failed to transform request body:', error);
+        // Continue with original body if transformation fails
+      }
+    }
+
+    return streamFetch(url, { ...transformedInit, headers });
+  };
+}
+
+/**
+ * Create an OpenAI provider that uses ChatGPT OAuth authentication
+ * The provider will automatically refresh tokens on each request
+ * @deprecated accessToken and accountId parameters - now dynamically fetched
+ */
+export function createOpenAIOAuthProvider(_accessToken?: string, _accountId?: string | null) {
+  return createOpenAI({
+    apiKey: 'oauth-placeholder', // SDK requires this but we override with Bearer token
+    fetch: createOpenAIOAuthFetch() as typeof fetch,
+  });
 }

@@ -20,6 +20,24 @@ export interface ChangelogEntry {
 // Only include the most recent versions that users care about
 export const CHANGELOG_DATA: ChangelogEntry[] = [
   {
+    version: '0.2.1',
+    date: '2025-12-27',
+    en: {
+      added: [
+        'Add Qwen Code Free Provider, to save your coding cost',
+        'Add Github Copilot Free Provider, to save your coding cost',
+      ],
+      changed: ['Improve context compaction logic, to better handle long conversations'],
+    },
+    zh: {
+      added: [
+        '新增 Qwen Code 免费提供商，节省您的编码成本',
+        '新增 Github Copilot 免费提供商，节省您的编码成本',
+      ],
+      changed: ['优化上下文压缩逻辑，更好地处理长对话'],
+    },
+  },
+  {
     version: '0.2.0',
     date: '2025-12-25',
     en: {

@@ -347,7 +347,6 @@ skills.get('/packages/:skillId/versions', async (c) => {
       }
     }
 
-    // Fetch metadata for each version
     const versionDetails = await Promise.all(
       versions.map(async (version) => {
         const metadataKey = `skills/${slug}/${version}/metadata.json`;

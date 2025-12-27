@@ -7,6 +7,7 @@ import {
 import { validateAnthropicMessages } from '@/lib/message-validate';
 import { timedMethod } from '@/lib/timer';
 import { GEMINI_25_FLASH_LITE, getContextLength } from '@/providers/config/model-config';
+import { useProviderStore } from '@/providers/stores/provider-store';
 import type {
   AgentLoopCallbacks,
   AgentLoopOptions,
@@ -318,8 +319,8 @@ Please be comprehensive and technical in your summary. Include specific file pat
   @timedMethod('MessageCompactor.compactMessages')
   public async compactMessages(
     options: MessageCompactionOptions,
-    abortController?: AbortController,
-    lastTokenCount?: number // Original token count for early-exit check
+    lastTokenCount: number, // Original token count for early-exit check
+    abortController?: AbortController
   ): Promise<CompressionResult> {
     const { messages, config } = options;
 
@@ -360,11 +361,20 @@ Please be comprehensive and technical in your summary. Include specific file pat
     // Convert messages to text for compression
     const conversationHistory = this.messagesToText(messagesToCompress);
 
+    // Estimate tokens if needed (used for early-exit optimization and compression ratio calculation)
+    let estimatedTokens: number | undefined;
+
     // Check if tree-sitter rewriting has reduced tokens enough to skip AI compression
     // If reduction >= 75%, we can skip the expensive AI compression step
+    // Only estimate tokens if we have a lastTokenCount to compare against
     if (lastTokenCount && lastTokenCount > 0) {
       try {
-        const estimatedTokens = await estimateTokens(conversationHistory);
+        estimatedTokens = await estimateTokens(conversationHistory);
+      } catch (error) {
+        logger.warn('Failed to estimate tokens:', error);
+      }
+
+      if (estimatedTokens !== undefined) {
         const reductionRatio = 1 - estimatedTokens / lastTokenCount;
 
         if (reductionRatio >= 0.75) {
@@ -396,17 +406,29 @@ Please be comprehensive and technical in your summary. Include specific file pat
             reductionRatio,
           }
         );
-      } catch (error) {
-        logger.warn('Failed to estimate tokens, proceeding with AI compression:', error);
       }
     }
 
     // Perform compression using the configured model
-    const compressedSummary = await this.performCompression(
-      conversationHistory,
-      config.compressionModel,
-      abortController
-    );
+    let compressedSummary = '';
+    try {
+      compressedSummary = await this.performCompression(
+        conversationHistory,
+        config.compressionModel,
+        abortController
+      );
+    } catch (error) {
+      logger.warn('AI compression failed, falling back to tree-sitter rewriting:', error);
+      return {
+        compressedSummary: '',
+        sections: [],
+        preservedMessages: [...messagesToCompress, ...preservedMessages],
+        originalMessageCount: messages.length,
+        compressedMessageCount: messagesToCompress.length + preservedMessages.length,
+        compressionRatio:
+          estimatedTokens && lastTokenCount ? estimatedTokens / lastTokenCount : 1.0,
+      };
+    }
 
     // Parse sections from the compressed summary
     const sections = this.parseSections(compressedSummary);
@@ -470,11 +492,58 @@ Please be comprehensive and technical in your summary. Include specific file pat
       .join('\n\n');
   }
 
+  private getAvailableModelForCompression(preferredModel: string): string | null {
+    if (useProviderStore.getState().isModelAvailable(preferredModel)) {
+      return preferredModel;
+    }
+
+    const models = useProviderStore.getState().availableModels;
+    if (models.length === 0) {
+      return null;
+    }
+
+    const modelsWithPricing = models.filter((m) => m.inputPricing !== undefined);
+    if (modelsWithPricing.length === 0) {
+      return null;
+    }
+
+    const sorted = modelsWithPricing.sort((a, b) => {
+      const contextA = getContextLength(a.key);
+      const contextB = getContextLength(b.key);
+
+      if (contextA !== contextB) {
+        return contextB - contextA;
+      }
+
+      const priceA = Number.parseFloat(a.inputPricing ?? 'Infinity') || 0;
+      const priceB = Number.parseFloat(b.inputPricing ?? 'Infinity') || 0;
+      return priceA - priceB;
+    });
+
+    if (sorted.length > 0) {
+      const fallback = sorted[0]!; // Type assertion safe due to length check
+      logger.info(
+        `[Compression] Preferred model ${preferredModel} not available, using fallback: ${fallback.key}@${fallback.provider} (context: ${getContextLength(fallback.key)}, price: ${fallback.inputPricing})`
+      );
+      return `${fallback.key}@${fallback.provider}`;
+    }
+
+    return null;
+  }
+
   private async performCompression(
     conversationHistory: string,
     model: string,
     abortController?: AbortController
   ): Promise<string> {
+    const availableModel = this.getAvailableModelForCompression(model || GEMINI_25_FLASH_LITE);
+
+    if (!availableModel) {
+      throw new Error(
+        'No available model for compression. Please configure an API key in settings.'
+      );
+    }
+
     return new Promise<string>((resolve, reject) => {
       let compressedText = '';
       let timeoutId: ReturnType<typeof setTimeout> | undefined;
@@ -505,7 +574,7 @@ Please provide a comprehensive structured summary following the 8-section format
       this.llmService.runAgentLoop(
         {
           messages: compressionMessages,
-          model: model || GEMINI_25_FLASH_LITE,
+          model: availableModel,
           systemPrompt: MessageCompactor.COMPRESSION_PROMPT,
           tools: {}, // No tools needed for compression
           maxIterations: 1, // Single response for compression
@@ -817,8 +886,8 @@ Please provide a comprehensive structured summary following the 8-section format
         config,
         systemPrompt,
       },
-      abortController,
-      lastTokenCount // Pass for early-exit token check
+      lastTokenCount, // Pass for early-exit token check
+      abortController
     );
 
     // Create compressed messages

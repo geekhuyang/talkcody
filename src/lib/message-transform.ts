@@ -10,11 +10,11 @@ export namespace MessageTransform {
     const lowerModelId = modelId.toLowerCase();
 
     return (
-      lowerProviderId === 'anthropic' ||
       lowerProviderId.includes('anthropic') ||
       lowerProviderId.includes('claude') ||
       lowerModelId.includes('anthropic') ||
-      lowerModelId.includes('claude')
+      lowerModelId.includes('claude') ||
+      lowerModelId.includes('minimax')
     );
   }
 
