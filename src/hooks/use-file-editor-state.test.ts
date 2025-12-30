@@ -59,8 +59,11 @@ describe('useFileEditorState', () => {
 
     // 3. Advance timers to trigger auto-save
     await act(async () => {
-      vi.runAllTimers();
+      vi.advanceTimersByTime(2000); // AUTO_SAVE_DELAY
     });
+    
+    // Wait for any pending promises (the writeFile call)
+    await Promise.resolve();
 
     // Assert that writeFile was called for fileA with the correct content
     expect(repositoryService.writeFile).toHaveBeenCalledWith('fileA.txt', 'new content for file A');
@@ -98,8 +101,11 @@ describe('useFileEditorState', () => {
 
     // 2. Advance timers to trigger auto-save
     await act(async () => {
-      vi.runAllTimers();
+      vi.advanceTimersByTime(2000); // AUTO_SAVE_DELAY
     });
+
+    // Wait for any pending promises
+    await Promise.resolve();
 
     // 3. Verify writeFile was called
     expect(repositoryService.writeFile).toHaveBeenCalledWith('test.txt', 'modified content');

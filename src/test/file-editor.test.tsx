@@ -44,8 +44,10 @@ describe('FileEditor', () => {
     rerender({ filePath: newFilePath, fileContent: 'some other content' });
 
     await act(async () => {
-      vi.runAllTimers();
+      vi.advanceTimersByTime(2000); // AUTO_SAVE_DELAY
     });
+
+    await Promise.resolve();
 
     expect(repositoryService.writeFile).toHaveBeenCalledWith(initialFilePath, newContent);
     expect(repositoryService.writeFile).not.toHaveBeenCalledWith(newFilePath, newContent);
