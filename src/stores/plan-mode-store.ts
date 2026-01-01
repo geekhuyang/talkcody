@@ -4,13 +4,6 @@ import { devtools } from 'zustand/middleware';
 import { logger } from '@/lib/logger';
 import { useSettingsStore } from './settings-store';
 
-/**
- * Plan Mode Store
- *
- * Manages the state for Plan Mode functionality.
- * Plan Mode requires AI to create a plan and get user approval before executing modifications.
- */
-
 export interface PlanReviewResult {
   action: 'approve this plan, please implement it' | 'reject this plan, do not implement it';
   editedPlan?: string; // If user edited the plan before approval
@@ -194,23 +187,11 @@ export const usePlanModeStore = create<PlanModeState>()(
               return {
                 pendingPlans: newPendingPlans,
                 planResolvers: newPlanResolvers,
-                isPlanModeEnabled: false,
               };
             },
             false,
             'approvePlan'
           );
-
-          // Sync with settings store for persistence
-          useSettingsStore
-            .getState()
-            .setPlanModeEnabled(false)
-            .catch((error) => {
-              logger.error(
-                '[PlanModeStore] Failed to persist plan mode state after approval:',
-                error
-              );
-            });
         } else {
           logger.error('[PlanModeStore] No resolver found when approving plan', { taskId });
         }

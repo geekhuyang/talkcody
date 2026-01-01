@@ -135,6 +135,12 @@ export function RepositoryLayout() {
 
   const chatBoxRef = useRef<ChatBoxRef>(null);
 
+  // Determine if we have a loaded repository
+  const hasRepository = !!(rootPath && fileTree);
+
+  // Determine if we should show sidebar (show when has repository OR has project selected)
+  const shouldShowSidebar = hasRepository || !!currentProjectId;
+
   const handleAddFileToChat = async (filePath: string, fileContent: string) => {
     // This will be handled by ChatBox's internal handleExternalAddFileToChat
     // which will delegate to ChatInput's addFileToChat method
@@ -248,6 +254,13 @@ export function RepositoryLayout() {
       loadTasks(currentProjectId || undefined);
     }
   }, [sidebarView, currentProjectId, loadTasks]);
+
+  // Force switch to Tasks view when no repository but has project
+  useEffect(() => {
+    if (!hasRepository && currentProjectId && sidebarView === SidebarView.FILES) {
+      setSidebarView(SidebarView.TASKS);
+    }
+  }, [hasRepository, currentProjectId, sidebarView]);
 
   // Load saved repository on component mount
   useEffect(() => {
@@ -414,9 +427,6 @@ export function RepositoryLayout() {
     }
   };
 
-  // Determine if we have a loaded repository
-  const hasRepository = !!(rootPath && fileTree);
-
   const handleFileDelete = async (filePath: string) => {
     refreshFileTree();
     // Close the tab if the deleted file is open
@@ -515,18 +525,18 @@ export function RepositoryLayout() {
             {showFileTree && (
               <>
                 <ResizablePanel
-                  id={hasRepository ? fileTreePanelId : emptyRepoPanelId}
+                  id={shouldShowSidebar ? fileTreePanelId : emptyRepoPanelId}
                   order={1}
                   className={
-                    hasRepository
+                    shouldShowSidebar
                       ? 'border-r bg-white dark:bg-gray-950'
                       : 'flex items-center justify-center bg-white dark:bg-gray-950'
                   }
-                  defaultSize={hasRepository ? 20 : 50}
-                  maxSize={hasRepository ? 40 : 70}
-                  minSize={hasRepository ? 10 : 30}
+                  defaultSize={shouldShowSidebar ? 20 : 50}
+                  maxSize={shouldShowSidebar ? 40 : 70}
+                  minSize={shouldShowSidebar ? 10 : 30}
                 >
-                  {hasRepository ? (
+                  {shouldShowSidebar ? (
                     <div className="flex h-full flex-col">
                       <FileTreeHeader
                         currentProjectId={currentProjectId}
@@ -539,69 +549,75 @@ export function RepositoryLayout() {
                           }
                         }}
                         isLoadingProject={isLoading}
-                        isTerminalVisible={isTerminalVisible}
-                        onToggleTerminal={toggleTerminalVisible}
-                        onOpenFileSearch={openFileSearch}
-                        onOpenContentSearch={() => setIsContentSearchVisible(true)}
+                        isTerminalVisible={hasRepository ? isTerminalVisible : undefined}
+                        onToggleTerminal={hasRepository ? toggleTerminalVisible : undefined}
+                        onOpenFileSearch={hasRepository ? openFileSearch : undefined}
+                        onOpenContentSearch={
+                          hasRepository ? () => setIsContentSearchVisible(true) : undefined
+                        }
                       />
 
-                      {/* View Switcher Tabs */}
-                      <div className=" border-b px-2 py-1">
-                        <Tabs
-                          value={sidebarView}
-                          onValueChange={(v) => {
-                            setSidebarView(v as SidebarView);
-                            settingsManager.setSidebarView(v);
-                          }}
+                      {/* View Switcher Tabs - only show when has repository */}
+                      {hasRepository && (
+                        <div className=" border-b px-2 py-1">
+                          <Tabs
+                            value={sidebarView}
+                            onValueChange={(v) => {
+                              setSidebarView(v as SidebarView);
+                              settingsManager.setSidebarView(v);
+                            }}
+                          >
+                            <TabsList className="grid w-full grid-cols-2 h-7 bg-muted/50 p-0.5">
+                              <TabsTrigger
+                                value={SidebarView.FILES}
+                                className="h-6 gap-1.5 px-2.5 text-[11px] data-[state=active]:shadow-none"
+                              >
+                                <Folder className="h-3.5 w-3.5" />
+                                {t.Sidebar.files || 'Files'}
+                              </TabsTrigger>
+                              <TabsTrigger
+                                value={SidebarView.TASKS}
+                                className="h-6 gap-1.5 px-2.5 text-[11px] data-[state=active]:shadow-none"
+                              >
+                                <ListTodo className="h-3.5 w-3.5" />
+                                {t.Sidebar.tasks || 'Tasks'}
+                              </TabsTrigger>
+                            </TabsList>
+                          </Tabs>
+                        </div>
+                      )}
+
+                      {/* Files View - only render when has repository */}
+                      {hasRepository && (
+                        <div
+                          className={
+                            sidebarView === SidebarView.FILES ? 'flex-1 overflow-auto' : 'hidden'
+                          }
                         >
-                          <TabsList className="grid w-full grid-cols-2 h-7 bg-muted/50 p-0.5">
-                            <TabsTrigger
-                              value={SidebarView.FILES}
-                              className="h-6 gap-1.5 px-2.5 text-[11px] data-[state=active]:shadow-none"
-                            >
-                              <Folder className="h-3.5 w-3.5" />
-                              {t.Sidebar.files || 'Files'}
-                            </TabsTrigger>
-                            <TabsTrigger
-                              value={SidebarView.TASKS}
-                              className="h-6 gap-1.5 px-2.5 text-[11px] data-[state=active]:shadow-none"
-                            >
-                              <ListTodo className="h-3.5 w-3.5" />
-                              {t.Sidebar.tasks || 'Tasks'}
-                            </TabsTrigger>
-                          </TabsList>
-                        </Tabs>
-                      </div>
+                          <FileTree
+                            key={rootPath}
+                            fileTree={fileTree}
+                            repositoryPath={rootPath}
+                            expandedPaths={expandedPaths}
+                            onFileCreate={handleFileCreate}
+                            onFileDelete={handleFileDelete}
+                            onFileRename={handleFileRename}
+                            onFileSelect={selectFile}
+                            onRefresh={refreshFileTree}
+                            selectedFile={selectedFilePath}
+                            onLoadChildren={async (node) => {
+                              await loadDirectoryChildren(node);
+                              return node.children || [];
+                            }}
+                            onToggleExpansion={toggleExpansion}
+                          />
+                        </div>
+                      )}
 
-                      {/* Files View */}
+                      {/* Tasks View - always render, conditionally display */}
                       <div
                         className={
-                          sidebarView === SidebarView.FILES ? 'flex-1 overflow-auto' : 'hidden'
-                        }
-                      >
-                        <FileTree
-                          key={rootPath}
-                          fileTree={fileTree}
-                          repositoryPath={rootPath}
-                          expandedPaths={expandedPaths}
-                          onFileCreate={handleFileCreate}
-                          onFileDelete={handleFileDelete}
-                          onFileRename={handleFileRename}
-                          onFileSelect={selectFile}
-                          onRefresh={refreshFileTree}
-                          selectedFile={selectedFilePath}
-                          onLoadChildren={async (node) => {
-                            await loadDirectoryChildren(node);
-                            return node.children || [];
-                          }}
-                          onToggleExpansion={toggleExpansion}
-                        />
-                      </div>
-
-                      {/* Tasks View */}
-                      <div
-                        className={
-                          sidebarView === SidebarView.TASKS
+                          !hasRepository || sidebarView === SidebarView.TASKS
                             ? 'flex flex-1 flex-col overflow-hidden'
                             : 'hidden'
                         }
@@ -821,18 +837,16 @@ export function RepositoryLayout() {
                 minSize={hasRepository ? 20 : 30}
               >
                 <div className="flex h-full flex-col">
-                  {/* Chat Panel Header - only show when repository is loaded */}
-                  {hasRepository && (
-                    <ChatPanelHeader
-                      currentTaskId={currentTaskId}
-                      isHistoryOpen={isHistoryOpen}
-                      onHistoryOpenChange={setIsHistoryOpen}
-                      onTaskSelect={handleHistoryTaskSelect}
-                      onNewChat={handleNewChat}
-                      isFullscreen={isChatFullscreen}
-                      onToggleFullscreen={() => toggleFullscreen('chat')}
-                    />
-                  )}
+                  {/* Chat Panel Header - always show */}
+                  <ChatPanelHeader
+                    currentTaskId={currentTaskId}
+                    isHistoryOpen={isHistoryOpen}
+                    onHistoryOpenChange={setIsHistoryOpen}
+                    onTaskSelect={handleHistoryTaskSelect}
+                    onNewChat={handleNewChat}
+                    isFullscreen={isChatFullscreen}
+                    onToggleFullscreen={() => toggleFullscreen('chat')}
+                  />
                   <div className="flex-1 overflow-hidden">
                     <ChatBox
                       ref={chatBoxRef}
