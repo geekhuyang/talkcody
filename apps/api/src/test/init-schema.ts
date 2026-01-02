@@ -105,10 +105,16 @@ try {
       type: "TEXT DEFAULT 'read-only'",
     },
     { table: 'marketplace_skills', column: 'has_scripts', type: 'INTEGER DEFAULT 0 NOT NULL' },
+    // Agent Skills Specification fields
+    { table: 'marketplace_skills', column: 'compatibility', type: 'TEXT' },
+    { table: 'marketplace_skills', column: 'metadata', type: 'TEXT' },
     // skill_versions table
     { table: 'skill_versions', column: 'storage_url', type: 'TEXT' },
     { table: 'skill_versions', column: 'package_size', type: 'INTEGER' },
     { table: 'skill_versions', column: 'checksum', type: 'TEXT' },
+    // Agent Skills Specification fields for versions
+    { table: 'skill_versions', column: 'compatibility', type: 'TEXT' },
+    { table: 'skill_versions', column: 'metadata', type: 'TEXT' },
   ];
 
   for (const { table, column, type } of alterStatements) {

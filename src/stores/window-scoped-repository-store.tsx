@@ -179,16 +179,13 @@ function createRepositoryStore() {
     openRepository: async (path: string, projectId: string) => {
       logger.info(`[openRepository] Called with path=${path}, projectId=${projectId}`);
 
-      // Skip if already opening or already opened the same path
+      // Skip if already opened the same path
       const currentState = get();
       if (currentState.rootPath === path) {
         logger.info('[openRepository] Skipping: same path already open');
         return;
       }
-      if (currentState.isLoading) {
-        logger.info('[openRepository] Skipping: already loading');
-        return;
-      }
+      // Note: We don't check isLoading here because selectRepository sets it before calling us
 
       set({ isLoading: true, error: null });
       logger.info('[openRepository] Starting to build directory tree...');
@@ -267,7 +264,18 @@ function createRepositoryStore() {
         }
 
         const project = await databaseService.createOrGetProjectForRepository(path);
-        await get().openRepository(path, project.id);
+
+        // Don't await openRepository - let it run in background
+        // This returns immediately so UI can update
+        // openRepository will manage isLoading state internally
+        // Catch any errors from openRepository to prevent unhandled promise rejections
+        get()
+          .openRepository(path, project.id)
+          .catch((error) => {
+            logger.error('Background openRepository failed:', error);
+            // Error is already handled in openRepository with toast
+          });
+
         return project;
       } catch (_error) {
         // Error handling is done in openRepository

@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { logger } from '@/lib/logger';
 import {
+  getAgentSkillService,
   getSkillService,
   type Skill,
   type SkillFilter,
@@ -9,6 +10,7 @@ import {
   type TaskSkill,
 } from '@/services/skills';
 import { useSkillsStore } from '@/stores/skills-store';
+import type { AgentSkill, AgentSkillFrontmatter } from '@/types/agent-skills-spec';
 import type { SkillContent } from '@/types/skill';
 
 /**
@@ -286,6 +288,42 @@ export function useTaskSkills(taskId: string | null) {
 export const useConversationSkills = useTaskSkills;
 
 /**
+ * Convert AgentSkill to Skill format
+ */
+function agentSkillToSkill(agentSkill: AgentSkill): Skill {
+  // Extract content from SKILL.md body
+  const content: SkillContent = {};
+  if (agentSkill.content) {
+    content.systemPromptFragment = agentSkill.content;
+  }
+
+  // Extract tags from metadata
+  const tags = agentSkill.frontmatter.metadata?.tags
+    ? typeof agentSkill.frontmatter.metadata.tags === 'string'
+      ? agentSkill.frontmatter.metadata.tags.split(',').map((t) => t.trim())
+      : []
+    : [];
+
+  return {
+    id: agentSkill.directory.name,
+    name: agentSkill.name,
+    description: agentSkill.frontmatter.description,
+    category: agentSkill.frontmatter.metadata?.category || 'other',
+    license: agentSkill.frontmatter.license,
+    compatibility: agentSkill.frontmatter.compatibility,
+    content,
+    localPath: agentSkill.path,
+    metadata: {
+      tags,
+      isBuiltIn: false,
+      sourceType: 'local',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    },
+  };
+}
+
+/**
  * Hook for CRUD operations on skills
  */
 export function useSkillMutations() {
@@ -299,46 +337,52 @@ export function useSkillMutations() {
       category: string;
       tags?: string[];
       content: string | SkillContent;
+      license?: string;
+      compatibility?: string;
       metadata?: { tags: string[] };
     }) => {
       try {
         setLoading(true);
         setError(null);
 
-        // Use FileBasedSkillService to create file-based skills
-        const { getFileBasedSkillService } = await import(
-          '@/services/skills/file-based-skill-service'
-        );
-        const fileService = await getFileBasedSkillService();
+        // Use AgentSkillService to create skills
+        const agentService = await getAgentSkillService();
 
-        const fileSkill = await fileService.createSkill({
+        // Prepare content from input (content is required in CreateSkillParams)
+        let content: string = '';
+        if (typeof data.content === 'string') {
+          content = data.content;
+        } else if (data.content?.systemPromptFragment) {
+          content = data.content.systemPromptFragment;
+        }
+
+        // Build metadata with tags (only include tags if not empty)
+        const metadata: Record<string, string> = {
+          category: data.category || 'other',
+        };
+        const tagsArray =
+          data.tags && data.tags.length > 0
+            ? data.tags
+            : data.metadata?.tags && data.metadata.tags.length > 0
+              ? data.metadata.tags
+              : [];
+        if (tagsArray.length > 0) {
+          metadata.tags = tagsArray.join(',');
+        }
+
+        const agentSkill = await agentService.createSkill({
           name: data.name,
           description: data.description,
-          category: data.category,
-          tags: data.metadata?.tags || data.tags || [],
-          content:
-            typeof data.content === 'string'
-              ? { systemPromptFragment: data.content }
-              : data.content,
+          content,
+          license: data.license,
+          compatibility: data.compatibility,
+          metadata,
         });
 
-        logger.info(`Created skill: ${data.name} (${fileSkill.id})`);
+        logger.info(`Created skill: ${data.name}`);
 
-        // Convert FileBasedSkill to Skill format for return
-        const skill = {
-          id: fileSkill.id,
-          name: fileSkill.name,
-          description: fileSkill.description,
-          category: fileSkill.frontmatter.category || 'other',
-          metadata: {
-            tags: fileSkill.metadata.tags,
-            isBuiltIn: false,
-            sourceType: 'local' as const,
-            createdAt: fileSkill.metadata.installedAt,
-            updatedAt: fileSkill.metadata.lastUpdatedAt,
-          },
-        };
-
+        // Convert AgentSkill to Skill format for return
+        const skill = agentSkillToSkill(agentSkill);
         return skill;
       } catch (err) {
         logger.error('Failed to create skill:', err);
@@ -361,6 +405,8 @@ export function useSkillMutations() {
         category?: string;
         tags?: string[];
         content?: string | SkillContent;
+        license?: string;
+        compatibility?: string;
         metadata?: { tags: string[] };
       }
     ) => {
@@ -368,80 +414,74 @@ export function useSkillMutations() {
         setLoading(true);
         setError(null);
 
-        // Use FileBasedSkillService to update file-based skills
-        const { getFileBasedSkillService } = await import(
-          '@/services/skills/file-based-skill-service'
-        );
-        const fileService = await getFileBasedSkillService();
+        // Use AgentSkillService to update skills
+        const agentService = await getAgentSkillService();
 
-        // Get the existing skill
-        const existingSkill = await fileService.getSkillById(id);
+        // Get the existing skill by name (id is the directory name which equals skill name)
+        const existingSkill = await agentService.getSkillByName(id);
         if (!existingSkill) {
-          throw new Error(`Skill with ID ${id} not found`);
+          throw new Error(`Skill with name ${id} not found`);
         }
 
-        const updatedName = data.name ?? existingSkill.name;
-        const updatedDescription = data.description ?? existingSkill.description;
-        const updatedCategory =
-          data.category ?? (existingSkill.frontmatter.category as string) ?? undefined;
+        // Prepare updates
+        const updates: {
+          description?: string;
+          content?: string;
+          metadata?: Record<string, string>;
+        } = {};
 
-        // If content is provided, regenerate SKILL.md content
-        let updatedContent = existingSkill.content;
-        if (data.content) {
-          const { SkillMdParser } = await import('@/services/skills/skill-md-parser');
-          const content =
-            typeof data.content === 'string'
-              ? { systemPromptFragment: data.content }
-              : data.content;
-          const fullContent = SkillMdParser.createSkillMdFromContent(
-            updatedName,
-            updatedDescription,
-            content,
-            updatedCategory
-          );
-          // Parse the generated content to extract just the markdown part
-          const parsed = SkillMdParser.parse(fullContent);
-          updatedContent = String(parsed.content);
+        if (data.description !== undefined) {
+          updates.description = data.description;
         }
 
-        // Update the skill object
-        const updatedSkill = {
-          ...existingSkill,
-          name: updatedName,
-          description: updatedDescription,
-          content: updatedContent,
-          frontmatter: {
-            ...existingSkill.frontmatter,
-            name: updatedName,
-            description: updatedDescription,
-            category: updatedCategory,
-          },
-          metadata: {
-            ...existingSkill.metadata,
-            tags: data.metadata?.tags ?? data.tags ?? existingSkill.metadata.tags,
-          },
+        if (data.content !== undefined) {
+          if (typeof data.content === 'string') {
+            updates.content = data.content;
+          } else if (data.content?.systemPromptFragment) {
+            updates.content = data.content.systemPromptFragment;
+          }
+        }
+
+        // Build metadata with tags (only include tags if not empty)
+        const tags = data.tags || data.metadata?.tags || [];
+        const category = data.category || existingSkill.frontmatter.metadata?.category || 'other';
+        const metadata: Record<string, string> = {
+          ...existingSkill.frontmatter.metadata,
+          category,
         };
+        if (tags.length > 0) {
+          metadata.tags = tags.join(',');
+        }
 
-        // Save the updated skill
-        await fileService.updateSkill(updatedSkill);
-
-        logger.info(`Updated skill: ${updatedSkill.name} (${id})`);
-
-        // Convert FileBasedSkill to Skill format for return
-        const skill = {
-          id: updatedSkill.id,
-          name: updatedSkill.name,
-          description: updatedSkill.description,
-          category: updatedSkill.frontmatter.category || 'other',
-          metadata: {
-            tags: updatedSkill.metadata.tags,
-            isBuiltIn: false,
-            sourceType: 'local' as const,
-            createdAt: updatedSkill.metadata.installedAt,
-            updatedAt: updatedSkill.metadata.lastUpdatedAt,
-          },
+        // Update frontmatter with license and compatibility if provided
+        const finalFrontmatter: Partial<AgentSkillFrontmatter> = {
+          ...existingSkill.frontmatter,
         };
+        if (data.name && data.name !== existingSkill.name) {
+          finalFrontmatter.name = data.name;
+        }
+        if (data.license !== undefined) {
+          finalFrontmatter.license = data.license || undefined;
+        }
+        if (data.compatibility !== undefined) {
+          finalFrontmatter.compatibility = data.compatibility || undefined;
+        }
 
+        updates.metadata = metadata;
+
+        // Update the skill using name as identifier
+        await agentService.updateSkill(existingSkill.name, updates, finalFrontmatter);
+
+        logger.info(`Updated skill: ${existingSkill.name}`);
+
+        // Reload the updated skill
+        const updatedSkill = await agentService.loadSkill(existingSkill.name);
+        if (!updatedSkill) {
+          throw new Error('Failed to reload updated skill');
+        }
+
+        // Convert AgentSkill to Skill format for return
+        const skill = agentSkillToSkill(updatedSkill);
         return skill;
       } catch (err) {
         logger.error('Failed to update skill:', err);
@@ -460,21 +500,19 @@ export function useSkillMutations() {
       setLoading(true);
       setError(null);
 
-      // Use FileBasedSkillService to delete file-based skills
-      const { getFileBasedSkillService } = await import(
-        '@/services/skills/file-based-skill-service'
-      );
-      const fileService = await getFileBasedSkillService();
+      // Use AgentSkillService to delete skills
+      // id is the directory name which equals skill name
+      const agentService = await getAgentSkillService();
 
-      // Get the skill to find its directory name
-      const skill = await fileService.getSkillById(id);
+      // Verify the skill exists
+      const skill = await agentService.getSkillByName(id);
       if (!skill) {
-        throw new Error(`Skill with ID ${id} not found`);
+        throw new Error(`Skill with name ${id} not found`);
       }
 
-      // Delete the skill using its directory name
-      await fileService.deleteSkill(skill.directoryName);
-      logger.info(`Deleted skill: ${skill.name} (${id})`);
+      // Delete the skill using its name
+      await agentService.deleteSkill(skill.name);
+      logger.info(`Deleted skill: ${skill.name}`);
     } catch (err) {
       logger.error('Failed to delete skill:', err);
       const error = err instanceof Error ? err : new Error('Failed to delete skill');

@@ -1,4 +1,4 @@
-use crate::constants::EXCLUDED_DIRS;
+use crate::constants::{BINARY_EXTENSIONS, EXCLUDED_DIRS};
 use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher};
 use std::path::Path;
 use std::sync::{
@@ -344,12 +344,19 @@ impl FileWatcher {
         // Check file extensions to ignore
         if let Some(extension) = path.extension() {
             let ext_str = extension.to_string_lossy().to_lowercase();
+
+            // Check binary extensions (includes Rust build artifacts: .rlib, .d, .rmeta, etc.)
+            if BINARY_EXTENSIONS.contains(&ext_str.as_str()) {
+                return false;
+            }
+
+            // Check temporary/system file extensions
             let ignore_extensions = [
                 "tmp",
                 "temp",
                 "log",
-                "cache",
                 "lock",
+                "cache",
                 "swp",
                 "swo",
                 "bak",
@@ -568,6 +575,76 @@ mod tests {
         assert!(FileWatcher::should_watch_path(Path::new(
             "/repo/package-lock.json"
         )));
+    }
+
+    #[test]
+    fn test_should_watch_path_excludes_target_dev_dir() {
+        assert!(!FileWatcher::should_watch_path(Path::new(
+            "/repo/src-tauri/target-dev/debug/libtauri_app_lib.a"
+        )));
+        assert!(!FileWatcher::should_watch_path(Path::new(
+            "/repo/src-tauri/target-dev/debug/libtauri_app_lib.rlib"
+        )));
+        assert!(!FileWatcher::should_watch_path(Path::new(
+            "/repo/src-tauri/target-dev/debug/libtauri_app_lib.dylib"
+        )));
+    }
+
+    #[test]
+    fn test_should_watch_path_excludes_rust_binary_extensions() {
+        assert!(!FileWatcher::should_watch_path(Path::new(
+            "/repo/target/debug/deps/lib.rlib"
+        )));
+        assert!(!FileWatcher::should_watch_path(Path::new(
+            "/repo/target/debug/deps/lib.d"
+        )));
+        assert!(!FileWatcher::should_watch_path(Path::new(
+            "/repo/target/debug/deps/lib.rmeta"
+        )));
+        assert!(!FileWatcher::should_watch_path(Path::new(
+            "/repo/target/debug/app.pdb"
+        )));
+    }
+
+    #[test]
+    fn test_should_watch_path_excludes_common_binary_files() {
+        assert!(!FileWatcher::should_watch_path(Path::new(
+            "/repo/build/lib.a"
+        )));
+        assert!(!FileWatcher::should_watch_path(Path::new(
+            "/repo/build/lib.dylib"
+        )));
+        assert!(!FileWatcher::should_watch_path(Path::new(
+            "/repo/build/lib.so"
+        )));
+        assert!(!FileWatcher::should_watch_path(Path::new(
+            "/repo/build/app.exe"
+        )));
+        assert!(!FileWatcher::should_watch_path(Path::new(
+            "/repo/build/lib.dll"
+        )));
+    }
+
+    #[test]
+    fn test_should_watch_path_allows_source_files() {
+        // Ensure Rust source files are still watched
+        assert!(FileWatcher::should_watch_path(Path::new(
+            "/repo/src/main.rs"
+        )));
+        assert!(FileWatcher::should_watch_path(Path::new(
+            "/repo/src/lib.rs"
+        )));
+        assert!(FileWatcher::should_watch_path(Path::new(
+            "/repo/Cargo.toml"
+        )));
+        // Ensure other source files are watched
+        assert!(FileWatcher::should_watch_path(Path::new(
+            "/repo/src/index.ts"
+        )));
+        assert!(FileWatcher::should_watch_path(Path::new(
+            "/repo/package.json"
+        )));
+        assert!(FileWatcher::should_watch_path(Path::new("/repo/README.md")));
     }
 
     // Test for trailing-edge debounce behavior simulation

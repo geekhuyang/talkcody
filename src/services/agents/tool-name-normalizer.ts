@@ -156,13 +156,6 @@ export function normalizeToolName(toolName: string): string | null {
     GithubPRTool: 'githubPR',
     GithubPR: 'githubPR',
     githubpr: 'githubPR',
-
-    // Execute skill script variations
-    executeSkillScript: 'executeSkillScript',
-    executeSkillScriptTool: 'executeSkillScript',
-    ExecuteSkillScriptTool: 'executeSkillScript',
-    ExecuteSkillScript: 'executeSkillScript',
-    executeskillscript: 'executeSkillScript',
   };
 
   // Try exact match first

@@ -172,12 +172,6 @@ describe('ToolNameNormalizer', () => {
       expect(normalizeToolName('GithubPR')).toBe('githubPR');
     });
 
-    it('should normalize executeSkillScript variations', () => {
-      expect(normalizeToolName('executeSkillScript')).toBe('executeSkillScript');
-      expect(normalizeToolName('executeSkillScriptTool')).toBe('executeSkillScript');
-      expect(normalizeToolName('ExecuteSkillScript')).toBe('executeSkillScript');
-    });
-
     it('should handle MCP tool names', () => {
       expect(normalizeToolName('mcp__chrome-devtools__click')).toBe('mcp__chrome-devtools__click');
       expect(normalizeToolName('mcp__ chrome devtools __ click')).toBe('mcp__chromedevtools__click');

@@ -140,7 +140,6 @@ class AgentRegistry {
       const todoWrite = await getTool('todoWrite');
       const writeFile = await getTool('writeFile');
       const editFile = await getTool('editFile');
-      const getSkill = await getTool('getSkill');
       const webSearch = await getTool('webSearch');
       const webFetch = await getTool('webFetch');
 
@@ -154,7 +153,6 @@ class AgentRegistry {
         todoWrite,
         writeFile,
         editFile,
-        getSkill,
         webSearch,
         webFetch,
       })) as AgentToolSet;
@@ -173,7 +171,6 @@ class AgentRegistry {
       const todoWrite = await getTool('todoWrite');
       const writeFile = await getTool('writeFile');
       const editFile = await getTool('editFile');
-      const getSkill = await getTool('getSkill');
       const webSearch = await getTool('webSearch');
       const webFetch = await getTool('webFetch');
 
@@ -187,7 +184,6 @@ class AgentRegistry {
         todoWrite,
         writeFile,
         editFile,
-        getSkill,
         webSearch,
         webFetch,
       } as AgentToolSet;

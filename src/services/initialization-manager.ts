@@ -26,7 +26,6 @@ type InitializationPhase = 'idle' | 'initializing' | 'completed' | 'failed';
  * Background Loading (non-blocking):
  * - Command Registry
  * - Terminal Service
- * - File-based Skills
  * - Agent Store
  * - Skills Store
  * - Plan Mode Store
@@ -134,16 +133,6 @@ class InitializationManager {
             .then(() => {
               logger.info('[InitManager] ✓ Terminal service initialized (background)');
             }),
-
-          // File-based skills
-          (async () => {
-            const { getFileBasedSkillService } = await import(
-              '@/services/skills/file-based-skill-service'
-            );
-            const fileBasedSkillService = await getFileBasedSkillService();
-            await fileBasedSkillService.initialize();
-            logger.info('[InitManager] ✓ File-based skills initialized (background)');
-          })(),
 
           // Agent store
           useAgentStore

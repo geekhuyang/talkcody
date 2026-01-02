@@ -7,9 +7,9 @@ import * as databaseServiceModule from '@/services/database-service';
 import * as forkSkillModule from '@/services/skills/fork-skill';
 import { useSkillMutations } from './use-skills';
 
-// Mock the file-based skills service
-vi.mock('@/services/skills/file-based-skill-service', () => ({
-  getFileBasedSkillService: vi.fn(),
+// Mock the agent skills service
+vi.mock('@/services/skills/agent-skill-service', () => ({
+  getAgentSkillService: vi.fn(),
 }));
 
 // Mock logger
@@ -41,21 +41,22 @@ vi.mock('@/services/skills/fork-skill', () => ({
 }));
 
 describe('useSkillMutations', () => {
-  let mockFileBasedSkillService: any;
-  let getFileBasedSkillServiceMock: any;
+  let mockAgentSkillService: any;
+  let getAgentSkillServiceMock: any;
 
   beforeEach(async () => {
-    mockFileBasedSkillService = {
+    mockAgentSkillService = {
       createSkill: vi.fn(),
       updateSkill: vi.fn(),
       deleteSkill: vi.fn(),
-      getSkillById: vi.fn(),
+      getSkillByName: vi.fn(),
+      loadSkill: vi.fn(),
       listSkills: vi.fn(),
     };
 
-    const fileBasedSkillServiceModule = await import('@/services/skills/file-based-skill-service');
-    getFileBasedSkillServiceMock = vi.mocked(fileBasedSkillServiceModule.getFileBasedSkillService);
-    getFileBasedSkillServiceMock.mockResolvedValue(mockFileBasedSkillService);
+    const agentSkillServiceModule = await import('@/services/skills/agent-skill-service');
+    getAgentSkillServiceMock = vi.mocked(agentSkillServiceModule.getAgentSkillService);
+    getAgentSkillServiceMock.mockResolvedValue(mockAgentSkillService);
   });
 
   afterEach(() => {
@@ -64,27 +65,32 @@ describe('useSkillMutations', () => {
 
   describe('createSkill', () => {
     it('should create a skill successfully', async () => {
-      const mockFileBasedSkill = {
-        id: 'new-skill-1',
+      const mockAgentSkill = {
         name: 'New Skill',
-        description: 'A new skill',
-        localPath: '/path/to/skill',
-        directoryName: 'new-skill-1',
+        path: '/path/to/skill',
         frontmatter: {
           name: 'New Skill',
           description: 'A new skill',
-          category: 'Development',
+          metadata: {
+            category: 'Development',
+            tags: 'tag1,tag2',
+          },
         },
         content: '# New Skill\n\nA new skill',
-        metadata: {
-          tags: [],
-          installedAt: '2025-01-01T00:00:00.000Z',
-          lastUpdatedAt: '2025-01-01T00:00:00.000Z',
+        directory: {
+          name: 'new-skill',
+          path: '/path/to/skill',
+          hasSkillMd: true,
+          hasScriptsDir: false,
+          hasReferencesDir: false,
+          hasAssetsDir: false,
+          scriptFiles: [],
+          referenceFiles: [],
+          assetFiles: [],
         },
-        hasScripts: false,
       };
 
-      mockFileBasedSkillService.createSkill.mockResolvedValue(mockFileBasedSkill);
+      mockAgentSkillService.createSkill.mockResolvedValue(mockAgentSkill);
 
       const { result } = renderHook(() => useSkillMutations());
 
@@ -92,8 +98,8 @@ describe('useSkillMutations', () => {
         name: 'New Skill',
         description: 'A new skill',
         category: 'Development',
-        content: {},
-        tags: [],
+        content: { systemPromptFragment: '# New Skill\n\nA new skill' },
+        tags: ['tag1', 'tag2'],
       };
 
       let createdSkill;
@@ -101,62 +107,71 @@ describe('useSkillMutations', () => {
         createdSkill = await result.current.createSkill(skillData);
       });
 
-      expect(mockFileBasedSkillService.createSkill).toHaveBeenCalledWith({
+      expect(mockAgentSkillService.createSkill).toHaveBeenCalledWith({
         name: 'New Skill',
         description: 'A new skill',
-        category: 'Development',
-        tags: [],
-        content: {},
+        content: '# New Skill\n\nA new skill',
+        metadata: {
+          category: 'Development',
+          tags: 'tag1,tag2',
+        },
       });
       expect(createdSkill).toEqual({
-        id: 'new-skill-1',
+        id: 'new-skill',
         name: 'New Skill',
         description: 'A new skill',
         category: 'Development',
+        content: {
+          systemPromptFragment: '# New Skill\n\nA new skill',
+        },
+        localPath: '/path/to/skill',
         metadata: {
-          tags: [],
+          tags: ['tag1', 'tag2'],
           isBuiltIn: false,
           sourceType: 'local',
-          createdAt: '2025-01-01T00:00:00.000Z',
-          updatedAt: '2025-01-01T00:00:00.000Z',
+          createdAt: expect.any(Number),
+          updatedAt: expect.any(Number),
         },
       });
       expect(result.current.loading).toBe(false);
       expect(result.current.error).toBeNull();
     });
 
-    it('should handle skill creation with null category (marketplace skill install)', async () => {
-      // This tests the bug fix where marketplace skills might not have a category
-      const mockFileBasedSkill = {
-        id: 'marketplace-skill-1',
-        name: 'Marketplace Skill',
-        description: 'A skill from marketplace',
-        localPath: '/path/to/skill',
-        directoryName: 'marketplace-skill-1',
+    it('should handle skill creation with string content', async () => {
+      const mockAgentSkill = {
+        name: 'String Content Skill',
+        path: '/path/to/skill',
         frontmatter: {
-          name: 'Marketplace Skill',
-          description: 'A skill from marketplace',
-          category: 'other', // Default category
+          name: 'String Content Skill',
+          description: 'A skill with string content',
+          metadata: {
+            category: 'other',
+            tags: '',
+          },
         },
-        content: '# Marketplace Skill\n\nA skill from marketplace',
-        metadata: {
-          tags: [],
-          installedAt: '2025-01-01T00:00:00.000Z',
-          lastUpdatedAt: '2025-01-01T00:00:00.000Z',
+        content: 'String content here',
+        directory: {
+          name: 'string-content-skill',
+          path: '/path/to/skill',
+          hasSkillMd: true,
+          hasScriptsDir: false,
+          hasReferencesDir: false,
+          hasAssetsDir: false,
+          scriptFiles: [],
+          referenceFiles: [],
+          assetFiles: [],
         },
-        hasScripts: false,
       };
 
-      mockFileBasedSkillService.createSkill.mockResolvedValue(mockFileBasedSkill);
+      mockAgentSkillService.createSkill.mockResolvedValue(mockAgentSkill);
 
       const { result } = renderHook(() => useSkillMutations());
 
-      // Simulate marketplace skill data with missing category
       const skillData = {
-        name: 'Marketplace Skill',
-        description: 'A skill from marketplace',
-        category: null, // This should be handled gracefully
-        content: {},
+        name: 'String Content Skill',
+        description: 'A skill with string content',
+        category: 'other',
+        content: 'String content here',
         tags: [],
       };
 
@@ -165,27 +180,37 @@ describe('useSkillMutations', () => {
         createdSkill = await result.current.createSkill(skillData);
       });
 
-      expect(mockFileBasedSkillService.createSkill).toHaveBeenCalled();
+      // Tags is empty array, so metadata.tags should not be included
+      expect(mockAgentSkillService.createSkill).toHaveBeenCalledWith({
+        name: 'String Content Skill',
+        description: 'A skill with string content',
+        content: 'String content here',
+        metadata: {
+          category: 'other',
+        },
+      });
       expect(createdSkill).toEqual({
-        id: 'marketplace-skill-1',
-        name: 'Marketplace Skill',
-        description: 'A skill from marketplace',
+        id: 'string-content-skill',
+        name: 'String Content Skill',
+        description: 'A skill with string content',
         category: 'other',
+        content: {
+          systemPromptFragment: 'String content here',
+        },
+        localPath: '/path/to/skill',
         metadata: {
           tags: [],
           isBuiltIn: false,
           sourceType: 'local',
-          createdAt: '2025-01-01T00:00:00.000Z',
-          updatedAt: '2025-01-01T00:00:00.000Z',
+          createdAt: expect.any(Number),
+          updatedAt: expect.any(Number),
         },
       });
-      expect(result.current.loading).toBe(false);
-      expect(result.current.error).toBeNull();
     });
 
     it('should handle create skill errors', async () => {
       const error = new Error('Failed to create skill');
-      mockFileBasedSkillService.createSkill.mockRejectedValue(error);
+      mockAgentSkillService.createSkill.mockRejectedValue(error);
 
       const { result } = renderHook(() => useSkillMutations());
 
@@ -203,33 +228,38 @@ describe('useSkillMutations', () => {
     });
 
     it('should set loading state during creation', async () => {
-      const mockFileBasedSkill = {
-        id: 'test-skill',
+      const mockAgentSkill = {
         name: 'Test',
-        description: 'Test skill',
-        localPath: '/path/to/skill',
-        directoryName: 'test-skill',
+        path: '/path/to/skill',
         frontmatter: {
           name: 'Test',
           description: 'Test skill',
-          category: 'other',
+          metadata: {
+            category: 'other',
+            tags: '',
+          },
         },
         content: '# Test',
-        metadata: {
-          tags: [],
-          installedAt: '2025-01-01T00:00:00.000Z',
-          lastUpdatedAt: '2025-01-01T00:00:00.000Z',
+        directory: {
+          name: 'test',
+          path: '/path/to/skill',
+          hasSkillMd: true,
+          hasScriptsDir: false,
+          hasReferencesDir: false,
+          hasAssetsDir: false,
+          scriptFiles: [],
+          referenceFiles: [],
+          assetFiles: [],
         },
-        hasScripts: false,
       };
 
-      mockFileBasedSkillService.createSkill.mockImplementation(
-        () => new Promise((resolve) => setTimeout(() => resolve(mockFileBasedSkill), 100))
+      mockAgentSkillService.createSkill.mockImplementation(
+        () => new Promise((resolve) => setTimeout(() => resolve(mockAgentSkill), 100))
       );
 
       const { result } = renderHook(() => useSkillMutations());
 
-      const createPromise = result.current.createSkill({ name: 'Test' } as any);
+      const createPromise = result.current.createSkill({ name: 'Test', description: 'Test skill', category: 'other', content: '# Test', tags: [] } as any);
 
       // Should be loading - wait for state update
       await waitFor(() => {
@@ -247,73 +277,106 @@ describe('useSkillMutations', () => {
 
   describe('updateSkill', () => {
     it('should update a skill successfully', async () => {
-      const existingFileBasedSkill = {
-        id: 'skill-1',
+      const existingAgentSkill = {
         name: 'Original Skill',
-        description: 'Original description',
-        localPath: '/path/to/skill',
-        directoryName: 'skill-1',
+        path: '/path/to/skill',
         frontmatter: {
           name: 'Original Skill',
           description: 'Original description',
-          category: 'Development',
+          metadata: {
+            category: 'Development',
+            tags: 'tag1,tag2',
+          },
         },
         content: '# Original Skill',
-        metadata: {
-          tags: [],
-          installedAt: '2025-01-01T00:00:00.000Z',
-          lastUpdatedAt: '2025-01-01T00:00:00.000Z',
+        directory: {
+          name: 'original-skill',
+          path: '/path/to/skill',
+          hasSkillMd: true,
+          hasScriptsDir: false,
+          hasReferencesDir: false,
+          hasAssetsDir: false,
+          scriptFiles: [],
+          referenceFiles: [],
+          assetFiles: [],
         },
-        hasScripts: false,
       };
 
-      const updatedFileBasedSkill = {
-        ...existingFileBasedSkill,
+      const updatedAgentSkill = {
+        ...existingAgentSkill,
         name: 'Updated Skill',
-        description: 'Updated description',
         frontmatter: {
-          ...existingFileBasedSkill.frontmatter,
+          ...existingAgentSkill.frontmatter,
           name: 'Updated Skill',
           description: 'Updated description',
+          metadata: {
+            ...existingAgentSkill.frontmatter.metadata,
+            category: 'Development',
+            tags: 'tag1,tag2,tag3',
+          },
         },
       };
 
-      mockFileBasedSkillService.getSkillById.mockResolvedValue(existingFileBasedSkill);
-      mockFileBasedSkillService.updateSkill.mockResolvedValue(undefined);
+      mockAgentSkillService.getSkillByName.mockResolvedValue(existingAgentSkill);
+      mockAgentSkillService.updateSkill.mockResolvedValue(undefined);
+      mockAgentSkillService.loadSkill.mockResolvedValue(updatedAgentSkill);
 
       const { result } = renderHook(() => useSkillMutations());
 
       const updates = {
         name: 'Updated Skill',
         description: 'Updated description',
+        tags: ['tag1', 'tag2', 'tag3'],
       };
 
       let updatedSkill;
       await waitFor(async () => {
-        updatedSkill = await result.current.updateSkill('skill-1', updates);
+        updatedSkill = await result.current.updateSkill('original-skill', updates);
       });
 
-      expect(mockFileBasedSkillService.getSkillById).toHaveBeenCalledWith('skill-1');
-      expect(mockFileBasedSkillService.updateSkill).toHaveBeenCalled();
+      expect(mockAgentSkillService.getSkillByName).toHaveBeenCalledWith('original-skill');
+      expect(mockAgentSkillService.updateSkill).toHaveBeenCalledWith(
+        'Original Skill',
+        expect.objectContaining({
+          description: 'Updated description',
+          metadata: expect.objectContaining({
+            category: 'Development',
+            tags: 'tag1,tag2,tag3',
+          }),
+        }),
+        expect.objectContaining({
+          description: 'Original description',
+          metadata: expect.objectContaining({
+            category: 'Development',
+            tags: 'tag1,tag2',
+          }),
+          name: 'Updated Skill',
+        })
+      );
       expect(updatedSkill).toEqual({
-        id: 'skill-1',
+        id: 'original-skill',
         name: 'Updated Skill',
         description: 'Updated description',
         category: 'Development',
+        content: {
+          systemPromptFragment: '# Original Skill',
+        },
+        localPath: '/path/to/skill',
         metadata: {
-          tags: [],
+          tags: ['tag1', 'tag2', 'tag3'],
           isBuiltIn: false,
           sourceType: 'local',
-          createdAt: '2025-01-01T00:00:00.000Z',
-          updatedAt: '2025-01-01T00:00:00.000Z',
+          createdAt: expect.any(Number),
+          updatedAt: expect.any(Number),
         },
       });
+      // Verify the name was updated in the returned skill
+      expect(updatedSkill.name).toBe('Updated Skill');
       expect(result.current.error).toBeNull();
     });
 
-    it('should handle update skill errors', async () => {
-      const error = new Error('Skill not found');
-      mockFileBasedSkillService.getSkillById.mockResolvedValue(null);
+    it('should handle update skill errors when skill not found', async () => {
+      mockAgentSkillService.getSkillByName.mockResolvedValue(null);
 
       const { result } = renderHook(() => useSkillMutations());
 
@@ -328,68 +391,138 @@ describe('useSkillMutations', () => {
         expect(result.current.error).toBeTruthy();
       });
     });
+
+    it('should handle update skill errors', async () => {
+      const existingAgentSkill = {
+        name: 'Test Skill',
+        path: '/path/to/skill',
+        frontmatter: {
+          name: 'Test Skill',
+          description: 'Test',
+          metadata: {
+            category: 'other',
+            tags: '',
+          },
+        },
+        content: '# Test',
+        directory: {
+          name: 'test-skill',
+          path: '/path/to/skill',
+          hasSkillMd: true,
+          hasScriptsDir: false,
+          hasReferencesDir: false,
+          hasAssetsDir: false,
+          scriptFiles: [],
+          referenceFiles: [],
+          assetFiles: [],
+        },
+      };
+
+      mockAgentSkillService.getSkillByName.mockResolvedValue(existingAgentSkill);
+      mockAgentSkillService.updateSkill.mockRejectedValue(new Error('Update failed'));
+
+      const { result } = renderHook(() => useSkillMutations());
+
+      try {
+        await result.current.updateSkill('test-skill', { description: 'New desc' });
+        expect(true).toBe(false);
+      } catch (err) {
+        expect(err).toBeInstanceOf(Error);
+      }
+
+      await waitFor(() => {
+        expect(result.current.error).toBeTruthy();
+      });
+    });
   });
 
   describe('deleteSkill', () => {
     it('should delete a skill successfully', async () => {
-      const mockSkill = {
-        id: 'skill-1',
+      const mockAgentSkill = {
         name: 'Test Skill',
-        description: 'Test',
-        localPath: '/path/to/skill',
-        directoryName: 'test-skill',
+        path: '/path/to/skill',
         frontmatter: {
           name: 'Test Skill',
           description: 'Test',
-          category: 'other',
+          metadata: {
+            category: 'other',
+            tags: '',
+          },
         },
         content: '# Test',
-        metadata: {
-          tags: [],
-          installedAt: '2025-01-01T00:00:00.000Z',
-          lastUpdatedAt: '2025-01-01T00:00:00.000Z',
+        directory: {
+          name: 'test-skill',
+          path: '/path/to/skill',
+          hasSkillMd: true,
+          hasScriptsDir: false,
+          hasReferencesDir: false,
+          hasAssetsDir: false,
+          scriptFiles: [],
+          referenceFiles: [],
+          assetFiles: [],
         },
-        hasScripts: false,
       };
 
-      mockFileBasedSkillService.getSkillById.mockResolvedValue(mockSkill);
-      mockFileBasedSkillService.deleteSkill.mockResolvedValue(undefined);
+      mockAgentSkillService.getSkillByName.mockResolvedValue(mockAgentSkill);
+      mockAgentSkillService.deleteSkill.mockResolvedValue(undefined);
 
       const { result } = renderHook(() => useSkillMutations());
 
       await waitFor(async () => {
-        await result.current.deleteSkill('skill-1');
+        await result.current.deleteSkill('test-skill');
       });
 
-      expect(mockFileBasedSkillService.getSkillById).toHaveBeenCalledWith('skill-1');
-      expect(mockFileBasedSkillService.deleteSkill).toHaveBeenCalledWith('test-skill');
+      expect(mockAgentSkillService.getSkillByName).toHaveBeenCalledWith('test-skill');
+      expect(mockAgentSkillService.deleteSkill).toHaveBeenCalledWith('Test Skill');
       expect(result.current.error).toBeNull();
     });
 
+    it('should handle delete skill errors when skill not found', async () => {
+      mockAgentSkillService.getSkillByName.mockResolvedValue(null);
+
+      const { result } = renderHook(() => useSkillMutations());
+
+      try {
+        await result.current.deleteSkill('non-existent');
+        expect(true).toBe(false);
+      } catch (err) {
+        expect((err as Error).message).toContain('not found');
+      }
+
+      await waitFor(() => {
+        expect(result.current.error).toBeTruthy();
+      });
+    });
+
     it('should handle delete skill errors', async () => {
-      const mockSkill = {
-        id: 'system-skill',
+      const mockAgentSkill = {
         name: 'System Skill',
-        description: 'Test',
-        localPath: '/path/to/skill',
-        directoryName: 'system-skill',
+        path: '/path/to/skill',
         frontmatter: {
           name: 'System Skill',
           description: 'Test',
-          category: 'other',
+          metadata: {
+            category: 'other',
+            tags: '',
+          },
         },
         content: '# System Skill',
-        metadata: {
-          tags: [],
-          installedAt: '2025-01-01T00:00:00.000Z',
-          lastUpdatedAt: '2025-01-01T00:00:00.000Z',
+        directory: {
+          name: 'system-skill',
+          path: '/path/to/skill',
+          hasSkillMd: true,
+          hasScriptsDir: false,
+          hasReferencesDir: false,
+          hasAssetsDir: false,
+          scriptFiles: [],
+          referenceFiles: [],
+          assetFiles: [],
         },
-        hasScripts: false,
       };
 
       const error = new Error('Cannot delete system skill');
-      mockFileBasedSkillService.getSkillById.mockResolvedValue(mockSkill);
-      mockFileBasedSkillService.deleteSkill.mockRejectedValue(error);
+      mockAgentSkillService.getSkillByName.mockResolvedValue(mockAgentSkill);
+      mockAgentSkillService.deleteSkill.mockRejectedValue(error);
 
       const { result } = renderHook(() => useSkillMutations());
 
@@ -455,34 +588,40 @@ describe('useSkillMutations', () => {
   describe('loading and error states', () => {
     it('should reset error when starting new mutation', async () => {
       const error = new Error('Previous error');
-      const mockFileBasedSkill = {
-        id: 'success',
+      const mockAgentSkill = {
         name: 'Test 2',
-        description: 'Test skill',
-        localPath: '/path/to/skill',
-        directoryName: 'success',
+        path: '/path/to/skill',
         frontmatter: {
           name: 'Test 2',
           description: 'Test skill',
-          category: 'other',
+          metadata: {
+            category: 'other',
+            tags: '',
+          },
         },
         content: '# Test 2',
-        metadata: {
-          tags: [],
-          installedAt: '2025-01-01T00:00:00.000Z',
-          lastUpdatedAt: '2025-01-01T00:00:00.000Z',
+        directory: {
+          name: 'test-2',
+          path: '/path/to/skill',
+          hasSkillMd: true,
+          hasScriptsDir: false,
+          hasReferencesDir: false,
+          hasAssetsDir: false,
+          scriptFiles: [],
+          referenceFiles: [],
+          assetFiles: [],
         },
-        hasScripts: false,
       };
 
-      mockFileBasedSkillService.createSkill.mockRejectedValueOnce(error);
-      mockFileBasedSkillService.createSkill.mockResolvedValueOnce(mockFileBasedSkill);
+      mockAgentSkillService.createSkill
+        .mockRejectedValueOnce(error)
+        .mockResolvedValueOnce(mockAgentSkill);
 
       const { result } = renderHook(() => useSkillMutations());
 
       // First call fails
       try {
-        await result.current.createSkill({ name: 'Test' } as any);
+        await result.current.createSkill({ name: 'Test', description: 'Test', category: 'other', content: '# Test', tags: [] } as any);
       } catch (_err) {
         // Expected
       }
@@ -493,7 +632,7 @@ describe('useSkillMutations', () => {
 
       // Second call succeeds
       await waitFor(async () => {
-        await result.current.createSkill({ name: 'Test 2' } as any);
+        await result.current.createSkill({ name: 'Test 2', description: 'Test skill', category: 'other', content: '# Test 2', tags: [] } as any);
       });
 
       // Error should be reset
@@ -517,58 +656,68 @@ describe('useSkillMutations', () => {
 
   describe('concurrent mutations', () => {
     it('should handle multiple sequential mutations correctly', async () => {
-      const mockSkill1 = {
-        id: 'skill-Skill1',
+      const mockAgentSkill1 = {
         name: 'Skill1',
-        description: '',
-        localPath: '/path/to/Skill1',
-        directoryName: 'skill-Skill1',
+        path: '/path/to/Skill1',
         frontmatter: {
           name: 'Skill1',
           description: '',
-          category: 'other',
+          metadata: {
+            category: 'other',
+            tags: '',
+          },
         },
         content: '# Skill1',
-        metadata: {
-          tags: [],
-          installedAt: '2025-01-01T00:00:00.000Z',
-          lastUpdatedAt: '2025-01-01T00:00:00.000Z',
+        directory: {
+          name: 'skill1',
+          path: '/path/to/Skill1',
+          hasSkillMd: true,
+          hasScriptsDir: false,
+          hasReferencesDir: false,
+          hasAssetsDir: false,
+          scriptFiles: [],
+          referenceFiles: [],
+          assetFiles: [],
         },
-        hasScripts: false,
       };
 
-      const mockSkill2 = {
-        id: 'skill-Skill2',
+      const mockAgentSkill2 = {
         name: 'Skill2',
-        description: '',
-        localPath: '/path/to/Skill2',
-        directoryName: 'skill-Skill2',
+        path: '/path/to/Skill2',
         frontmatter: {
           name: 'Skill2',
           description: '',
-          category: 'other',
+          metadata: {
+            category: 'other',
+            tags: '',
+          },
         },
         content: '# Skill2',
-        metadata: {
-          tags: [],
-          installedAt: '2025-01-01T00:00:00.000Z',
-          lastUpdatedAt: '2025-01-01T00:00:00.000Z',
+        directory: {
+          name: 'skill2',
+          path: '/path/to/Skill2',
+          hasSkillMd: true,
+          hasScriptsDir: false,
+          hasReferencesDir: false,
+          hasAssetsDir: false,
+          scriptFiles: [],
+          referenceFiles: [],
+          assetFiles: [],
         },
-        hasScripts: false,
       };
 
-      mockFileBasedSkillService.createSkill
-        .mockResolvedValueOnce(mockSkill1)
-        .mockResolvedValueOnce(mockSkill2);
+      mockAgentSkillService.createSkill
+        .mockResolvedValueOnce(mockAgentSkill1)
+        .mockResolvedValueOnce(mockAgentSkill2);
 
       const { result } = renderHook(() => useSkillMutations());
 
       // Test multiple sequential calls work correctly
-      const skill1 = await result.current.createSkill({ name: 'Skill1' } as any);
-      expect(skill1.id).toBe('skill-Skill1');
+      const skill1 = await result.current.createSkill({ name: 'Skill1', description: '', category: 'other', content: '# Skill1', tags: [] } as any);
+      expect(skill1.id).toBe('skill1');
 
-      const skill2 = await result.current.createSkill({ name: 'Skill2' } as any);
-      expect(skill2.id).toBe('skill-Skill2');
+      const skill2 = await result.current.createSkill({ name: 'Skill2', description: '', category: 'other', content: '# Skill2', tags: [] } as any);
+      expect(skill2.id).toBe('skill2');
     });
   });
 });

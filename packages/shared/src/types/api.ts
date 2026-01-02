@@ -178,6 +178,10 @@ export interface CreateSkillRequest {
   packageSize?: number
   checksum?: string
   hasScripts?: boolean
+
+  // Agent Skills Specification fields
+  compatibility?: string
+  metadata?: Record<string, string> | null
 }
 
 export interface CreateSkillResponse {
@@ -197,6 +201,10 @@ export interface UpdateSkillRequest {
   workflowRules?: string
   documentation?: DocumentationItem[]
   isPublished?: boolean
+
+  // Agent Skills Specification fields
+  compatibility?: string
+  metadata?: Record<string, string> | null
 }
 
 export interface UpdateSkillResponse {

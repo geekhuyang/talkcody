@@ -2,10 +2,17 @@
 
 import {
   BookOpen,
+  Code,
   Download,
+  ExternalLink,
   FileText,
+  Folder,
   GitFork,
+  Github,
+  Info,
   Pencil,
+  RefreshCw,
+  Scale,
   Share2,
   Star,
   Trash2,
@@ -23,6 +30,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { Skill } from '@/types/skill';
 
 interface SkillCardProps {
@@ -37,6 +45,8 @@ interface SkillCardProps {
   onDelete?: () => void;
   onFork?: () => void;
   onShare?: () => void;
+  onInstall?: (skill: Skill) => void;
+  isInstalling?: boolean;
 }
 
 export function SkillCard({
@@ -50,6 +60,8 @@ export function SkillCard({
   onDelete,
   onFork,
   onShare,
+  onInstall,
+  isInstalling = false,
 }: SkillCardProps) {
   const handleCardClick = () => {
     if (onClick) {
@@ -71,6 +83,11 @@ export function SkillCard({
     skill.content?.documentation && skill.content.documentation.length > 0
   );
   const hasScripts = Boolean(skill.content?.hasScripts);
+  const _hasReferences = Boolean(skill.content?.hasReferences);
+  const _hasAssets = Boolean(skill.content?.hasAssets);
+  const hasScriptsDir = Boolean(skill.content?.hasScriptsDir);
+  const hasReferencesDir = Boolean(skill.content?.hasReferencesDir);
+  const hasAssetsDir = Boolean(skill.content?.hasAssetsDir);
 
   // Determine skill type
   const isBuiltIn = skill.metadata.isBuiltIn;
@@ -125,6 +142,29 @@ export function SkillCard({
               {skill.category}
             </Badge>
 
+            {/* License Badge */}
+            {skill.license && (
+              <Badge variant="outline" className="mt-1 text-xs">
+                <Scale className="h-3 w-3 mr-1" />
+                {skill.license}
+              </Badge>
+            )}
+
+            {/* Compatibility Tooltip */}
+            {skill.compatibility && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Badge variant="secondary" className="mt-1 text-xs cursor-help">
+                    <Info className="h-3 w-3 mr-1" />
+                    Compatible
+                  </Badge>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="max-w-xs">{skill.compatibility}</p>
+                </TooltipContent>
+              </Tooltip>
+            )}
+
             <CardDescription className="text-xs line-clamp-2 mt-2">
               {skill.description}
             </CardDescription>
@@ -161,10 +201,46 @@ export function SkillCard({
                 : 'Scripts'}
             </div>
           )}
+          {hasScriptsDir && (
+            <div className="flex items-center gap-1" title="Scripts Directory">
+              <Code className="h-3 w-3" />
+              Scripts
+            </div>
+          )}
+          {hasReferencesDir && (
+            <div className="flex items-center gap-1" title="References Directory">
+              <BookOpen className="h-3 w-3" />
+              References
+            </div>
+          )}
+          {hasAssetsDir && (
+            <div className="flex items-center gap-1" title="Assets Directory">
+              <Folder className="h-3 w-3" />
+              Assets
+            </div>
+          )}
         </div>
 
-        {/* Marketplace stats */}
-        {skill.marketplace && (
+        {/* GitHub info for remote skills */}
+        {sourceType === 'remote' && skill.metadata.repository && skill.metadata.githubPath && (
+          <div className="mb-3">
+            <a
+              href={`https://github.com/${skill.metadata.repository}/tree/main/${skill.metadata.githubPath}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors group"
+              onClick={(e) => e.stopPropagation()}
+              title={`View on GitHub: ${skill.metadata.githubPath}`}
+            >
+              <Github className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">{skill.metadata.repository}</span>
+              <ExternalLink className="h-3 w-3 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+            </a>
+          </div>
+        )}
+
+        {/* Marketplace stats for marketplace skills */}
+        {sourceType === 'marketplace' && skill.marketplace && (
           <div className="flex items-center gap-4 text-xs text-muted-foreground mb-3">
             <div className="flex items-center gap-1">
               <Download className="h-3 w-3" />
@@ -286,9 +362,34 @@ export function SkillCard({
 
           {/* Primary action buttons */}
           <div className="flex gap-2 w-full">
-            <Button variant="outline" size="sm" className="flex-1" onClick={handleCardClick}>
-              View Details
-            </Button>
+            {onInstall ? (
+              <Button
+                variant="default"
+                size="sm"
+                className="flex-1"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onInstall(skill);
+                }}
+                disabled={isInstalling}
+              >
+                {isInstalling ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                    Installing...
+                  </>
+                ) : (
+                  <>
+                    <Download className="h-4 w-4 mr-2" />
+                    Install
+                  </>
+                )}
+              </Button>
+            ) : (
+              <Button variant="outline" size="sm" className="flex-1" onClick={handleCardClick}>
+                View Details
+              </Button>
+            )}
             {onToggle && (
               <Button
                 variant={isActive ? 'secondary' : 'default'}

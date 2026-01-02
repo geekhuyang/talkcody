@@ -14,7 +14,6 @@ import { logger } from '@/lib/logger';
 import { convertToAnthropicFormat } from '@/lib/message-convert';
 import { MessageTransform } from '@/lib/message-transform';
 import { validateAnthropicMessages } from '@/lib/message-validate';
-import { getToolSync } from '@/lib/tools';
 import { generateId } from '@/lib/utils';
 import { getLocale, type SupportedLocale } from '@/locales';
 import { getContextLength } from '@/providers/config/model-config';
@@ -280,8 +279,6 @@ export class LLMService {
           agentId,
         } = options;
 
-        const isImageGenerator = agentId === 'image-generator';
-
         // Merge compression config with defaults
         const compressionConfig: CompressionConfig = {
           ...this.getDefaultCompressionConfig(),
@@ -445,18 +442,6 @@ export class LLMService {
 
           const filteredTools = { ...tools };
           const isPlanModeEnabled = usePlanModeStore.getState().isPlanModeEnabled;
-          if (!isImageGenerator) {
-            // By default, remove executeSkillScript (only add when needed)
-            delete filteredTools.executeSkillScript;
-            // Dynamically add executeSkillScript if skills with scripts have been loaded
-            if (loopState.hasSkillScripts) {
-              filteredTools.executeSkillScript =
-                tools.executeSkillScript || getToolSync('executeSkillScript');
-              logger.info('[Dynamic Tool] Added executeSkillScript for skill script execution', {
-                iteration: loopState.currentIteration,
-              });
-            }
-          }
 
           const availableTools = Object.keys(filteredTools);
 
@@ -569,7 +554,7 @@ export class LLMService {
                 });
               }
 
-              const enableReasoningOptions = !isImageGenerator && isThink;
+              const enableReasoningOptions = isThink;
               const providerOptionsMap: Record<string, unknown> = {};
 
               if (enableReasoningOptions) {
@@ -941,32 +926,6 @@ export class LLMService {
               toolExecutionOptions,
               onStatus
             );
-
-            // Check if get-skill tool returned skills with scripts
-            for (const { toolCall, result } of results) {
-              if (
-                toolCall.toolName === 'getSkill' &&
-                result &&
-                typeof result === 'object' &&
-                'has_scripts' in result &&
-                result.has_scripts === true
-              ) {
-                loopState.hasSkillScripts = true;
-                const skillResult = result as {
-                  skill_name?: string;
-                  script_count?: number;
-                  has_scripts: boolean;
-                };
-                logger.info(
-                  '[Dynamic Tool] Detected skill with scripts, will add executeSkillScript',
-                  {
-                    skill_name: skillResult.skill_name,
-                    script_count: skillResult.script_count,
-                  }
-                );
-                break; // Only need to set the flag once
-              }
-            }
 
             // Build combined assistant message with text/reasoning AND tool calls
             const assistantContent = streamProcessor.getAssistantContent();

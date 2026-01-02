@@ -24,6 +24,16 @@ export type {
   ToolMessageContent,
   UIMessage,
 } from './agent';
+// Agent Skills Specification types
+export type {
+  AgentSkill,
+  AgentSkillDirectory,
+  AgentSkillFrontmatter,
+  CreateSkillParams,
+  DisclosureLevel,
+  SkillDiscoveryInfo,
+  UpdateSkillParams,
+} from './agent-skills-spec';
 // API keys types
 export type { ApiKeySettings, AvailableModel } from './api-keys';
 // Command types
@@ -51,13 +61,6 @@ export type {
   DbAgent,
   UpdateAgentData,
 } from './db-agent';
-// File-based skill types
-export type {
-  FileBasedSkill,
-  ParsedSkillMd,
-  SkillMdFrontmatter,
-  TalkCodySkillMetadata,
-} from './file-based-skill';
 // File system types
 export type {
   FileNode,

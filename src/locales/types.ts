@@ -704,6 +704,7 @@ export interface LocaleDefinition {
     page: {
       description: string;
       createNew: string;
+      importFromGitHub: string;
       refresh: string;
       searchPlaceholder: string;
       allCategories: string;
@@ -727,6 +728,75 @@ export interface LocaleDefinition {
       deleteDescription: (name: string) => string;
       tooltipTitle: string;
       tooltipDescription: string;
+    };
+    metadata?: {
+      label: string;
+      empty: string;
+      selectKey: string;
+      valuePlaceholder: string;
+    };
+    references?: {
+      title: string;
+      addButton: string;
+      empty: string;
+      emptyHint: string;
+      helpText: string;
+      alreadyExists: string;
+      invalidExtension: string;
+      uploadSuccess: string;
+      uploadError: string;
+      deleteConfirm: string;
+      deleteSuccess: string;
+      preview: string;
+      previewDescription: string;
+      previewError: string;
+      download: string;
+      downloadStarted: string;
+      downloadError: string;
+    };
+    assets?: {
+      title: string;
+      addButton: string;
+      empty: string;
+      emptyHint: string;
+      helpText: string;
+      alreadyExists: string;
+      invalidExtension: string;
+      uploadSuccess: string;
+      uploadError: string;
+      deleteConfirm: string;
+      deleteSuccess: string;
+      previewDescription: string;
+      previewError: string;
+      preview: string;
+      download: string;
+      downloadStarted: string;
+      downloadError: string;
+    };
+    githubImport: {
+      title: string;
+      description: string;
+      urlLabel: string;
+      urlPlaceholder: string;
+      urlHint: string;
+      urlRequired: string;
+      scanning: string;
+      foundSkills: (count: number) => string;
+      noSkillsFound: string;
+      invalidUrl: string;
+      networkError: string;
+      importing: string;
+      importSuccess: (count: number) => string;
+      importFailed: (count: number) => string;
+      alreadyExists: (name: string) => string;
+      selectAll: string;
+      deselectAll: string;
+      scan: string;
+      import: string;
+      cancel: string;
+      back: string;
+      close: string;
+      importMore: string;
     };
   };
 

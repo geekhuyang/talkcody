@@ -5,6 +5,7 @@ pub const EXCLUDED_DIRS: &[&str] = &[
     "node_modules",
     ".git",
     "target",
+    "target-dev", // Tauri development build directory
     "build",
     "dist",
     ".next",
@@ -144,10 +145,17 @@ pub const CODE_FILENAMES: &[&str] = &[
 
 /// Binary file extensions to exclude
 pub const BINARY_EXTENSIONS: &[&str] = &[
-    "exe", "dll", "so", "dylib", "a", "lib", "o", "obj", "pdf", "doc", "docx", "xls", "xlsx",
-    "ppt", "pptx", "zip", "tar", "gz", "bz2", "7z", "rar", "jpg", "jpeg", "png", "gif", "bmp",
-    "ico", "svg", "mp3", "mp4", "avi", "mkv", "mov", "wmv", "flv", "ttf", "otf", "woff", "woff2",
-    "eot", "jar", "war", "ear", "class", "pyc", "pyo", "db", "sqlite", "sqlite3",
+    // Executables and libraries
+    "exe", "dll", "so", "dylib", "a", "lib", "o", "obj", // Rust build artifacts
+    "rlib", "rmeta", "d", "pdb", // Documents
+    "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", // Archives
+    "zip", "tar", "gz", "bz2", "7z", "rar", // Images
+    "jpg", "jpeg", "png", "gif", "bmp", "ico", "svg", // Media
+    "mp3", "mp4", "avi", "mkv", "mov", "wmv", "flv", // Fonts
+    "ttf", "otf", "woff", "woff2", "eot", // Java
+    "jar", "war", "ear", "class", // Python
+    "pyc", "pyo", // Databases
+    "db", "sqlite", "sqlite3",
 ];
 
 /// Check if a directory should be excluded
@@ -296,6 +304,17 @@ mod tests {
     }
 
     #[test]
+    fn test_is_binary_extension_rust_artifacts() {
+        assert!(is_binary_extension("rlib"));
+        assert!(is_binary_extension("rmeta"));
+        assert!(is_binary_extension("d"));
+        assert!(is_binary_extension("pdb"));
+        assert!(is_binary_extension("a"));
+        assert!(is_binary_extension("dylib"));
+        assert!(is_binary_extension("so"));
+    }
+
+    #[test]
     fn test_is_binary_extension_false() {
         assert!(!is_binary_extension("rs"));
         assert!(!is_binary_extension("js"));
@@ -308,6 +327,7 @@ mod tests {
         assert!(EXCLUDED_DIRS.contains(&"node_modules"));
         assert!(EXCLUDED_DIRS.contains(&".git"));
         assert!(EXCLUDED_DIRS.contains(&"target"));
+        assert!(EXCLUDED_DIRS.contains(&"target-dev"));
         assert!(EXCLUDED_DIRS.contains(&"__pycache__"));
         assert!(EXCLUDED_DIRS.len() > 20); // Should have many exclusions
     }
@@ -326,6 +346,10 @@ mod tests {
         assert!(BINARY_EXTENSIONS.contains(&"exe"));
         assert!(BINARY_EXTENSIONS.contains(&"png"));
         assert!(BINARY_EXTENSIONS.contains(&"zip"));
+        assert!(BINARY_EXTENSIONS.contains(&"rlib"));
+        assert!(BINARY_EXTENSIONS.contains(&"rmeta"));
+        assert!(BINARY_EXTENSIONS.contains(&"d"));
+        assert!(BINARY_EXTENSIONS.contains(&"pdb"));
         assert!(BINARY_EXTENSIONS.len() > 30); // Should have many extensions
     }
 }

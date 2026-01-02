@@ -39,6 +39,13 @@ export interface SkillContent {
   hasScripts?: boolean; // Whether the skill includes executable scripts
   scriptFiles?: string[]; // List of script filenames (e.g., ['analyze.py', 'format.sh'])
   scriptContents?: Map<string, string>; // Script contents during creation (not persisted)
+
+  // Directory indicators (from Agent Skills Specification)
+  hasReferences?: boolean; // Whether the skill has references
+  hasAssets?: boolean; // Whether the skill has assets
+  hasScriptsDir?: boolean; // Whether the skill has scripts/ directory
+  hasReferencesDir?: boolean; // Whether the skill has references/ directory
+  hasAssetsDir?: boolean; // Whether the skill has assets/ directory
 }
 
 /**
@@ -62,7 +69,7 @@ export interface SkillMarketplaceMetadata {
  */
 export interface SkillLocalMetadata {
   isBuiltIn: boolean; // Whether this is a built-in skill
-  sourceType?: 'local' | 'marketplace' | 'system'; // Source of the skill
+  sourceType?: 'local' | 'marketplace' | 'system' | 'remote'; // Source of the skill
   forkedFromId?: string; // Local skill ID if forked from another local skill
   forkedFromMarketplaceId?: string; // Marketplace ID if forked from marketplace
   isShared?: boolean; // Whether this skill has been shared to marketplace
@@ -70,6 +77,9 @@ export interface SkillLocalMetadata {
   createdAt: number; // Creation timestamp
   updatedAt: number; // Last update timestamp
   lastUsed?: number; // Last usage timestamp
+  // GitHub information for remote skills
+  repository?: string; // GitHub repository (e.g., "talkcody/skills")
+  githubPath?: string; // Path within the repository (e.g., "skills/theme-factory")
 }
 
 /**
@@ -82,6 +92,11 @@ export interface Skill {
   longDescription?: string;
   category: string;
   icon?: string;
+
+  // Frontmatter fields per Agent Skills Specification
+  license?: string;
+  compatibility?: string;
+  frontmatterMetadata?: Record<string, string>; // Agent Skills Spec: metadata field
 
   content: SkillContent;
 

@@ -29,7 +29,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { logger } from '@/lib/logger';
 import type { DocumentationItem, Skill } from '@/types/skill';
+import { AssetsManager } from './assets-manager';
 import { DocumentationEditor } from './documentation-editor';
+import { MetadataEditor } from './metadata-editor';
+import { ReferencesManager } from './references-manager';
 
 interface SkillEditorDialogProps {
   skill?: Skill | null;
@@ -52,6 +55,19 @@ const SKILL_CATEGORIES = [
   'General',
 ];
 
+const LICENSE_OPTIONS = [
+  { label: 'MIT', value: 'MIT' },
+  { label: 'Apache-2.0', value: 'Apache-2.0' },
+  { label: 'GPL-3.0', value: 'GPL-3.0' },
+  { label: 'BSD-3-Clause', value: 'BSD-3-Clause' },
+  { label: 'BSD-2-Clause', value: 'BSD-2-Clause' },
+  { label: 'LGPL-3.0', value: 'LGPL-3.0' },
+  { label: 'MPL-2.0', value: 'MPL-2.0' },
+  { label: 'AGPL-3.0', value: 'AGPL-3.0' },
+  { label: 'Unlicense', value: 'Unlicense' },
+  { label: 'Custom', value: 'Custom' },
+];
+
 export function SkillEditorDialog({
   skill,
   open,
@@ -63,6 +79,8 @@ export function SkillEditorDialog({
   const descriptionId = useId();
   const longDescriptionId = useId();
   const categoryId = useId();
+  const licenseId = useId();
+  const compatibilityId = useId();
   const iconId = useId();
   const tagsId = useId();
   const systemPromptId = useId();
@@ -76,6 +94,9 @@ export function SkillEditorDialog({
   const [description, setDescription] = useState('');
   const [longDescription, setLongDescription] = useState('');
   const [category, setCategory] = useState('General');
+  const [license, setLicense] = useState('');
+  const [compatibility, setCompatibility] = useState('');
+  const [frontmatterMetadata, setFrontmatterMetadata] = useState<Record<string, string>>({});
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
   const [systemPromptFragment, setSystemPromptFragment] = useState('');
@@ -88,6 +109,12 @@ export function SkillEditorDialog({
   const [scriptContents, setScriptContents] = useState<Map<string, string>>(new Map());
   const [selectingScripts, setSelectingScripts] = useState(false);
 
+  // References and Assets state
+  const [references, setReferences] = useState<Array<{ filename: string; content: string }>>([]);
+  const [assets, setAssets] = useState<
+    Array<{ filename: string; content: Uint8Array; size: number }>
+  >([]);
+
   // Load skill data when editing
   useEffect(() => {
     if (skill) {
@@ -95,6 +122,10 @@ export function SkillEditorDialog({
       setDescription(skill.description);
       setLongDescription(skill.longDescription || '');
       setCategory(skill.category);
+      setLicense(skill.license || '');
+      setCompatibility(skill.compatibility || '');
+      // Extract frontmatter metadata from skill (if it's an AgentSkill)
+      setFrontmatterMetadata(skill.frontmatterMetadata || {});
       setTags(skill.metadata.tags || []);
       setSystemPromptFragment(skill.content.systemPromptFragment || '');
       setWorkflowRules(skill.content.workflowRules || '');
@@ -107,6 +138,9 @@ export function SkillEditorDialog({
       setDescription('');
       setLongDescription('');
       setCategory('General');
+      setLicense('');
+      setCompatibility('');
+      setFrontmatterMetadata({});
       setTags([]);
       setSystemPromptFragment('');
       setWorkflowRules('');
@@ -232,7 +266,12 @@ export function SkillEditorDialog({
         description: description.trim(),
         longDescription: longDescription.trim() || undefined,
         category,
+        license: license.trim() || undefined,
+        compatibility: compatibility.trim() || undefined,
         icon: icon.trim() || undefined,
+        // Save frontmatter metadata (per Agent Skills Specification)
+        frontmatterMetadata:
+          Object.keys(frontmatterMetadata).length > 0 ? frontmatterMetadata : undefined,
         content: {
           systemPromptFragment: systemPromptFragment.trim() || undefined,
           workflowRules: workflowRules.trim() || undefined,
@@ -280,6 +319,8 @@ export function SkillEditorDialog({
               <TabsTrigger value="content">Content</TabsTrigger>
               <TabsTrigger value="documentation">Documentation</TabsTrigger>
               <TabsTrigger value="scripts">Scripts</TabsTrigger>
+              <TabsTrigger value="references">References</TabsTrigger>
+              <TabsTrigger value="assets">Assets</TabsTrigger>
             </TabsList>
           </div>
 
@@ -333,15 +374,52 @@ export function SkillEditorDialog({
                 </Select>
               </div>
 
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor={licenseId}>License</Label>
+                  <Select value={license} onValueChange={setLicense}>
+                    <SelectTrigger id={licenseId}>
+                      <SelectValue placeholder="Select license" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {LICENSE_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor={iconId}>Icon URL</Label>
+                  <Input
+                    id={iconId}
+                    value={icon}
+                    onChange={(e) => setIcon(e.target.value)}
+                    placeholder="https://example.com/icon.png"
+                    type="url"
+                  />
+                </div>
+              </div>
+
               <div>
-                <Label htmlFor={iconId}>Icon URL</Label>
-                <Input
-                  id={iconId}
-                  value={icon}
-                  onChange={(e) => setIcon(e.target.value)}
-                  placeholder="https://example.com/icon.png"
-                  type="url"
+                <Label htmlFor={compatibilityId}>Compatibility</Label>
+                <Textarea
+                  id={compatibilityId}
+                  value={compatibility}
+                  onChange={(e) => setCompatibility(e.target.value)}
+                  placeholder="e.g., Requires Python 3.8+, git, Node.js 18+"
+                  rows={3}
+                  maxLength={500}
                 />
+                <p className="text-xs text-muted-foreground mt-1">
+                  {compatibility.length}/500 characters
+                </p>
+              </div>
+
+              {/* Frontmatter Metadata Editor */}
+              <div className="border-t pt-4">
+                <MetadataEditor value={frontmatterMetadata} onChange={setFrontmatterMetadata} />
               </div>
 
               <div>
@@ -474,6 +552,16 @@ export function SkillEditorDialog({
                   </div>
                 )}
               </div>
+            </TabsContent>
+
+            {/* References Tab */}
+            <TabsContent value="references" className="mt-4 pb-4">
+              <ReferencesManager value={references} onChange={setReferences} />
+            </TabsContent>
+
+            {/* Assets Tab */}
+            <TabsContent value="assets" className="mt-4 pb-4">
+              <AssetsManager value={assets} onChange={setAssets} />
             </TabsContent>
           </ScrollArea>
         </Tabs>

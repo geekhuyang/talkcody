@@ -78,7 +78,7 @@ export class FastDirectoryTreeService {
   invalidatePath(path: string): void {
     try {
       invoke('invalidate_directory_path', { path });
-      logger.info(`Cache invalidated for path: ${path}`);
+      logger.debug(`Cache invalidated for path: ${path}`);
     } catch (error) {
       logger.error('Failed to invalidate path cache:', error);
     }

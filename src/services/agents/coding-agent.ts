@@ -154,7 +154,6 @@ export class CodingAgent {
       listFiles: getToolSync('listFiles'),
       bash: getToolSync('bash'),
       todoWrite: getToolSync('todoWrite'),
-      getSkill: getToolSync('getSkill'),
     };
 
     return {

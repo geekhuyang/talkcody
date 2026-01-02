@@ -296,11 +296,15 @@ skills.get('/packages/:skillId/:version/download', async (c) => {
       return c.json({ error: 'Package not found' }, 404);
     }
 
-    // Stream the file to the client
-    return new Response(object.body, {
+    // Get the file as arrayBuffer to ensure binary data is handled correctly
+    const arrayBuffer = await object.arrayBuffer();
+
+    // Return the binary data with proper headers
+    return new Response(arrayBuffer, {
       headers: {
         'Content-Type': 'application/gzip',
         'Content-Disposition': `attachment; filename="${slug}-${version}.tar.gz"`,
+        'Content-Length': String(arrayBuffer.byteLength),
         'Cache-Control': 'public, max-age=31536000',
       },
     });

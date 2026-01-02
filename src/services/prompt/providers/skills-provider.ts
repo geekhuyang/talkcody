@@ -1,28 +1,15 @@
 // src/services/prompt/providers/skills-provider.ts
 
 import { logger } from '@/lib/logger';
-import { getFileBasedSkillService } from '@/services/skills/file-based-skill-service';
+import { getAgentSkillService } from '@/services/skills/agent-skill-service';
 import { useSkillsStore } from '@/stores/skills-store';
 import type { PromptContextProvider, ResolveContext } from '@/types/prompt';
 
-/**
- * Skills Provider
- * Injects compact skill summaries into the system prompt
- * Skills are configured at the agent level
- *
- * This provider uses a lazy-loading approach:
- * - System prompt contains only skill names and descriptions (compact)
- * - Full skill content (domain knowledge, workflow rules, docs) is loaded via get_skill tool
- * - This significantly reduces system prompt token usage while maintaining skill accessibility
- *
- * System skills (like talkcody-knowledge-base) are always included in the prompt,
- * while user skills are included based on active selection.
- */
 export const SkillsProvider: PromptContextProvider = {
   id: 'skills',
   label: 'Available Skills',
   description:
-    'Injects compact summaries of available skills; full content loaded on-demand via get_skill tool',
+    'Injects available skills in XML format (name, description, location); full content loaded on-demand via get_skill tool',
   badges: ['Auto', 'Agent', 'Skills'],
 
   providedTokens() {
@@ -38,16 +25,16 @@ export const SkillsProvider: PromptContextProvider = {
       // Get global active skills from the skills store
       const activeSkillIds = useSkillsStore.getState().getActiveSkills();
 
-      // Get file-based skill service
-      const skillService = await getFileBasedSkillService();
+      // Get agent skill service
+      const skillService = await getAgentSkillService();
 
       // Load all skills
       const allSkills = await skillService.listSkills();
 
       // Filter: system skills are always included + active user skills
       const skillsToUse = allSkills.filter((skill) => {
-        const isSystem = skill.metadata.source === 'system';
-        const isActive = activeSkillIds && activeSkillIds.includes(skill.id);
+        const isSystem = skill.frontmatter.metadata?.['talkcody.source'] === 'system';
+        const isActive = activeSkillIds && activeSkillIds.includes(skill.name);
         return isSystem || isActive;
       });
 
@@ -55,21 +42,23 @@ export const SkillsProvider: PromptContextProvider = {
         return undefined;
       }
 
-      // Build compact skills summaries (name + description + script indicator + system badge)
-      const skillsSummaries: string[] = [];
+      // Build XML format skills information (name + description + location)
+      const skillsXml: string[] = [];
 
       for (const skill of skillsToUse) {
-        const isSystem = skill.metadata.source === 'system' ? ' [System]' : '';
-        const scriptIndicator =
-          skill.hasScripts && skill.scriptFiles && skill.scriptFiles.length > 0
-            ? ` [${skill.scriptFiles.length} script(s)]`
-            : '';
-        const summary = `- **${skill.name}**: ${skill.description || 'Domain-specific knowledge and best practices'}${scriptIndicator}${isSystem}`;
-        skillsSummaries.push(summary);
+        const location = `${skill.path}/SKILL.md`;
+        const description =
+          skill.frontmatter.description || 'Domain-specific knowledge and best practices';
+
+        skillsXml.push('  <skill>');
+        skillsXml.push(`    <name>${skill.name}</name>`);
+        skillsXml.push(`    <description>${description}</description>`);
+        skillsXml.push(`    <location>${location}</location>`);
+        skillsXml.push('  </skill>');
       }
 
-      // Return compact list
-      return skillsSummaries.join('\n');
+      // Return XML format
+      return `<available_skills>\n${skillsXml.join('\n')}\n</available_skills>`;
     } catch (error) {
       logger.error('Failed to resolve skills context:', error);
       return undefined;
@@ -84,29 +73,30 @@ export const SkillsProvider: PromptContextProvider = {
       const content = values.skills_context || values.active_skills || '';
       if (!content) return '';
 
-      return [
-        '====',
-        '# Available Skills',
-        '',
-        'The following skills are available to assist you.',
-        'System skills (marked with [System]) are always available.',
-        '',
-        content,
-        '',
-        '## Using Skills',
-        '',
-        'Skills are loaded on-demand to optimize prompt efficiency. Use the `get_skill` tool when you need:',
-        '- Detailed domain knowledge for implementation',
-        '- Specific workflow rules for a technology stack',
-        '- Reference documentation for APIs or frameworks',
-        '- Best practices and design patterns for a domain',
-        '',
-        'Example: If you\'re implementing a React component and need React best practices, use `get_skill` with skill_name="React Best Practices".',
-        'Or to learn about TalkCody features and usage, use `get_skill` with skill_name="TalkCody Knowledge Base".',
-        '',
-        "**Note**: Only fetch skills when they're relevant to your current task. For simple tasks that don't require deep expertise, you may not need to load any skills.",
-        '====',
-      ].join('\n');
+      // Build the complete skills context with instructions
+      const instructionsSection = `<skills_instructions>
+When users ask you to perform tasks, check if any of the available skills below can help complete the task more effectively.
+
+How to use skills:
+- Each skill provides domain-specific knowledge, tools, and capabilities
+- Skills are located at the path specified in <location>
+- Read the full skill content using: readFile tool with the location path
+- Execute skill scripts using: bash tool to run commands in the skill directory
+
+Workflow:
+1. Check available skills when a task matches their domain
+2. Use readFile to read the skill's SKILL.md for detailed instructions and capabilities
+3. Follow the skill's guidelines and best practices
+4. Use bash tool to execute any scripts provided in the skill directory
+5. Combine skill knowledge with your general capabilities
+
+Important:
+- Only use skills listed in <available_skills> below
+</skills_instructions>
+
+${content}`;
+
+      return instructionsSection;
     },
   },
 };

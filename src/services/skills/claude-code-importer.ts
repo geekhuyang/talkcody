@@ -9,8 +9,7 @@
 import { homeDir, join } from '@tauri-apps/api/path';
 import { exists, mkdir, readDir, readTextFile, writeTextFile } from '@tauri-apps/plugin-fs';
 import { logger } from '@/lib/logger';
-import type { SkillDirectoryScan, TalkCodySkillMetadata } from '@/types/file-based-skill';
-import { getFileBasedSkillService } from './file-based-skill-service';
+import { getAgentSkillService } from './agent-skill-service';
 import { SkillMdParser } from './skill-md-parser';
 
 export interface ClaudeCodeSkillLocation {
@@ -19,11 +18,15 @@ export interface ClaudeCodeSkillLocation {
   type: 'personal' | 'project';
 }
 
-export interface ClaudeCodeSkillInfo extends SkillDirectoryScan {
+export interface ClaudeCodeSkillInfo {
+  directoryName: string;
+  hasSkillMd: boolean;
+  hasReferenceMd: boolean;
+  hasScriptsDir: boolean;
+  scriptFiles: string[];
   sourcePath: string;
   skillName: string;
   description: string;
-  hasReferenceMd: boolean;
   isValid: boolean;
   error?: string;
 }
@@ -106,7 +109,6 @@ export class ClaudeCodeImporter {
       hasReferenceMd: false,
       hasScriptsDir: false,
       scriptFiles: [],
-      estimatedSize: 0,
       isValid: false,
     };
 
@@ -155,7 +157,7 @@ export class ClaudeCodeImporter {
    * Import a Claude Code skill into TalkCody
    */
   static async importSkill(sourceSkillPath: string): Promise<void> {
-    const skillService = await getFileBasedSkillService();
+    const skillService = await getAgentSkillService();
     const skillsDir = await skillService.getSkillsDirPath();
 
     // Get skill info
@@ -200,6 +202,17 @@ export class ClaudeCodeImporter {
 
     // Create TalkCody metadata
     const parsed = SkillMdParser.parse(sourceSkillMd);
+
+    // Define internal metadata type
+    interface TalkCodySkillMetadata {
+      skillId: string;
+      source: string;
+      installedAt: number;
+      lastUpdatedAt: number;
+      tags: string[];
+      version?: string;
+    }
+
     const metadata: TalkCodySkillMetadata = {
       skillId: crypto.randomUUID(),
       source: 'claude-code',
@@ -209,8 +222,8 @@ export class ClaudeCodeImporter {
     };
 
     // Save Claude Code metadata if present
-    if (parsed.frontmatter.version) {
-      metadata.version = parsed.frontmatter.version;
+    if (parsed.frontmatter.metadata?.version) {
+      metadata.version = parsed.frontmatter.metadata.version;
     }
 
     await writeTextFile(

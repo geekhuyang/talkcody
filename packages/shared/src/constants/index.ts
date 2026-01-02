@@ -9,6 +9,7 @@ export const DEFAULT_CATEGORIES = [
   { slug: 'creative', name: 'Creative', icon: '🎨' },
   { slug: 'education', name: 'Education', icon: '📚' },
   { slug: 'business', name: 'Business', icon: '💼' },
+  { slug: 'frontend', name: 'Frontend', icon: '🌐' }
 ] as const
 
 export const DEFAULT_TAGS = [

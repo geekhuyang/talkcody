@@ -1,142 +1,151 @@
-// Marketplace Skills hook for fetching and managing marketplace skills data
+// Marketplace Skills hook for fetching and managing remote skills data
+// Now uses JSON-based configuration instead of database
 
-import { useCallback, useState } from 'react';
-import { toast } from 'sonner';
-import { API_BASE_URL } from '@/lib/config';
+import { useCallback, useEffect, useState } from 'react';
 import { logger } from '@/lib/logger';
-import { simpleFetch } from '@/lib/tauri-fetch';
+import { remoteSkillsLoader } from '@/providers/remote-skills/remote-skills-loader';
 import { apiClient } from '@/services/api-client';
-import type { MarketplaceSkill, SkillCategory, SkillSortOption, SkillTag } from '@/types/skill';
+import type { RemoteSkillConfig } from '@/types/remote-skills';
+import type { SkillSortOption } from '@/types/skill';
 
 export interface ListSkillsRequest {
   search?: string;
   category?: string;
-  tags?: string[];
   sort?: SkillSortOption;
   limit?: number;
   offset?: number;
-  featured?: boolean;
 }
 
 interface UseMarketplaceSkillsReturn {
-  skills: MarketplaceSkill[];
-  categories: SkillCategory[];
-  tags: SkillTag[];
-  featuredSkills: MarketplaceSkill[];
+  skills: RemoteSkillConfig[];
+  categories: string[];
   isLoading: boolean;
   error: string | null;
   loadSkills: (options?: ListSkillsRequest) => Promise<void>;
-  loadCategories: () => Promise<void>;
-  loadTags: () => Promise<void>;
-  loadFeaturedSkills: () => Promise<void>;
-  getSkillBySlug: (slug: string) => Promise<MarketplaceSkill | null>;
+  getSkillById: (skillId: string) => RemoteSkillConfig | null;
+  refresh: () => Promise<void>;
   installSkill: (slug: string, version: string) => Promise<void>;
-  downloadSkill: (slug: string) => Promise<void>;
 }
 
 export function useMarketplaceSkills(): UseMarketplaceSkillsReturn {
-  const [skills, setSkills] = useState<MarketplaceSkill[]>([]);
-  const [categories, setCategories] = useState<SkillCategory[]>([]);
-  const [tags, setTags] = useState<SkillTag[]>([]);
-  const [featuredSkills, setFeaturedSkills] = useState<MarketplaceSkill[]>([]);
+  const [allSkills, setAllSkills] = useState<RemoteSkillConfig[]>([]);
+  const [skills, setSkills] = useState<RemoteSkillConfig[]>([]);
+  const [categories, setCategories] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const loadSkills = useCallback(async (options?: ListSkillsRequest) => {
-    setIsLoading(true);
-    setError(null);
-
+  // Load all skills from JSON
+  const loadAllSkills = useCallback(async () => {
     try {
-      const params = new URLSearchParams();
+      const config = await remoteSkillsLoader.load();
+      setAllSkills(config.remoteSkills);
 
-      if (options?.limit) params.append('limit', options.limit.toString());
-      if (options?.offset) params.append('offset', options.offset.toString());
-      if (options?.sort) params.append('sort', options.sort);
-      if (options?.search) params.append('search', options.search);
-      if (options?.category) params.append('category', options.category);
-      if (options?.tags?.length) params.append('tags', options.tags.join(','));
-      if (options?.featured !== undefined) params.append('featured', options.featured.toString());
+      // Extract unique categories
+      const uniqueCategories = Array.from(
+        new Set(config.remoteSkills.map((skill) => skill.category))
+      ).sort();
+      setCategories(uniqueCategories);
 
-      const response = await simpleFetch(`${API_BASE_URL}/api/skills-marketplace/skills?${params}`);
-
-      if (!response.ok) {
-        throw new Error('Failed to load skills');
-      }
-
-      const data = await response.json();
-      setSkills(data.skills || []);
+      return config.remoteSkills;
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error');
-      logger.error('Load skills error:', err);
-    } finally {
-      setIsLoading(false);
+      const errorMsg = err instanceof Error ? err.message : 'Failed to load remote skills';
+      setError(errorMsg);
+      logger.error('Load remote skills error:', err);
+      throw err;
     }
   }, []);
 
-  const loadCategories = useCallback(async () => {
-    try {
-      const response = await simpleFetch(`${API_BASE_URL}/api/skills-marketplace/categories`);
+  // Filter and sort skills based on options
+  const loadSkills = useCallback(
+    async (options?: ListSkillsRequest) => {
+      setIsLoading(true);
+      setError(null);
 
-      if (!response.ok) {
-        throw new Error('Failed to load categories');
+      try {
+        // Load all skills if not already loaded
+        const skillsData = allSkills.length > 0 ? allSkills : await loadAllSkills();
+
+        // Apply filters
+        let filteredSkills = [...skillsData];
+
+        // Category filter
+        if (options?.category) {
+          filteredSkills = filteredSkills.filter((skill) => skill.category === options.category);
+        }
+
+        // Search filter
+        if (options?.search) {
+          const query = options.search.toLowerCase();
+          filteredSkills = filteredSkills.filter(
+            (skill) =>
+              skill.name.toLowerCase().includes(query) ||
+              skill.description.toLowerCase().includes(query) ||
+              skill.id.toLowerCase().includes(query)
+          );
+        }
+
+        // Sort
+        if (options?.sort) {
+          filteredSkills = sortSkills(filteredSkills, options.sort);
+        }
+
+        // Pagination
+        if (options?.offset !== undefined || options?.limit !== undefined) {
+          const offset = options.offset || 0;
+          const limit = options.limit || filteredSkills.length;
+          filteredSkills = filteredSkills.slice(offset, offset + limit);
+        }
+
+        setSkills(filteredSkills);
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+        setError(errorMsg);
+        logger.error('Load skills error:', err);
+      } finally {
+        setIsLoading(false);
       }
+    },
+    [allSkills, loadAllSkills]
+  );
 
-      const data = await response.json();
-      setCategories(data.categories || []);
-    } catch (err) {
-      logger.error('Load categories error:', err);
-    }
-  }, []);
+  // Get skill by ID
+  const getSkillById = useCallback(
+    (skillId: string): RemoteSkillConfig | null => {
+      return allSkills.find((skill) => skill.id === skillId) || null;
+    },
+    [allSkills]
+  );
 
-  const loadTags = useCallback(async () => {
+  // Manual refresh
+  const refresh = useCallback(async () => {
+    remoteSkillsLoader.clearCache();
+    await loadAllSkills();
+    await loadSkills();
+  }, [loadAllSkills, loadSkills]);
+
+  // Listen for remote skills updates
+  useEffect(() => {
+    const handleUpdate = () => {
+      logger.info('Remote skills updated, refreshing...');
+      refresh().catch((err) => {
+        logger.error('Failed to refresh after remote skills update:', err);
+      });
+    };
+
+    window.addEventListener('remoteSkillsUpdated', handleUpdate);
+    return () => window.removeEventListener('remoteSkillsUpdated', handleUpdate);
+  }, [refresh]);
+
+  // Load skills on mount
+  useEffect(() => {
+    loadSkills().catch((err) => {
+      logger.error('Initial skills load failed:', err);
+    });
+  }, [loadSkills]);
+
+  // Install skill - track installation with backend
+  const installSkill = useCallback(async (slug: string, version: string): Promise<void> => {
     try {
-      const response = await simpleFetch(`${API_BASE_URL}/api/skills-marketplace/tags`);
-
-      if (!response.ok) {
-        throw new Error('Failed to load tags');
-      }
-
-      const data = await response.json();
-      setTags(data.tags || []);
-    } catch (err) {
-      logger.error('Load tags error:', err);
-    }
-  }, []);
-
-  const loadFeaturedSkills = useCallback(async () => {
-    try {
-      const response = await simpleFetch(`${API_BASE_URL}/api/skills-marketplace/skills/featured`);
-
-      if (!response.ok) {
-        throw new Error('Failed to load featured skills');
-      }
-
-      const data = await response.json();
-      setFeaturedSkills(data.skills || []);
-    } catch (err) {
-      logger.error('Load featured skills error:', err);
-    }
-  }, []);
-
-  const getSkillBySlug = useCallback(async (slug: string): Promise<MarketplaceSkill | null> => {
-    try {
-      const response = await simpleFetch(`${API_BASE_URL}/api/skills-marketplace/skills/${slug}`);
-
-      if (!response.ok) {
-        throw new Error('Failed to load skill');
-      }
-
-      const data = await response.json();
-      return data.skill;
-    } catch (err) {
-      logger.error('Get skill error:', err);
-      return null;
-    }
-  }, []);
-
-  const installSkill = useCallback(async (slug: string, version: string) => {
-    try {
-      // Track install
       const response = await apiClient.post(`/api/skills-marketplace/skills/${slug}/install`, {
         version,
       });
@@ -144,40 +153,47 @@ export function useMarketplaceSkills(): UseMarketplaceSkillsReturn {
       if (!response.ok) {
         throw new Error('Failed to track skill installation');
       }
-
-      logger.info(`Successfully tracked installation of skill: ${slug}`);
-    } catch (err) {
-      logger.error('Install skill error:', err);
-      throw err;
-    }
-  }, []);
-
-  const downloadSkill = useCallback(async (slug: string) => {
-    try {
-      const response = await apiClient.post(`/api/skills-marketplace/skills/${slug}/download`);
-
-      if (!response.ok) {
-        throw new Error('Failed to track download');
-      }
-    } catch (err) {
-      logger.error('Download skill error:', err);
-      throw err;
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Failed to track skill installation';
+      logger.error('Track skill installation error:', error);
+      throw new Error(errorMessage);
     }
   }, []);
 
   return {
     skills,
     categories,
-    tags,
-    featuredSkills,
     isLoading,
     error,
     loadSkills,
-    loadCategories,
-    loadTags,
-    loadFeaturedSkills,
-    getSkillBySlug,
+    getSkillById,
+    refresh,
     installSkill,
-    downloadSkill,
   };
+}
+
+/**
+ * Sort skills based on the specified option
+ */
+function sortSkills(skills: RemoteSkillConfig[], sortBy: SkillSortOption): RemoteSkillConfig[] {
+  const sorted = [...skills];
+
+  switch (sortBy) {
+    case 'name':
+      return sorted.sort((a, b) => a.name.localeCompare(b.name));
+    case 'recent':
+    case 'updated':
+      // For JSON-based system, we don't have timestamps
+      // Fall back to alphabetical
+      return sorted.sort((a, b) => a.name.localeCompare(b.name));
+    case 'downloads':
+    case 'installs':
+    case 'rating':
+      // For JSON-based system, we don't have stats
+      // Fall back to alphabetical
+      return sorted.sort((a, b) => a.name.localeCompare(b.name));
+    default:
+      return sorted;
+  }
 }

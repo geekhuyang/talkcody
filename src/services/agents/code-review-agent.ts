@@ -333,7 +333,6 @@ export class CodeReviewAgent {
       codeSearch: getToolSync('codeSearch'),
       bash: getToolSync('bash'),
       githubPR: getToolSync('githubPR'),
-      getSkill: getToolSync('getSkill'),
     };
 
     return {

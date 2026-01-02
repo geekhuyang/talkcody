@@ -27,6 +27,9 @@ export interface MarketplaceSkill {
   workflowRules?: string
   documentation?: DocumentationItem[]
   hasScripts?: boolean
+  // Agent Skills Specification fields
+  compatibility?: string
+  metadata?: Record<string, string> | null
 }
 
 export interface SkillVersion {

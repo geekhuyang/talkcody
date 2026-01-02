@@ -64,6 +64,8 @@ One sentence precisely describing the goal of this task.
 - Acceptance criteria.
 \`\`\`
 
+IMPORTANT: Your plan doesn't need to be too detailed. For example, you don't need to provide the specific implementation code; just describe the thought process and key points.
+
 ### Phase 4: Obtain User Approval
 **This is the critical step!**
 

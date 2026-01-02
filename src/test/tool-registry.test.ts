@@ -28,10 +28,8 @@ describe('Tool Registry', () => {
         'todoWrite',
         'webSearch',
         'webFetch',
-        'getSkill',
         'askUserQuestions',
         'exitPlanMode',
-        'executeSkillScript',
         'githubPR',
       ];
 
@@ -140,14 +138,12 @@ describe('Tool Registry', () => {
         editFile: 'Edit File',
         bash: 'Bash',
         callAgent: 'Call Agent',
-      
+
         todoWrite: 'Todo',
         webSearch: 'Web Search',
         webFetch: 'Web Fetch',
-        getSkill: 'Get Skill',
         askUserQuestions: 'Ask User Questions',
         exitPlanMode: 'Exit Plan Mode',
-        executeSkillScript: 'Execute Skill Script',
         githubPR: 'GitHub PR',
       };
 
@@ -237,10 +233,8 @@ describe('Tool Registry', () => {
         'todoWrite',
         'webSearch',
         'webFetch',
-        'getSkill',
         'askUserQuestions',
         'exitPlanMode',
-        'executeSkillScript',
         'imageGeneration',
       ];
 
@@ -318,10 +312,8 @@ describe('Tool Registry', () => {
         'todoWrite',
         'webSearch',
         'webFetch',
-        'getSkill',
         'askUserQuestions',
         'exitPlanMode',
-        'executeSkillScript',
         'githubPR',
         'imageGeneration',
       ];

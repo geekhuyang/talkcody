@@ -1,10 +1,9 @@
 // Skills Marketplace page for discovering and installing skills
 
-import { Plus, RefreshCw, Search, Zap } from 'lucide-react';
+import { Download, Plus, RefreshCw, Search, Zap } from 'lucide-react';
 import React, { useState } from 'react';
 import { toast } from 'sonner';
-import { ChecksumWarningDialog } from '@/components/skills/checksum-warning-dialog';
-import { PublishSkillDialog } from '@/components/skills/publish-skill-dialog';
+import { ImportGitHubDialog } from '@/components/skills/import-github-dialog';
 import { SkillCard } from '@/components/skills/skill-card';
 import { SkillDetailDialog } from '@/components/skills/skill-detail-dialog';
 import { SkillEditorDialog } from '@/components/skills/skill-editor-dialog';
@@ -34,52 +33,44 @@ import { useMarketplaceSkills } from '@/hooks/use-marketplace-skills';
 import { useSkillMutations, useSkills } from '@/hooks/use-skills';
 import { getDocLinks } from '@/lib/doc-links';
 import { logger } from '@/lib/logger';
-import type {
-  CreateSkillRequest,
-  MarketplaceSkill,
-  Skill,
-  SkillSortOption,
-  UpdateSkillRequest,
-} from '@/types/skill';
+import type { RemoteSkillConfig } from '@/types/remote-skills';
+import type { CreateSkillRequest, Skill, SkillSortOption, UpdateSkillRequest } from '@/types/skill';
 
 /**
- * Helper function to convert MarketplaceSkill to Skill format for UI components
+ * Helper function to convert RemoteSkillConfig to Skill format for UI components
  */
-function convertMarketplaceSkillToSkill(marketplaceSkill: MarketplaceSkill): Skill {
-  // Extract first category name or use 'General' as default
-  const categoryName =
-    marketplaceSkill.categories && marketplaceSkill.categories.length > 0
-      ? (marketplaceSkill.categories[0]?.name ?? 'General')
-      : 'General';
-
+function convertRemoteSkillToSkill(remoteSkill: RemoteSkillConfig): Skill {
   return {
-    id: marketplaceSkill.id,
-    name: marketplaceSkill.name,
-    description: marketplaceSkill.description,
-    longDescription: marketplaceSkill.longDescription,
-    category: categoryName,
-    icon: marketplaceSkill.iconUrl,
+    id: remoteSkill.id,
+    name: remoteSkill.name,
+    description: remoteSkill.description,
+    longDescription: undefined, // Not available in simplified schema
+    category: remoteSkill.category,
+    icon: undefined, // Not available in simplified schema
     content: {
-      systemPromptFragment: marketplaceSkill.systemPromptFragment,
-      workflowRules: marketplaceSkill.workflowRules,
-      documentation: marketplaceSkill.documentation,
-      hasScripts: marketplaceSkill.hasScripts,
+      systemPromptFragment: undefined,
+      workflowRules: undefined,
+      documentation: undefined,
+      hasScripts: false,
     },
     metadata: {
       isBuiltIn: false,
-      sourceType: 'marketplace',
-      tags: marketplaceSkill.tags?.map((t) => t.name) || [],
-      createdAt: new Date(marketplaceSkill.createdAt).getTime(),
-      updatedAt: new Date(marketplaceSkill.updatedAt).getTime(),
+      sourceType: 'remote', // Remote skill from JSON config
+      tags: [], // Not available in simplified schema
+      createdAt: Date.now(), // Default value
+      updatedAt: Date.now(), // Default value
+      // Store GitHub info in metadata for SkillCard to use
+      repository: remoteSkill.repository,
+      githubPath: remoteSkill.githubPath,
     },
     marketplace: {
-      marketplaceId: marketplaceSkill.id,
-      slug: marketplaceSkill.slug,
-      author: marketplaceSkill.author?.name || 'Unknown',
-      authorId: marketplaceSkill.author?.id || '',
-      version: marketplaceSkill.latestVersion || '1.0.0',
-      downloads: marketplaceSkill.installCount || 0,
-      rating: marketplaceSkill.rating || 0,
+      marketplaceId: remoteSkill.id,
+      slug: remoteSkill.id, // Use id as slug for simplified schema
+      author: 'Unknown', // Not available in simplified schema
+      authorId: '', // Not available in simplified schema
+      version: '1.0.0', // Default version
+      downloads: 0, // Not available in simplified schema
+      rating: 0, // Not available in simplified schema
     },
   };
 }
@@ -88,20 +79,12 @@ export function SkillsMarketplacePage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [sortBy, setSortBy] = useState<SkillSortOption>('downloads');
-  const [selectedSkill, setSelectedSkill] = useState<Skill | MarketplaceSkill | null>(null);
-  const [activeTab, setActiveTab] = useState<'all' | 'featured' | 'local'>('local');
+  const [selectedSkill, setSelectedSkill] = useState<Skill | RemoteSkillConfig | null>(null);
+  const [activeTab, setActiveTab] = useState<'all' | 'local'>('local');
   const [editingSkill, setEditingSkill] = useState<Skill | null>(null);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
-  const [publishingSkill, setPublishingSkill] = useState<Skill | null>(null);
-  const [isPublishDialogOpen, setIsPublishDialogOpen] = useState(false);
+  const [isGitHubImportOpen, setIsGitHubImportOpen] = useState(false);
   const [deletingSkill, setDeletingSkill] = useState<Skill | null>(null);
-  const [checksumWarning, setChecksumWarning] = useState<{
-    skillName: string;
-    expectedChecksum: string;
-    actualChecksum: string;
-    onContinue: () => void;
-    onCancel: () => void;
-  } | null>(null);
 
   const t = useTranslation();
 
@@ -135,35 +118,19 @@ export function SkillsMarketplacePage() {
         category: selectedCategory !== 'all' ? selectedCategory : undefined,
         sort: sortBy,
       });
-    } else if (activeTab === 'featured') {
-      marketplace.loadFeaturedSkills();
     }
-  }, [
-    activeTab,
-    searchQuery,
-    selectedCategory,
-    sortBy,
-    marketplace.loadSkills,
-    marketplace.loadFeaturedSkills,
-  ]);
+  }, [activeTab, searchQuery, selectedCategory, sortBy, marketplace.loadSkills]);
 
-  // Load categories and tags on mount
-  React.useEffect(() => {
-    marketplace.loadCategories();
-    marketplace.loadTags();
-  }, [marketplace.loadCategories, marketplace.loadTags]);
+  // Categories and tags are now loaded automatically with skills
 
   // Get displayed skills based on active tab
   const displayedSkills = React.useMemo(() => {
     if (activeTab === 'all') {
       return marketplace.skills;
     }
-    if (activeTab === 'featured') {
-      return marketplace.featuredSkills;
-    }
     // My Skills tab - filter out marketplace skills
     return localSkills.filter((skill) => !skill.marketplace);
-  }, [activeTab, marketplace.skills, marketplace.featuredSkills, localSkills]);
+  }, [activeTab, marketplace.skills, localSkills]);
 
   // Get loading and error states based on active tab
   const loading = activeTab === 'local' ? localLoading : marketplace.isLoading;
@@ -178,8 +145,6 @@ export function SkillsMarketplacePage() {
         category: selectedCategory !== 'all' ? selectedCategory : undefined,
         sort: sortBy,
       });
-    } else if (activeTab === 'featured') {
-      marketplace.loadFeaturedSkills();
     } else {
       refreshLocal();
     }
@@ -198,7 +163,12 @@ export function SkillsMarketplacePage() {
     setSortBy(value);
   };
 
-  const handleSkillClick = (skill: Skill | MarketplaceSkill) => {
+  const handleSkillClick = (skill: Skill | RemoteSkillConfig) => {
+    // Only open details for local skills (non-remote)
+    const isRemote = 'repository' in skill;
+    if (isRemote) {
+      return;
+    }
     setSelectedSkill(skill);
   };
 
@@ -272,27 +242,32 @@ export function SkillsMarketplacePage() {
     setEditingSkill(null);
   };
 
-  const handleInstall = async (skill: Skill | MarketplaceSkill) => {
+  const handleInstall = async (skill: Skill | RemoteSkillConfig) => {
     try {
-      // Check if this is a MarketplaceSkill (has slug) or converted Skill (has marketplace metadata)
-      const isMarketplaceSkill =
-        'slug' in skill || Boolean((skill as Skill).marketplace?.marketplaceId);
+      // Check if this is a RemoteSkillConfig (has repository) or converted Skill (has marketplace metadata)
+      const isRemoteSkill =
+        'repository' in skill || Boolean((skill as Skill).marketplace?.marketplaceId);
 
-      if (!isMarketplaceSkill) {
-        logger.warn('Attempted to install a non-marketplace skill');
+      if (!isRemoteSkill) {
+        logger.warn('Attempted to install a non-remote skill');
         return;
       }
 
-      // Extract slug and version from skill
-      // If it's a MarketplaceSkill, use the slug directly
-      // If it's a converted Skill, get slug from marketplace metadata
-      const slug = 'slug' in skill ? skill.slug : (skill as Skill).marketplace?.slug;
+      // Extract repository and githubPath from skill
+      // If it's a RemoteSkillConfig, use the fields directly
+      // If it's a converted Skill, get from marketplace metadata
+      const repository = 'repository' in skill ? skill.repository : '';
+      const githubPath = 'githubPath' in skill ? skill.githubPath : '';
       const marketplaceId =
-        'slug' in skill ? skill.id : (skill as Skill).marketplace?.marketplaceId;
-      const version = 'slug' in skill ? skill.latestVersion : (skill as Skill).marketplace?.version;
+        'repository' in skill ? skill.id : (skill as Skill).marketplace?.marketplaceId;
+      const version = 'repository' in skill ? '1.0.0' : (skill as Skill).marketplace?.version;
 
-      if (!slug) {
-        throw new Error('Skill slug is required for installation');
+      if (!repository) {
+        throw new Error('Skill repository is required for installation');
+      }
+
+      if (!githubPath) {
+        throw new Error('Skill GitHub path is required for installation');
       }
 
       if (!marketplaceId) {
@@ -303,70 +278,27 @@ export function SkillsMarketplacePage() {
         throw new Error('Skill version is required for installation');
       }
 
-      // Work with the skill as Skill type (it's already converted from MarketplaceSkill)
+      // Work with the skill as Skill type (it's already converted from RemoteSkillConfig)
       const convertedSkill = skill as Skill;
 
-      // Import marketplace service
-      const { marketplaceService } = await import('@/services/skills/marketplace-service');
+      // Import GitHub import service
+      const { importSkillFromGitHub } = await import('@/services/skills/github-import-service');
 
-      // Step 1: Download and extract skill package from R2
-      logger.info('Downloading skill package from R2:', convertedSkill.name);
-      const installResult = await marketplaceService.installSkill({
+      // Step 1: Download and extract skill package from GitHub
+      logger.info('Downloading skill package from GitHub:', convertedSkill.name);
+      await importSkillFromGitHub({
+        repository,
+        path: githubPath,
         skillId: marketplaceId,
-        version: version,
-        metadata: {
-          skillId: marketplaceId,
-          name: convertedSkill.name,
-          description: convertedSkill.description,
-          longDescription: convertedSkill.longDescription,
-          author: {
-            name: convertedSkill.marketplace?.author || 'Unknown',
-            url: undefined,
-          },
-          version: version,
-          tags: convertedSkill.metadata?.tags || [],
-          license: 'MIT',
-          requiredPermission: 'read-only',
-          storageUrl: '',
-          packageSize: 0,
-          publishedAt: convertedSkill.metadata?.createdAt || Date.now(),
-          updatedAt: convertedSkill.metadata?.updatedAt || Date.now(),
-          downloadCount: convertedSkill.marketplace?.downloads || 0,
-          rating: convertedSkill.marketplace?.rating,
-          ratingCount: 0,
-        },
-        onChecksumMismatch: async (expectedChecksum, actualChecksum) => {
-          return new Promise<boolean>((resolve) => {
-            setChecksumWarning({
-              skillName: convertedSkill.name,
-              expectedChecksum,
-              actualChecksum,
-              onContinue: () => {
-                setChecksumWarning(null);
-                resolve(true);
-              },
-              onCancel: () => {
-                setChecksumWarning(null);
-                resolve(false);
-              },
-            });
-          });
-        },
       });
 
-      if (!installResult.success) {
-        throw new Error(installResult.error || 'Failed to install skill package');
-      }
-
-      logger.info('Skill package installed successfully:', {
-        name: installResult.name,
-        localPath: installResult.localPath,
+      logger.info('Skill package installed successfully from GitHub:', {
+        name: convertedSkill.name,
+        repository,
+        githubPath,
       });
 
-      // Step 2: Track installation in marketplace API
-      await marketplace.installSkill(slug, version);
-
-      // Step 4: Refresh local skills list
+      // Refresh local skills list
       refreshLocal();
 
       toast.success(t.Skills.page.installed(convertedSkill.name));
@@ -380,24 +312,9 @@ export function SkillsMarketplacePage() {
   };
 
   const handleShare = (skill: Skill) => {
-    setPublishingSkill(skill);
-    setIsPublishDialogOpen(true);
-  };
-
-  const handlePublishSuccess = () => {
-    refreshLocal();
-    marketplace.loadSkills({
-      search: searchQuery || undefined,
-      category: selectedCategory !== 'all' ? selectedCategory : undefined,
-      sort: sortBy,
-    });
-    setIsPublishDialogOpen(false);
-    setPublishingSkill(null);
-  };
-
-  const handleClosePublishDialog = () => {
-    setIsPublishDialogOpen(false);
-    setPublishingSkill(null);
+    // TODO: Implement share functionality
+    logger.info('Share skill:', skill.name);
+    toast.info('Share functionality coming soon');
   };
 
   // Get unique categories based on active tab
@@ -405,21 +322,9 @@ export function SkillsMarketplacePage() {
     if (activeTab === 'local') {
       return Array.from(new Set(localSkills.map((s) => s.category))).sort();
     }
-    // Use marketplace categories if available, otherwise extract from skills
-    if (marketplace.categories.length > 0) {
-      return marketplace.categories.map((c) => c.name).sort();
-    }
-    // Extract unique category names from marketplace skills
-    const categorySet = new Set<string>();
-    for (const skill of marketplace.skills) {
-      if (skill.categories && skill.categories.length > 0) {
-        for (const category of skill.categories) {
-          categorySet.add(category.name);
-        }
-      }
-    }
-    return Array.from(categorySet).sort();
-  }, [activeTab, localSkills, marketplace.skills, marketplace.categories]);
+    // Use marketplace categories (already string[])
+    return marketplace.categories;
+  }, [activeTab, localSkills, marketplace.categories]);
 
   return (
     <div className="flex flex-col h-full">
@@ -446,6 +351,10 @@ export function SkillsMarketplacePage() {
             <Button variant="default" size="sm" onClick={handleCreateNew}>
               <Plus className="h-4 w-4 mr-2" />
               {t.Skills.page.createNew}
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setIsGitHubImportOpen(true)}>
+              <Download className="h-4 w-4 mr-2" />
+              {t.Skills.page.importFromGitHub}
             </Button>
             <Button variant="outline" size="sm" onClick={handleRefresh} disabled={loading}>
               <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
@@ -501,10 +410,10 @@ export function SkillsMarketplacePage() {
       {/* Tabs */}
       <Tabs
         value={activeTab}
-        onValueChange={(v) => setActiveTab(v as 'all' | 'featured' | 'local')}
-        className="flex-1 flex flex-col"
+        onValueChange={(v) => setActiveTab(v as 'all' | 'local')}
+        className="flex-1 flex flex-col min-h-0"
       >
-        <div className="border-b border-border px-6">
+        <div className="border-b border-border px-6 flex-shrink-0">
           <TabsList>
             <TabsTrigger value="local">{t.Skills.page.localSkills}</TabsTrigger>
             {/* <TabsTrigger value="featured">Featured</TabsTrigger> */}
@@ -513,8 +422,8 @@ export function SkillsMarketplacePage() {
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-auto">
-          <TabsContent value="local" className="m-0 h-full">
+        <TabsContent value="local" className="m-0 flex-1 min-h-0">
+          <div className="h-full overflow-auto">
             <SkillsGrid
               skills={displayedSkills}
               loading={loading}
@@ -527,37 +436,30 @@ export function SkillsMarketplacePage() {
               loadingMessage={t.Skills.page.loading}
               loadFailedMessage={t.Skills.page.loadFailed}
             />
-          </TabsContent>
+          </div>
+        </TabsContent>
 
-          {/* <TabsContent value="featured" className="m-0 h-full">
+        <TabsContent value="all" className="m-0 flex-1 min-h-0">
+          <div className="h-full overflow-auto">
             <SkillsGrid
               skills={displayedSkills}
               loading={loading}
               error={error}
               onSkillClick={handleSkillClick}
-              emptyMessage="No featured skills available"
-            />
-          </TabsContent> */}
-
-          <TabsContent value="all" className="m-0 h-full">
-            <SkillsGrid
-              skills={displayedSkills}
-              loading={loading}
-              error={error}
-              onSkillClick={handleSkillClick}
+              onInstall={handleInstall}
               emptyMessage={t.Skills.page.noSkillsFound}
               loadingMessage={t.Skills.page.loading}
               loadFailedMessage={t.Skills.page.loadFailed}
             />
-          </TabsContent>
-        </div>
+          </div>
+        </TabsContent>
       </Tabs>
 
       {/* Detail Dialog */}
       {selectedSkill && (
         <SkillDetailDialog
           skill={
-            'slug' in selectedSkill ? convertMarketplaceSkillToSkill(selectedSkill) : selectedSkill
+            'repository' in selectedSkill ? convertRemoteSkillToSkill(selectedSkill) : selectedSkill
           }
           open={true}
           onOpenChange={(open) => !open && handleCloseDetail()}
@@ -577,16 +479,6 @@ export function SkillsMarketplacePage() {
         onSave={handleSaveSkill}
         onClose={handleCloseEditor}
       />
-
-      {/* Publish Dialog */}
-      {publishingSkill && (
-        <PublishSkillDialog
-          skill={publishingSkill}
-          open={isPublishDialogOpen}
-          onClose={handleClosePublishDialog}
-          onSuccess={handlePublishSuccess}
-        />
-      )}
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={!!deletingSkill} onOpenChange={(open) => !open && setDeletingSkill(null)}>
@@ -609,16 +501,12 @@ export function SkillsMarketplacePage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {checksumWarning && (
-        <ChecksumWarningDialog
-          open={true}
-          skillName={checksumWarning.skillName}
-          expectedChecksum={checksumWarning.expectedChecksum}
-          actualChecksum={checksumWarning.actualChecksum}
-          onContinue={checksumWarning.onContinue}
-          onCancel={checksumWarning.onCancel}
-        />
-      )}
+      {/* GitHub Import Dialog */}
+      <ImportGitHubDialog
+        open={isGitHubImportOpen}
+        onOpenChange={setIsGitHubImportOpen}
+        onImportComplete={refreshLocal}
+      />
     </div>
   );
 }
@@ -632,17 +520,19 @@ function SkillsGrid({
   onEdit,
   onDelete,
   onShare,
+  onInstall,
   emptyMessage,
   loadingMessage,
   loadFailedMessage,
 }: {
-  skills: (Skill | MarketplaceSkill)[];
+  skills: (Skill | RemoteSkillConfig)[];
   loading: boolean;
   error: Error | null;
-  onSkillClick: (skill: Skill | MarketplaceSkill) => void;
+  onSkillClick: (skill: Skill | RemoteSkillConfig) => void;
   onEdit?: (skill: Skill) => void;
   onDelete?: (skill: Skill) => void;
   onShare?: (skill: Skill) => void;
+  onInstall?: (skill: Skill | RemoteSkillConfig) => Promise<void>;
   emptyMessage?: string;
   loadingMessage?: string;
   loadFailedMessage?: string;
@@ -680,21 +570,22 @@ function SkillsGrid({
     <div className="p-6">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {skills.map((skill) => {
-          const isLocalSkill = !('slug' in skill);
-          // Convert MarketplaceSkill to Skill format for display
+          const isLocalSkill = !('repository' in skill);
+          // Convert RemoteSkillConfig to Skill format for display
           const displaySkill: Skill = isLocalSkill
             ? (skill as Skill)
-            : convertMarketplaceSkillToSkill(skill as MarketplaceSkill);
+            : convertRemoteSkillToSkill(skill as RemoteSkillConfig);
 
           return (
             <SkillCard
               key={skill.id}
               skill={displaySkill}
               onClick={() => onSkillClick(skill)}
-              showActions={Boolean(onEdit || onDelete || onShare) && isLocalSkill}
+              showActions={Boolean(onEdit || onDelete || onShare || onInstall)}
               onEdit={onEdit && isLocalSkill ? () => onEdit(skill as Skill) : undefined}
               onDelete={onDelete && isLocalSkill ? () => onDelete(skill as Skill) : undefined}
               onShare={onShare && isLocalSkill ? () => onShare(skill as Skill) : undefined}
+              onInstall={onInstall && !isLocalSkill ? () => onInstall(skill) : undefined}
             />
           );
         })}

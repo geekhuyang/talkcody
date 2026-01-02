@@ -73,6 +73,9 @@ export class SkillService {
           packageSize: data.packageSize || null,
           checksum: data.checksum || null,
           hasScripts: data.hasScripts ? 1 : 0,
+          // Agent Skills Specification fields
+          compatibility: data.compatibility || null,
+          metadata: data.metadata ? JSON.stringify(data.metadata) : null,
         })
         .returning();
 
@@ -90,6 +93,9 @@ export class SkillService {
         storageUrl: data.storageUrl || null,
         packageSize: data.packageSize || null,
         checksum: data.checksum || null,
+        // Agent Skills Specification fields
+        compatibility: data.compatibility || null,
+        metadata: data.metadata ? JSON.stringify(data.metadata) : null,
       });
 
       // Step 4: Link categories
@@ -157,6 +163,11 @@ export class SkillService {
     if (data.documentation !== undefined) updates.documentation = data.documentation;
     if (data.iconUrl !== undefined) updates.iconUrl = data.iconUrl;
     if (data.bannerUrl !== undefined) updates.bannerUrl = data.bannerUrl;
+    // Agent Skills Specification fields
+    if (data.compatibility !== undefined) updates.compatibility = data.compatibility;
+    if (data.metadata !== undefined) {
+      updates.metadata = data.metadata ? JSON.stringify(data.metadata) : null;
+    }
 
     // Update skill
     if (Object.keys(updates).length > 0) {

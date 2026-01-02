@@ -13,6 +13,9 @@ export interface MarketplaceSkillMetadata {
   /** Unique skill ID */
   skillId: string;
 
+  /** Skill slug (URL-friendly identifier) */
+  slug?: string;
+
   /** Skill name */
   name: string;
 

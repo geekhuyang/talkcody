@@ -19,9 +19,7 @@ import { bashTool } from './bash-tool';
 import { callAgent } from './call-agent-tool';
 import { codeSearch } from './code-search-tool';
 import { editFile } from './edit-file-tool';
-import { executeSkillScriptTool } from './execute-skill-script-tool';
 import { exitPlanModeTool } from './exit-plan-mode-tool';
-import { getSkillTool } from './get-skill-tool';
 import { githubPRTool } from './github-pr-tool';
 import { globTool } from './glob-tool';
 import { listFiles } from './list-files-tool';
@@ -165,16 +163,6 @@ export const TOOL_DEFINITIONS = {
       renderDoingUI: true,
     },
   },
-  executeSkillScript: {
-    tool: executeSkillScriptTool,
-    label: 'Execute Skill Script',
-    metadata: {
-      category: 'other' as ToolCategory,
-      canConcurrent: false,
-      fileOperation: false,
-      renderDoingUI: true,
-    },
-  },
   callAgent: {
     tool: callAgent,
     label: 'Call Agent',
@@ -237,16 +225,6 @@ export const TOOL_DEFINITIONS = {
       canConcurrent: true,
       fileOperation: false,
       renderDoingUI: true,
-    },
-  },
-  getSkill: {
-    tool: getSkillTool,
-    label: 'Get Skill',
-    metadata: {
-      category: 'other' as ToolCategory,
-      canConcurrent: true,
-      fileOperation: false,
-      renderDoingUI: false,
     },
   },
 } as const satisfies Record<string, ToolDefinition>;

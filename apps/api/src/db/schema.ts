@@ -416,6 +416,10 @@ export const marketplaceSkills = sqliteTable(
     requiredPermission: text('required_permission').default('read-only'),
     hasScripts: integer('has_scripts', { mode: 'boolean' }).default(false).notNull(),
 
+    // Agent Skills Specification fields
+    compatibility: text('compatibility', { length: 500 }),
+    metadata: text('metadata'), // JSON string for key-value metadata
+
     iconUrl: text('icon_url'),
     bannerUrl: text('banner_url'),
 
@@ -475,6 +479,10 @@ export const skillVersions = sqliteTable(
     storageUrl: text('storage_url'),
     packageSize: integer('package_size'),
     checksum: text('checksum'),
+
+    // Agent Skills Specification fields
+    compatibility: text('compatibility', { length: 500 }),
+    metadata: text('metadata'), // JSON string for key-value metadata
 
     changeLog: text('change_log'),
     isPrerelease: integer('is_prerelease', { mode: 'boolean' }).default(false).notNull(),

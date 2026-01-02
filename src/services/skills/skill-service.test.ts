@@ -1,18 +1,18 @@
-// Test for SkillService - specifically for file-based skill deletion
+// Test for SkillService - specifically for agent skill deletion
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SkillService } from './skill-service';
 import type { SkillDatabaseService } from '../database/skill-database-service';
 import type { Skill } from '@/types/skill';
 
-// Mock the file-based skill service
-vi.mock('./file-based-skill-service', () => ({
-  getFileBasedSkillService: vi.fn(),
+// Mock the agent skill service
+vi.mock('./agent-skill-service', () => ({
+  getAgentSkillService: vi.fn(),
 }));
 
 describe('SkillService - Delete Operations', () => {
   let skillService: SkillService;
   let mockDbService: SkillDatabaseService;
-  let mockFileService: any;
+  let mockAgentService: any;
 
   beforeEach(() => {
     // Create mock database service
@@ -21,9 +21,9 @@ describe('SkillService - Delete Operations', () => {
       deleteSkill: vi.fn(),
     } as any;
 
-    // Create mock file-based service
-    mockFileService = {
-      getSkillById: vi.fn(),
+    // Create mock agent service
+    mockAgentService = {
+      getSkillByName: vi.fn(),
       deleteSkill: vi.fn(),
     };
 
@@ -56,46 +56,59 @@ describe('SkillService - Delete Operations', () => {
       expect(mockDbService.deleteSkill).toHaveBeenCalledWith('db-skill-1');
     });
 
-    it('should delete a file-based skill when not found in database', async () => {
-      const mockFileSkill = {
-        id: 'file-skill-1',
-        name: 'File Skill',
-        description: 'A file-based skill',
-        directoryName: 'check-chinese-local-001',
-        localPath: '/path/to/skills/check-chinese-local-001',
+    it('should delete an agent skill when not found in database', async () => {
+      const mockAgentSkill = {
+        name: 'test-skill',
+        path: '/path/to/skills/test-skill',
+        frontmatter: {
+          name: 'test-skill',
+          description: 'An agent skill',
+        },
+        content: '',
+        directory: {
+          name: 'test-skill',
+          path: '/path/to/skills/test-skill',
+          hasSkillMd: true,
+          hasScriptsDir: false,
+          hasReferencesDir: false,
+          hasAssetsDir: false,
+          scriptFiles: [],
+          referenceFiles: [],
+          assetFiles: [],
+        },
       };
 
       // Not in database
       mockDbService.getSkill = vi.fn().mockResolvedValue(null);
 
-      // Setup file service mock
-      const { getFileBasedSkillService } = await import('./file-based-skill-service');
-      vi.mocked(getFileBasedSkillService).mockResolvedValue(mockFileService);
-      mockFileService.getSkillById.mockResolvedValue(mockFileSkill);
-      mockFileService.deleteSkill.mockResolvedValue(undefined);
+      // Setup agent service mock
+      const { getAgentSkillService } = await import('./agent-skill-service');
+      vi.mocked(getAgentSkillService).mockResolvedValue(mockAgentService);
+      mockAgentService.getSkillByName.mockResolvedValue(mockAgentSkill);
+      mockAgentService.deleteSkill.mockResolvedValue(undefined);
 
-      await skillService.deleteSkill('file-skill-1');
+      await skillService.deleteSkill('test-skill');
 
-      expect(mockDbService.getSkill).toHaveBeenCalledWith('file-skill-1');
-      expect(mockFileService.getSkillById).toHaveBeenCalledWith('file-skill-1');
-      expect(mockFileService.deleteSkill).toHaveBeenCalledWith('check-chinese-local-001');
+      expect(mockDbService.getSkill).toHaveBeenCalledWith('test-skill');
+      expect(mockAgentService.getSkillByName).toHaveBeenCalledWith('test-skill');
+      expect(mockAgentService.deleteSkill).toHaveBeenCalledWith('test-skill');
     });
 
-    it('should throw error when skill not found in database or file system', async () => {
+    it('should throw error when skill not found in database or agent skills', async () => {
       // Not in database
       mockDbService.getSkill = vi.fn().mockResolvedValue(null);
 
-      // Not in file system
-      const { getFileBasedSkillService } = await import('./file-based-skill-service');
-      vi.mocked(getFileBasedSkillService).mockResolvedValue(mockFileService);
-      mockFileService.getSkillById.mockResolvedValue(null);
+      // Not in agent skills
+      const { getAgentSkillService } = await import('./agent-skill-service');
+      vi.mocked(getAgentSkillService).mockResolvedValue(mockAgentService);
+      mockAgentService.getSkillByName.mockResolvedValue(null);
 
       await expect(skillService.deleteSkill('non-existent-skill')).rejects.toThrow(
-        'Skill non-existent-skill not found in database or file system'
+        'Skill "non-existent-skill" not found'
       );
 
       expect(mockDbService.getSkill).toHaveBeenCalledWith('non-existent-skill');
-      expect(mockFileService.getSkillById).toHaveBeenCalledWith('non-existent-skill');
+      expect(mockAgentService.getSkillByName).toHaveBeenCalledWith('non-existent-skill');
     });
 
     it('should handle database delete errors', async () => {
@@ -122,25 +135,38 @@ describe('SkillService - Delete Operations', () => {
       );
     });
 
-    it('should handle file system delete errors', async () => {
-      const mockFileSkill = {
-        id: 'file-skill-1',
-        name: 'File Skill',
-        description: 'A file-based skill',
-        directoryName: 'test-skill',
-        localPath: '/path/to/skills/test-skill',
+    it('should handle agent skill delete errors', async () => {
+      const mockAgentSkill = {
+        name: 'test-skill',
+        path: '/path/to/skills/test-skill',
+        frontmatter: {
+          name: 'test-skill',
+          description: 'An agent skill',
+        },
+        content: '',
+        directory: {
+          name: 'test-skill',
+          path: '/path/to/skills/test-skill',
+          hasSkillMd: true,
+          hasScriptsDir: false,
+          hasReferencesDir: false,
+          hasAssetsDir: false,
+          scriptFiles: [],
+          referenceFiles: [],
+          assetFiles: [],
+        },
       };
 
-      const error = new Error('File deletion failed');
+      const error = new Error('Agent skill deletion failed');
       mockDbService.getSkill = vi.fn().mockResolvedValue(null);
 
-      const { getFileBasedSkillService } = await import('./file-based-skill-service');
-      vi.mocked(getFileBasedSkillService).mockResolvedValue(mockFileService);
-      mockFileService.getSkillById.mockResolvedValue(mockFileSkill);
-      mockFileService.deleteSkill.mockRejectedValue(error);
+      const { getAgentSkillService } = await import('./agent-skill-service');
+      vi.mocked(getAgentSkillService).mockResolvedValue(mockAgentService);
+      mockAgentService.getSkillByName.mockResolvedValue(mockAgentSkill);
+      mockAgentService.deleteSkill.mockRejectedValue(error);
 
-      await expect(skillService.deleteSkill('file-skill-1')).rejects.toThrow(
-        'File deletion failed'
+      await expect(skillService.deleteSkill('test-skill')).rejects.toThrow(
+        'Agent skill deletion failed'
       );
     });
   });

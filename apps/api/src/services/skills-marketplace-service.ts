@@ -385,6 +385,17 @@ export class SkillsMarketplaceService {
         }
       }
 
+      // Parse metadata if it's a string
+      let parsedMetadata: Record<string, string> | null = null;
+      if (skill.metadata) {
+        try {
+          parsedMetadata =
+            typeof skill.metadata === 'string' ? JSON.parse(skill.metadata) : skill.metadata;
+        } catch (e) {
+          console.warn(`Failed to parse metadata for skill ${skill.id}:`, e);
+        }
+      }
+
       return {
         id: skill.id,
         slug: skill.slug,
@@ -403,6 +414,9 @@ export class SkillsMarketplaceService {
         workflowRules: skill.workflowRules,
         documentation,
         hasScripts: skill.hasScripts === 1,
+        // Agent Skills Specification fields
+        compatibility: skill.compatibility || undefined,
+        metadata: parsedMetadata,
         latestVersion: skill.latestVersion,
         installCount: skill.installCount,
         rating: skill.rating,

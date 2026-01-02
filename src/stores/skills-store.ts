@@ -2,43 +2,47 @@ import { create } from 'zustand';
 import { logger } from '@/lib/logger';
 import { activeSkillsConfigService } from '@/services/active-skills-config-service';
 import {
+  type AgentSkill,
+  getAgentSkillService,
   getSkillService,
   type Skill,
   type SkillFilter,
   type SkillSortOption,
 } from '@/services/skills';
-import { getFileBasedSkillService } from '@/services/skills/file-based-skill-service';
-import type { FileBasedSkill } from '@/types/file-based-skill';
 
 /**
- * Convert FileBasedSkill to Skill format for UI compatibility
+ * Convert AgentSkill to Skill format for UI compatibility
  */
-function convertFileBasedSkillToSkill(fileSkill: FileBasedSkill): Skill {
+function convertAgentSkillToSkill(agentSkill: AgentSkill): Skill {
   const now = Date.now();
+  const metadata = agentSkill.frontmatter.metadata || {};
+
   return {
-    id: fileSkill.id,
-    name: fileSkill.name,
-    description: fileSkill.description,
-    longDescription: (fileSkill.frontmatter.longDescription as string) || fileSkill.description,
-    category: fileSkill.category || 'general',
-    icon: (fileSkill.frontmatter.icon as string) || undefined,
+    id: agentSkill.name, // Use name as ID for Agent Skills
+    name: agentSkill.name,
+    description: agentSkill.frontmatter.description,
+    longDescription: agentSkill.frontmatter.description, // Agent Skills don't have separate long description
+    category: metadata.category || 'general',
+    icon: undefined, // Agent Skills Spec doesn't include icon in frontmatter
     content: {
-      systemPromptFragment: fileSkill.content,
-      workflowRules: (fileSkill.frontmatter.workflowRules as string) || undefined,
-      documentation: fileSkill.referenceContent
-        ? [{ type: 'inline' as const, title: 'Reference', content: fileSkill.referenceContent }]
-        : [],
-      hasScripts: fileSkill.hasScripts,
-      scriptFiles: fileSkill.scriptFiles,
+      systemPromptFragment: agentSkill.content,
+      workflowRules: undefined,
+      documentation: agentSkill.directory.referenceFiles.map((file: string) => ({
+        filename: file,
+        type: 'file' as const,
+        title: file,
+      })),
+      hasScripts: agentSkill.directory.hasScriptsDir,
+      scriptFiles: agentSkill.directory.scriptFiles,
     },
     metadata: {
       isBuiltIn: false,
-      sourceType: (fileSkill.metadata.source as 'local' | 'marketplace' | 'system') || 'local',
-      tags: fileSkill.metadata.tags || [],
-      createdAt: fileSkill.metadata.installedAt || now,
-      updatedAt: fileSkill.metadata.installedAt || now,
+      sourceType: 'local',
+      tags: [],
+      createdAt: now,
+      updatedAt: now,
     },
-    localPath: fileSkill.localPath,
+    localPath: agentSkill.path,
   };
 }
 
@@ -87,17 +91,17 @@ export const useSkillsStore = create<SkillsStore>((set, get) => ({
     try {
       set({ isLoading: true, error: null });
 
-      // Load database skills
+      // Load Agent Skills (new format - Agent Skills Specification)
+      const agentService = await getAgentSkillService();
+      const agentSkills = await agentService.listSkills();
+      const convertedAgentSkills = agentSkills.map(convertAgentSkillToSkill);
+
+      // Load database skills (marketplace)
       const dbService = await getSkillService();
       const dbSkills = await dbService.listSkills(filter, sort);
 
-      // Load file-based skills
-      const fileService = await getFileBasedSkillService();
-      const fileSkills = await fileService.listSkills();
-      const convertedFileSkills = fileSkills.map(convertFileBasedSkillToSkill);
-
       // Merge both types of skills
-      const allSkills = [...dbSkills, ...convertedFileSkills];
+      const allSkills = [...convertedAgentSkills, ...dbSkills];
 
       set({
         skills: allSkills,
@@ -105,7 +109,7 @@ export const useSkillsStore = create<SkillsStore>((set, get) => ({
         isInitialized: true,
       });
       logger.info(
-        `Loaded ${allSkills.length} skills successfully (${dbSkills.length} from DB, ${fileSkills.length} from files)`
+        `Loaded ${allSkills.length} skills successfully (${agentSkills.length} Agent Skills, ${dbSkills.length} from DB)`
       );
 
       // Clean up active skills that no longer exist
@@ -132,24 +136,24 @@ export const useSkillsStore = create<SkillsStore>((set, get) => ({
     try {
       set({ isLoading: true, error: null });
 
-      // Load database skills
+      // Load Agent Skills (new format - Agent Skills Specification)
+      const agentService = await getAgentSkillService();
+      const agentSkills = await agentService.listSkills();
+      const convertedAgentSkills = agentSkills.map(convertAgentSkillToSkill);
+
+      // Load database skills (marketplace)
       const dbService = await getSkillService();
       const dbSkills = await dbService.listSkills(filter, sort);
 
-      // Load file-based skills
-      const fileService = await getFileBasedSkillService();
-      const fileSkills = await fileService.listSkills();
-      const convertedFileSkills = fileSkills.map(convertFileBasedSkillToSkill);
-
       // Merge both types of skills
-      const allSkills = [...dbSkills, ...convertedFileSkills];
+      const allSkills = [...convertedAgentSkills, ...dbSkills];
 
       set({
         skills: allSkills,
         isLoading: false,
       });
       logger.info(
-        `Refreshed ${allSkills.length} skills successfully (${dbSkills.length} from DB, ${fileSkills.length} from files)`
+        `Refreshed ${allSkills.length} skills successfully (${agentSkills.length} Agent Skills, ${dbSkills.length} from DB)`
       );
 
       // Clean up active skills that no longer exist

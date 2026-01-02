@@ -15,7 +15,7 @@ import type {
   TaskSkill,
   UpdateSkillRequest,
 } from '@/types/skill';
-import type { SkillDatabaseService } from '../database/skill-database-service';
+import { SkillDatabaseService } from '../database/skill-database-service';
 
 /**
  * High-level service for managing skills
@@ -114,31 +114,50 @@ export class SkillService {
 
   /**
    * Delete a skill
-   * Handles both database skills and file-based skills
+   * Handles both database skills and agent skills
+   *
+   * @param id - Skill ID (UUID for database skills, skill name for agent skills)
+   * @param sourceType - Optional hint about skill type ('database' | 'agent')
    */
-  async deleteSkill(id: string): Promise<void> {
-    // First, check if this is a file-based skill by trying to get it from database
-    const skill = await this.dbService.getSkill(id);
+  async deleteSkill(id: string, sourceType?: 'database' | 'agent'): Promise<void> {
+    // ✅ Simplified logic with early returns
 
-    if (skill) {
-      // Database skill - delete from database
+    // If source type is provided, use it directly
+    if (sourceType === 'database') {
       await this.dbService.deleteSkill(id);
       logger.info(`Deleted database skill: ${id}`);
-    } else {
-      // Not in database, might be a file-based skill
-      // Try to find it in file-based skills
-      const { getFileBasedSkillService } = await import('./file-based-skill-service');
-      const fileService = await getFileBasedSkillService();
-      const fileSkill = await fileService.getSkillById(id);
-
-      if (fileSkill) {
-        // File-based skill - delete from file system
-        await fileService.deleteSkill(fileSkill.directoryName);
-        logger.info(`Deleted file-based skill: ${id} (${fileSkill.directoryName})`);
-      } else {
-        throw new Error(`Skill ${id} not found in database or file system`);
-      }
+      return;
     }
+
+    if (sourceType === 'agent') {
+      const { getAgentSkillService } = await import('./agent-skill-service');
+      const agentService = await getAgentSkillService();
+      await agentService.deleteSkill(id);
+      logger.info(`Deleted agent skill: ${id}`);
+      return;
+    }
+
+    // Auto-detect: Try database first (faster lookup)
+    const dbSkill = await this.dbService.getSkill(id);
+    if (dbSkill) {
+      await this.dbService.deleteSkill(id);
+      logger.info(`Deleted database skill: ${id}`);
+      return;
+    }
+
+    // Try agent skills (name-based lookup)
+    const { getAgentSkillService } = await import('./agent-skill-service');
+    const agentService = await getAgentSkillService();
+    const agentSkill = await agentService.getSkillByName(id);
+
+    if (agentSkill) {
+      await agentService.deleteSkill(agentSkill.name);
+      logger.info(`Deleted agent skill: ${id}`);
+      return;
+    }
+
+    // Not found anywhere
+    throw new Error(`Skill "${id}" not found`);
   }
 
   /**
@@ -411,4 +430,27 @@ export class SkillService {
       mostUsed,
     };
   }
+}
+
+// Singleton instance
+let instance: SkillService | null = null;
+
+/**
+ * Get the SkillService singleton instance
+ * If dbService is not provided, it will be created automatically
+ */
+export async function getSkillService(dbService?: SkillDatabaseService): Promise<SkillService> {
+  if (!instance) {
+    if (!dbService) {
+      const { databaseService } = await import('../database-service');
+      await databaseService.initialize();
+      const db = await databaseService.getDb();
+      dbService = new SkillDatabaseService(db);
+    }
+    instance = new SkillService(dbService);
+  } else if (dbService) {
+    // If dbService is provided and instance exists, update the underlying service
+    instance = new SkillService(dbService);
+  }
+  return instance;
 }
