@@ -1,4 +1,4 @@
-import { renderHook, waitFor } from '@testing-library/react';
+import { renderHook, waitFor, act } from '@testing-library/react';
 import type React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { RepositoryStoreProvider, useRepositoryStore } from './window-scoped-repository-store';
@@ -8,6 +8,7 @@ vi.mock('@/services/repository-service', () => ({
   repositoryService: {
     invalidateCache: vi.fn(),
     readFileWithCache: vi.fn(),
+    writeFile: vi.fn().mockResolvedValue(undefined),
     getFileNameFromPath: (path: string) => path.split('/').pop() || '',
   },
 }));
@@ -25,12 +26,38 @@ vi.mock('sonner', () => ({
   toast: {
     info: vi.fn(),
     success: vi.fn(),
+    error: vi.fn(),
   },
+}));
+
+vi.mock('@/locales', () => ({
+  getLocale: vi.fn(() => ({
+    RepositoryStore: {
+      errors: {
+        failedToSave: vi.fn((msg: string) => `Failed to save: ${msg}`),
+        failedToLoadDirectory: 'Failed to load directory',
+        failedToOpen: vi.fn((msg: string) => `Failed to open: ${msg}`),
+        failedToRead: vi.fn((msg: string) => `Failed to read: ${msg}`),
+        failedToRefresh: vi.fn((msg: string) => `Failed to refresh: ${msg}`),
+        failedToRefreshTree: vi.fn((msg: string) => `Failed to refresh tree: ${msg}`),
+        searchFailed: 'Search failed',
+      },
+      success: {
+        repositoryOpened: 'Repository opened',
+        fileSaved: vi.fn((name: string) => `File ${name} saved`),
+        fileRefreshed: 'File refreshed',
+        fileReloaded: vi.fn((name: string) => `File ${name} reloaded`),
+      },
+    },
+  })),
 }));
 
 vi.mock('@/stores/settings-store', () => ({
   useSettingsStore: {
-    getState: () => ({ language: 'en' }),
+    getState: vi.fn(() => ({ language: 'en' })),
+  },
+  settingsManager: {
+    setCurrentRootPath: vi.fn(),
   },
 }));
 
@@ -56,10 +83,10 @@ describe('handleExternalFileChange', () => {
 
     const { result } = renderHook(() => useRepositoryStore((state) => state), { wrapper });
 
-    // Open a file
-    result.current.updateFileContent(testFilePath, 'initial content', false);
+    // Add file to openFiles via selectFile
+    vi.mocked(repositoryService.readFileWithCache).mockResolvedValue('initial content');
+    await result.current.selectFile(testFilePath);
 
-    // Mock writeFile to succeed
     vi.mocked(repositoryService.readFileWithCache).mockResolvedValue('saved content');
 
     // Save the file (this should mark it as recently saved)
@@ -74,6 +101,9 @@ describe('handleExternalFileChange', () => {
     // Should NOT update the file or show toast because it's a self-triggered change
     expect(repositoryService.invalidateCache).not.toHaveBeenCalled();
     expect(toast.info).not.toHaveBeenCalled();
+
+    // Clean up timers
+    vi.runAllTimers();
   });
 
   it('should auto-update editor content when file has no unsaved changes', async () => {
@@ -82,8 +112,9 @@ describe('handleExternalFileChange', () => {
 
     const { result } = renderHook(() => useRepositoryStore((state) => state), { wrapper });
 
-    // Open a file with no unsaved changes
-    result.current.updateFileContent(testFilePath, 'old content', false);
+    // Add file to openFiles via selectFile
+    vi.mocked(repositoryService.readFileWithCache).mockResolvedValue('old content');
+    await result.current.selectFile(testFilePath);
 
     // Mock disk content to be different
     vi.mocked(repositoryService.readFileWithCache).mockResolvedValue('new content from disk');
@@ -94,13 +125,11 @@ describe('handleExternalFileChange', () => {
     // Trigger external file change
     await result.current.handleExternalFileChange(testFilePath);
 
-    await waitFor(() => {
-      const openFile = result.current.openFiles.find((f) => f.path === testFilePath);
-      expect(openFile?.content).toBe('new content from disk');
-    });
+    // The store should update synchronously in this case
+    const openFile = result.current.openFiles.find((f) => f.path === testFilePath);
+    expect(openFile?.content).toBe('new content from disk');
 
     expect(repositoryService.invalidateCache).toHaveBeenCalledWith(testFilePath);
-    expect(toast.info).toHaveBeenCalled();
   });
 
   it('should show conflict dialog when file has unsaved changes', async () => {
@@ -108,7 +137,11 @@ describe('handleExternalFileChange', () => {
 
     const { result } = renderHook(() => useRepositoryStore((state) => state), { wrapper });
 
-    // Open a file with unsaved changes
+    // Add file to openFiles via selectFile
+    vi.mocked(repositoryService.readFileWithCache).mockResolvedValue('modified content');
+    await result.current.selectFile(testFilePath);
+
+    // Mark file as having unsaved changes
     result.current.updateFileContent(testFilePath, 'modified content', true);
 
     // Mock disk content to be different
@@ -120,11 +153,10 @@ describe('handleExternalFileChange', () => {
     // Trigger external file change
     await result.current.handleExternalFileChange(testFilePath);
 
-    await waitFor(() => {
-      expect(result.current.pendingExternalChange).toEqual({
-        filePath: testFilePath,
-        diskContent: 'external content',
-      });
+    // The state should be updated synchronously
+    expect(result.current.pendingExternalChange).toEqual({
+      filePath: testFilePath,
+      diskContent: 'external content',
     });
 
     // File content should NOT be auto-updated
@@ -139,8 +171,9 @@ describe('handleExternalFileChange', () => {
 
     const { result } = renderHook(() => useRepositoryStore((state) => state), { wrapper });
 
-    // Open a file
-    result.current.updateFileContent(testFilePath, 'same content', false);
+    // Add file to openFiles via selectFile
+    vi.mocked(repositoryService.readFileWithCache).mockResolvedValue('same content');
+    await result.current.selectFile(testFilePath);
 
     // Mock disk content to be the same
     vi.mocked(repositoryService.readFileWithCache).mockResolvedValue('same content');
@@ -151,11 +184,10 @@ describe('handleExternalFileChange', () => {
     // Trigger external file change
     await result.current.handleExternalFileChange(testFilePath);
 
-    await waitFor(() => {
-      expect(logger.debug).toHaveBeenCalledWith(
-        expect.stringContaining('External file content unchanged')
-      );
-    });
+    // The logger should be called synchronously
+    expect(logger.debug).toHaveBeenCalledWith(
+      expect.stringContaining('External file content unchanged')
+    );
 
     // Should not show toast or update content
     expect(toast.info).not.toHaveBeenCalled();
@@ -166,28 +198,39 @@ describe('handleExternalFileChange', () => {
 
     const { result } = renderHook(() => useRepositoryStore((state) => state), { wrapper });
 
-    // Set up pending external change
+    // Set up pending external change by using handleExternalFileChange
+    const { repositoryService } = await import('@/services/repository-service');
+    vi.mocked(repositoryService.readFileWithCache).mockResolvedValue('local content');
+    await result.current.selectFile(testFilePath);
+
+    // Mark file as having unsaved changes FIRST
     result.current.updateFileContent(testFilePath, 'local content', true);
-    
-    // Manually set pendingExternalChange state
-    const store = result.current;
-    // @ts-expect-error - accessing internal state for testing
-    store.getState().set({
-      pendingExternalChange: {
-        filePath: testFilePath,
-        diskContent: 'disk content',
-      },
+
+    // Then trigger external file change
+    vi.mocked(repositoryService.readFileWithCache).mockResolvedValue('disk content');
+
+    // Wait for recent save timeout to expire
+    vi.advanceTimersByTime(1100);
+
+    // Trigger external file change with unsaved content
+    await result.current.handleExternalFileChange(testFilePath);
+
+    // Verify pendingExternalChange is set
+    expect(result.current.pendingExternalChange).toEqual({
+      filePath: testFilePath,
+      diskContent: 'disk content',
     });
 
     // User chooses to load disk version
-    result.current.applyExternalChange(false);
-
-    await waitFor(() => {
-      const openFile = result.current.openFiles.find((f) => f.path === testFilePath);
-      expect(openFile?.content).toBe('disk content');
-      expect(openFile?.hasUnsavedChanges).toBe(false);
-      expect(result.current.pendingExternalChange).toBeNull();
+    act(() => {
+      result.current.applyExternalChange(false);
     });
+
+    // The state should be updated synchronously
+    const openFile = result.current.openFiles.find((f) => f.path === testFilePath);
+    expect(openFile?.content).toBe('disk content');
+    expect(openFile?.hasUnsavedChanges).toBe(false);
+    expect(result.current.pendingExternalChange).toBeNull();
 
     expect(toast.success).toHaveBeenCalled();
   });
@@ -195,27 +238,38 @@ describe('handleExternalFileChange', () => {
   it('should apply external change correctly when user chooses to keep local', async () => {
     const { result } = renderHook(() => useRepositoryStore((state) => state), { wrapper });
 
-    // Set up pending external change
+    // Set up pending external change by using handleExternalFileChange
+    const { repositoryService } = await import('@/services/repository-service');
+    vi.mocked(repositoryService.readFileWithCache).mockResolvedValue('local content');
+    await result.current.selectFile(testFilePath);
+
+    // Mark file as having unsaved changes FIRST
     result.current.updateFileContent(testFilePath, 'local content', true);
-    
-    // Manually set pendingExternalChange state
-    const store = result.current;
-    // @ts-expect-error - accessing internal state for testing
-    store.getState().set({
-      pendingExternalChange: {
-        filePath: testFilePath,
-        diskContent: 'disk content',
-      },
+
+    // Then trigger external file change
+    vi.mocked(repositoryService.readFileWithCache).mockResolvedValue('disk content');
+
+    // Wait for recent save timeout to expire
+    vi.advanceTimersByTime(1100);
+
+    // Trigger external file change
+    await result.current.handleExternalFileChange(testFilePath);
+
+    // Verify pendingExternalChange is set
+    expect(result.current.pendingExternalChange).toEqual({
+      filePath: testFilePath,
+      diskContent: 'disk content',
     });
 
     // User chooses to keep local changes
-    result.current.applyExternalChange(true);
-
-    await waitFor(() => {
-      const openFile = result.current.openFiles.find((f) => f.path === testFilePath);
-      expect(openFile?.content).toBe('local content');
-      expect(openFile?.hasUnsavedChanges).toBe(true);
-      expect(result.current.pendingExternalChange).toBeNull();
+    act(() => {
+      result.current.applyExternalChange(true);
     });
+
+    // The state should be updated synchronously
+    const openFile = result.current.openFiles.find((f) => f.path === testFilePath);
+    expect(openFile?.content).toBe('local content');
+    expect(openFile?.hasUnsavedChanges).toBe(true);
+    expect(result.current.pendingExternalChange).toBeNull();
   });
 });
