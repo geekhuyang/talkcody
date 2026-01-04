@@ -1,10 +1,9 @@
-# TalkCody
 
 <div align="center">
 
-![TalkCody Logo](src-tauri/icons/128x128.png)
+<h1 style="border-bottom: none;">TalkCody</h1>
 
-**A Free, Open-Source AI Coding Agent**
+**Free, Open-Source AI Coding Agent**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.8-blue.svg)](https://www.typescriptlang.org/)
@@ -14,9 +13,10 @@
 
 [Features](#features) • [Installation](#installation) • [Quick Start](#quick-start) • [Development](#development) • [Contributing](#contributing)
 
-</div>
 
----
+[![TalkCody](public/talkcody.png)](https://talkcody.com)
+
+</div>
 
 ## Overview
 
