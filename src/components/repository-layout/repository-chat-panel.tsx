@@ -17,9 +17,6 @@ interface RepositoryChatPanelProps {
   currentTaskId: string | null | undefined;
   currentTask?: Task;
   messages?: UIMessage[];
-  isHistoryOpen: boolean;
-  onHistoryOpenChange: (open: boolean) => void;
-  onTaskSelect: (taskId: string) => void;
   onNewChat: () => void;
   onToggleFullscreen: () => void;
   chatBoxRef: React.RefObject<ChatBoxRef | null>;
@@ -42,9 +39,6 @@ export const RepositoryChatPanel = memo(function RepositoryChatPanel({
   currentTaskId,
   currentTask,
   messages,
-  isHistoryOpen,
-  onHistoryOpenChange,
-  onTaskSelect,
   onNewChat,
   onToggleFullscreen,
   chatBoxRef,
@@ -79,12 +73,8 @@ export const RepositoryChatPanel = memo(function RepositoryChatPanel({
     >
       <div className="flex h-full flex-col">
         <ChatPanelHeader
-          currentTaskId={currentTaskId ?? undefined}
           currentTask={currentTask}
           messages={messages}
-          isHistoryOpen={isHistoryOpen}
-          onHistoryOpenChange={onHistoryOpenChange}
-          onTaskSelect={onTaskSelect}
           onNewChat={onNewChat}
           isFullscreen={isChatFullscreen}
           onToggleFullscreen={onToggleFullscreen}

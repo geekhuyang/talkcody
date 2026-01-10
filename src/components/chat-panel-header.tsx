@@ -11,24 +11,16 @@ import { ShareTaskDialog } from './task/share-task-dialog';
 import { ToolbarStats } from './toolbar-stats';
 
 interface ChatPanelHeaderProps {
-  currentTaskId?: string;
   currentTask?: Task;
   messages?: UIMessage[];
-  isHistoryOpen: boolean;
-  onHistoryOpenChange: (open: boolean) => void;
-  onTaskSelect: (taskId: string) => void;
   onNewChat: () => void;
   isFullscreen?: boolean;
   onToggleFullscreen?: () => void;
 }
 
 export function ChatPanelHeader({
-  currentTaskId,
   currentTask,
   messages = [],
-  isHistoryOpen,
-  onHistoryOpenChange,
-  onTaskSelect,
   onNewChat,
   isFullscreen,
   onToggleFullscreen,

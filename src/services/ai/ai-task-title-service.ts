@@ -26,9 +26,7 @@ class AITaskTitleService {
 
       const language = settingsManager.getSync('language');
       const languageInstruction =
-        language === 'zh'
-          ? 'Generate the title in Chinese (中文).'
-          : 'Generate the title in English.';
+        language === 'zh' ? 'Generate the title in Chinese' : 'Generate the title in English.';
 
       const prompt = `You are an AI assistant that generates concise, descriptive titles for tasks.
 

@@ -1,6 +1,7 @@
 import { Folder, ListTodo, Plus, Search } from 'lucide-react';
 import type React from 'react';
-import { memo } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { EmptyRepositoryState } from '@/components/empty-repository-state';
 import { FileTree } from '@/components/file-tree';
 import { FileTreeHeader } from '@/components/file-tree-header';
@@ -11,10 +12,12 @@ import { ResizableHandle, ResizablePanel } from '@/components/ui/resizable';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useTranslation } from '@/hooks/use-locale';
-import type { Task } from '@/services/database-service';
+import { useStableRunningIds } from '@/hooks/use-stable-running-ids';
+import { useTasks } from '@/hooks/use-tasks';
+import { useExecutionStore } from '@/stores/execution-store';
+import { useWorktreeStore } from '@/stores/worktree-store';
 import type { FileNode } from '@/types/file-system';
 import { SidebarView } from '@/types/navigation';
-import type { WorktreeInfo } from '@/types/worktree';
 
 interface RepositorySidebarProps {
   emptyRepoPanelId: string;
@@ -44,23 +47,7 @@ interface RepositorySidebarProps {
   onRefreshFileTree: () => void;
   onLoadChildren: (node: FileNode) => Promise<FileNode[]>;
   onToggleExpansion: (path: string) => void;
-  taskSearchQuery: string;
-  onTaskSearchQueryChange: (value: string) => void;
-  isMaxReached: boolean;
-  onNewChat: () => void;
-  filteredTasks: Task[];
-  tasksLoading: boolean;
-  currentTaskId: string | null | undefined;
-  editingId: string | null;
-  editingTitle: string;
-  onCancelEdit: () => void;
-  onTaskSelect: (taskId: string) => void;
-  onDeleteTask: (taskId: string, e?: React.MouseEvent) => void;
-  onSaveEdit: (taskId: string) => void;
-  onStartEditing: (task: Task, e?: React.MouseEvent) => void;
-  onTitleChange: (title: string) => void;
-  runningTaskIds: string[];
-  getWorktreeForTask: (taskId: string) => WorktreeInfo | null;
+  taskSearchInputRef: React.RefObject<HTMLInputElement | null>;
 }
 
 export const RepositorySidebar = memo(function RepositorySidebar({
@@ -91,26 +78,72 @@ export const RepositorySidebar = memo(function RepositorySidebar({
   onRefreshFileTree,
   onLoadChildren,
   onToggleExpansion,
-  taskSearchQuery,
-  onTaskSearchQueryChange,
-  isMaxReached,
-  onNewChat,
-  filteredTasks,
-  tasksLoading,
-  currentTaskId,
-  editingId,
-  editingTitle,
-  onCancelEdit,
-  onTaskSelect,
-  onDeleteTask,
-  onSaveEdit,
-  onStartEditing,
-  onTitleChange,
-  runningTaskIds,
-  getWorktreeForTask,
+  taskSearchInputRef,
 }: RepositorySidebarProps) {
   const t = useTranslation();
   const panelId = shouldShowSidebar ? fileTreePanelId : emptyRepoPanelId;
+
+  const { isMaxReached } = useExecutionStore(
+    useShallow((state) => ({ isMaxReached: state.isMaxReached() }))
+  );
+
+  const [sidebarTaskSearch, setSidebarTaskSearch] = useState('');
+  const stableRunningTaskIds = useStableRunningIds();
+
+  // Task data + actions scoped to sidebar to avoid rerenders upstream
+  const {
+    tasks,
+    loading: tasksLoading,
+    editingId,
+    editingTitle,
+    setEditingTitle,
+    deleteTask,
+    finishEditing,
+    startEditing,
+    cancelEditing,
+    selectTask,
+    currentTaskId,
+    startNewChat,
+    loadTasks,
+  } = useTasks();
+
+  const { getWorktreeForTask } = useWorktreeStore(
+    useShallow((state) => ({ getWorktreeForTask: state.getWorktreeForTask }))
+  );
+
+  // Filter tasks locally in sidebar to avoid re-rendering RepositoryLayout
+  const normalizedTaskSearch = useMemo(
+    () => sidebarTaskSearch.trim().toLowerCase(),
+    [sidebarTaskSearch]
+  );
+
+  const filteredTasks = useMemo(() => {
+    const hasSearch = normalizedTaskSearch.length > 0;
+    const hasProject = Boolean(currentProjectId);
+
+    if (!hasSearch && !hasProject) {
+      return tasks;
+    }
+
+    return tasks.filter((task) => {
+      const matchesSearch = !hasSearch || task.title.toLowerCase().includes(normalizedTaskSearch);
+      const matchesProject = !hasProject || task.project_id === currentProjectId;
+      return matchesSearch && matchesProject;
+    });
+  }, [tasks, normalizedTaskSearch, currentProjectId]);
+
+  useEffect(() => {
+    if (sidebarView === SidebarView.TASKS) {
+      loadTasks(currentProjectId || undefined);
+    }
+  }, [sidebarView, currentProjectId, loadTasks]);
+
+  // Keep input controlled externally if provided
+  useEffect(() => {
+    if (taskSearchInputRef.current) {
+      taskSearchInputRef.current.value = sidebarTaskSearch;
+    }
+  }, [sidebarTaskSearch, taskSearchInputRef]);
 
   return (
     <>
@@ -204,10 +237,11 @@ export const RepositorySidebar = memo(function RepositorySidebar({
                 <div className="relative flex-1">
                   <Search className="-translate-y-1/2 absolute top-1/2 left-2.5 h-3.5 w-3.5 text-gray-400" />
                   <Input
+                    ref={taskSearchInputRef}
                     className="h-8 pl-8 text-xs"
-                    onChange={(event) => onTaskSearchQueryChange(event.target.value)}
+                    onChange={(event) => setSidebarTaskSearch(event.target.value)}
                     placeholder={t.Chat.searchTasks}
-                    value={taskSearchQuery}
+                    value={sidebarTaskSearch}
                   />
                 </div>
                 <Tooltip>
@@ -215,7 +249,10 @@ export const RepositorySidebar = memo(function RepositorySidebar({
                     <Button
                       className="h-8 w-8 p-0"
                       disabled={isMaxReached}
-                      onClick={onNewChat}
+                      onClick={() => {
+                        setSidebarTaskSearch('');
+                        startNewChat();
+                      }}
                       size="sm"
                       variant="outline"
                     >
@@ -238,13 +275,26 @@ export const RepositorySidebar = memo(function RepositorySidebar({
                   editingTitle={editingTitle}
                   loading={tasksLoading}
                   getWorktreeForTask={getWorktreeForTask}
-                  onCancelEdit={onCancelEdit}
-                  onTaskSelect={onTaskSelect}
-                  onDeleteTask={onDeleteTask}
-                  onSaveEdit={onSaveEdit}
-                  onStartEditing={onStartEditing}
-                  onTitleChange={onTitleChange}
-                  runningTaskIds={runningTaskIds}
+                  onCancelEdit={cancelEditing}
+                  onTaskSelect={(taskId) => {
+                    selectTask(taskId);
+                  }}
+                  onDeleteTask={(taskId, e) => {
+                    e?.stopPropagation();
+                    deleteTask(taskId).then((result) => {
+                      if (result.requiresConfirmation && result.changesCount && result.message) {
+                        useWorktreeStore.getState().setPendingDeletion?.({
+                          taskId,
+                          changesCount: result.changesCount,
+                          message: result.message,
+                        });
+                      }
+                    });
+                  }}
+                  onSaveEdit={finishEditing}
+                  onStartEditing={startEditing}
+                  onTitleChange={setEditingTitle}
+                  runningTaskIds={stableRunningTaskIds}
                 />
               </div>
             </div>

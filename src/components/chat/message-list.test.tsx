@@ -5,6 +5,15 @@ import type { StoredToolContent } from '@/types';
 import type { UIMessage } from '@/types/agent';
 import { MessageList } from './message-list';
 
+// Mock ResizeObserver globally for tests
+class ResizeObserverMock {
+  observe = vi.fn();
+  unobserve = vi.fn();
+  disconnect = vi.fn();
+}
+
+vi.stubGlobal('ResizeObserver', ResizeObserverMock);
+
 // Mock the MessageItem component to simplify testing
 vi.mock('@/components/chat/message-item', () => ({
   MessageItem: ({ message }: { message: UIMessage }) => (
@@ -21,6 +30,23 @@ vi.mock('@/components/chat/message-item', () => ({
     </div>
   ),
 }));
+
+vi.mock('react-window', async () => {
+  const ReactModule = await import('react');
+  return {
+    VariableSizeList: ({ itemCount, itemData, children }: any) => (
+      <div>
+        {Array.from({ length: itemCount }, (_, index) =>
+          children({
+            index,
+            style: {},
+            data: itemData,
+          })
+        )}
+      </div>
+    ),
+  };
+});
 
 describe('MessageList', () => {
   it('should display tool messages with different toolCallIds', () => {

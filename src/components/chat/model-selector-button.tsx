@@ -21,6 +21,8 @@ export function ModelSelectorButton() {
   const { t } = useLocale();
   const [open, setOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  // Track recently used models with timestamps (memory-only)
+  const [recentModels, setRecentModels] = useState<Record<string, number>>({});
 
   // Get available models from store
   const availableModels = useProviderStore((state) => state.availableModels);
@@ -49,6 +51,45 @@ export function ModelSelectorButton() {
     searchQuery,
   });
 
+  // Sort models: recently used first (top 5), then others
+  const sortedModels = useMemo(() => {
+    if (filteredModels.length === 0) return [];
+
+    // Get recently used model identifiers (top 5 by timestamp)
+    const recentModelEntries = Object.entries(recentModels).filter(
+      (entry): entry is [string, number] => typeof entry[1] === 'number'
+    );
+    const sortedRecentEntries = recentModelEntries
+      .sort((a, b) => b[1] - a[1]) // Descending by timestamp
+      .slice(0, 5);
+    const topRecentModels = sortedRecentEntries.map(([identifier]) => identifier);
+
+    // Separate models into recent and others
+    const recent: AvailableModel[] = [];
+    const others: AvailableModel[] = [];
+
+    for (const model of filteredModels) {
+      const identifier = `${model.key}@${model.provider}`;
+      if (topRecentModels.includes(identifier)) {
+        recent.push(model);
+      } else {
+        others.push(model);
+      }
+    }
+
+    // Sort recent models to match the order in topRecentModels (most recent first)
+    recent.sort((a, b) => {
+      const aId = `${a.key}@${a.provider}`;
+      const bId = `${b.key}@${b.provider}`;
+      const aIndex = topRecentModels.indexOf(aId);
+      const bIndex = topRecentModels.indexOf(bId);
+      return aIndex - bIndex; // Lower index (more recent) comes first
+    });
+
+    // Return recent models first, then others
+    return [...recent, ...others];
+  }, [filteredModels, recentModels]);
+
   // Find current model info
   const currentModel = useMemo(() => {
     return availableModels.find((m) => m.key === currentModelKey);
@@ -60,6 +101,12 @@ export function ModelSelectorButton() {
       // Store as "modelKey@provider" format
       const modelIdentifier = `${model.key}@${model.provider}`;
       await setModelType('main', modelIdentifier);
+
+      // Update recent models tracking
+      setRecentModels((prev) => ({
+        ...prev,
+        [modelIdentifier]: Date.now(),
+      }));
 
       toast.success(t.Chat.model.switchSuccess);
       setOpen(false);
@@ -138,7 +185,7 @@ export function ModelSelectorButton() {
           <ModelSearchInput
             value={searchQuery}
             onChange={setSearchQuery}
-            resultCount={filteredModels.length}
+            resultCount={sortedModels.length}
           />
 
           <ScrollArea className="h-[400px]">
@@ -146,7 +193,7 @@ export function ModelSelectorButton() {
               <div className="p-4 text-center text-sm text-muted-foreground">
                 {t.Common.loading}
               </div>
-            ) : filteredModels.length === 0 ? (
+            ) : sortedModels.length === 0 ? (
               <div className="p-4 text-center text-sm text-muted-foreground">
                 {hasSearchQuery
                   ? t.Settings.customModelsDialog.noModelsMatch(searchQuery)
@@ -154,7 +201,7 @@ export function ModelSelectorButton() {
               </div>
             ) : (
               <div className="p-2 space-y-1" key={`models-${searchQuery}`}>
-                {filteredModels.map((model) => (
+                {sortedModels.map((model) => (
                   <ModelListItem
                     key={`${model.key}-${model.provider}`}
                     model={model}

@@ -402,7 +402,7 @@ function filterCases(
 
     // Skip cases in skipTags
     if (skipTags && skipTags.length > 0) {
-      if (c.tags && c.tags.some((t) => skipTags.includes(t))) {
+      if (c.tags?.some((t) => skipTags.includes(t))) {
         return false;
       }
     }
@@ -519,7 +519,6 @@ export function generateReportSummary(report: EvaluationReport): string {
     }
   }
 
-  // 列出失败的用例
   const failedResults = report.results.filter((r) => !r.passed);
   if (failedResults.length > 0) {
     lines.push('');

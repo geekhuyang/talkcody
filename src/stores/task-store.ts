@@ -224,7 +224,8 @@ export const useTaskStore = create<TaskState>()(
       setTasks: (tasks) => {
         set(
           (state) => {
-            const newTasks = new Map<string, Task>();
+            // Create a new Map to ensure state change is detected
+            const newTasks = new Map();
             for (const task of tasks) {
               newTasks.set(task.id, task);
             }
@@ -238,9 +239,8 @@ export const useTaskStore = create<TaskState>()(
       addTask: (task) => {
         set(
           (state) => {
-            const newTasks = new Map(state.tasks);
-            newTasks.set(task.id, task);
-            return { tasks: newTasks };
+            state.tasks.set(task.id, task);
+            return { tasks: state.tasks };
           },
           false,
           'addTask'
@@ -253,9 +253,9 @@ export const useTaskStore = create<TaskState>()(
             const task = state.tasks.get(taskId);
             if (!task) return state;
 
-            const newTasks = new Map(state.tasks);
-            newTasks.set(taskId, { ...task, ...updates });
-            return { tasks: newTasks };
+            // Directly modify the object
+            Object.assign(task, updates);
+            return { tasks: state.tasks };
           },
           false,
           'updateTask'
@@ -265,19 +265,15 @@ export const useTaskStore = create<TaskState>()(
       removeTask: (taskId) => {
         set(
           (state) => {
-            const newTasks = new Map(state.tasks);
-            newTasks.delete(taskId);
-
-            // Also remove messages for this task
-            const newMessages = new Map(state.messages);
-            newMessages.delete(taskId);
+            state.tasks.delete(taskId);
+            state.messages.delete(taskId);
 
             // Clear current task if it was deleted
             const newCurrentTaskId = state.currentTaskId === taskId ? null : state.currentTaskId;
 
             return {
-              tasks: newTasks,
-              messages: newMessages,
+              tasks: state.tasks,
+              messages: state.messages,
               currentTaskId: newCurrentTaskId,
             };
           },
@@ -296,14 +292,11 @@ export const useTaskStore = create<TaskState>()(
             const task = state.tasks.get(taskId);
             if (!task) return state;
 
-            const newTasks = new Map(state.tasks);
-            newTasks.set(taskId, {
-              ...task,
-              cost: task.cost + cost,
-              input_token: task.input_token + inputTokens,
-              output_token: task.output_token + outputTokens,
-            });
-            return { tasks: newTasks };
+            // Direct update
+            task.cost += cost;
+            task.input_token += inputTokens;
+            task.output_token += outputTokens;
+            return { tasks: state.tasks };
           },
           false,
           'updateTaskUsage'
@@ -316,12 +309,8 @@ export const useTaskStore = create<TaskState>()(
             const task = state.tasks.get(taskId);
             if (!task) return state;
 
-            const newTasks = new Map(state.tasks);
-            newTasks.set(taskId, {
-              ...task,
-              context_usage: contextUsage,
-            });
-            return { tasks: newTasks };
+            task.context_usage = contextUsage;
+            return { tasks: state.tasks };
           },
           false,
           'setContextUsage'
@@ -335,12 +324,8 @@ export const useTaskStore = create<TaskState>()(
             if (!task) return state;
 
             const existingSettings: TaskSettings = task.settings ? JSON.parse(task.settings) : {};
-            const newTasks = new Map(state.tasks);
-            newTasks.set(taskId, {
-              ...task,
-              settings: JSON.stringify({ ...existingSettings, ...settings }),
-            });
-            return { tasks: newTasks };
+            task.settings = JSON.stringify({ ...existingSettings, ...settings });
+            return { tasks: state.tasks };
           },
           false,
           'updateTaskSettings'
@@ -356,22 +341,17 @@ export const useTaskStore = create<TaskState>()(
           (state) => {
             const existingMessages = state.messages.get(taskId) || [];
 
-            // If existing messages have content not in loaded messages,
-            // merge them (preserving messages added during async load)
             const loadedIds = new Set(messages.map((m) => m.id));
             const pendingMessages = existingMessages.filter((m) => !loadedIds.has(m.id));
 
-            // Combine: loaded messages + any pending messages added during load
             const merged = [...messages, ...pendingMessages];
-
-            // Sort by timestamp
             merged.sort(
               (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
             );
 
-            const newMessages = new Map(state.messages);
-            newMessages.set(taskId, merged);
-            return { messages: newMessages };
+            // Direct set
+            state.messages.set(taskId, merged);
+            return { messages: state.messages };
           },
           false,
           'setMessages'
@@ -384,26 +364,21 @@ export const useTaskStore = create<TaskState>()(
 
         set(
           (state) => {
-            // Update messages
-            const newMessages = new Map(state.messages);
-            const existing = newMessages.get(taskId) || [];
-            newMessages.set(taskId, [...existing, fullMessage]);
+            // Directly modify the existing Map, avoiding creating new objects
+            const existing = state.messages.get(taskId) || [];
+            state.messages.set(taskId, [...existing, fullMessage]);
 
-            // Update task's updated_at only for user messages
-            // This prevents unnecessary re-sorting during AI streaming
+            // Only update timestamp for user messages
             const task = state.tasks.get(taskId);
-            if (task) {
-              const newTasks = new Map(state.tasks);
-              const updatedTask = {
-                ...task,
-                message_count: (task.message_count ?? 0) + 1,
-                ...(message.role === 'user' ? { updated_at: Date.now() } : {}),
-              };
-              newTasks.set(taskId, updatedTask);
-              return { messages: newMessages, tasks: newTasks };
+            if (task && message.role === 'user') {
+              task.updated_at = Date.now();
+              task.message_count = (task.message_count ?? 0) + 1;
             }
 
-            return { messages: newMessages };
+            return {
+              messages: state.messages,
+              tasks: state.tasks,
+            };
           },
           false,
           'addMessage'
@@ -418,12 +393,15 @@ export const useTaskStore = create<TaskState>()(
             const messages = state.messages.get(taskId);
             if (!messages) return state;
 
-            const newMessages = new Map(state.messages);
-            const updatedMessages = messages.map((msg) =>
+            // Directly update messages
+            const taskMessages = state.messages.get(taskId);
+            if (!taskMessages) return state;
+
+            const updatedMessages = taskMessages.map((msg) =>
               msg.id === messageId ? ({ ...msg, ...updates } as UIMessage) : msg
             );
-            newMessages.set(taskId, updatedMessages);
-            return { messages: newMessages };
+            state.messages.set(taskId, updatedMessages);
+            return { messages: state.messages };
           },
           false,
           'updateMessage'
@@ -436,12 +414,16 @@ export const useTaskStore = create<TaskState>()(
             const messages = state.messages.get(taskId);
             if (!messages) return state;
 
-            const newMessages = new Map(state.messages);
-            const updatedMessages = messages.map((msg) =>
+            // Use Immer to directly modify, avoiding creating new Map and arrays
+            const taskMessages = state.messages.get(taskId);
+            if (!taskMessages) return state;
+
+            // Directly modify messages in Map (Zustand still detects changes)
+            const updatedMessages = taskMessages.map((msg) =>
               msg.id === messageId ? { ...msg, content, isStreaming } : msg
             );
-            newMessages.set(taskId, updatedMessages);
-            return { messages: newMessages };
+            state.messages.set(taskId, updatedMessages);
+            return { messages: state.messages };
           },
           false,
           'updateMessageContent'
@@ -454,12 +436,12 @@ export const useTaskStore = create<TaskState>()(
             const messages = state.messages.get(taskId);
             if (!messages) return state;
 
-            const newMessages = new Map(state.messages);
-            newMessages.set(
+            // Direct modification
+            state.messages.set(
               taskId,
               messages.filter((msg) => msg.id !== messageId)
             );
-            return { messages: newMessages };
+            return { messages: state.messages };
           },
           false,
           'deleteMessage'
@@ -472,9 +454,8 @@ export const useTaskStore = create<TaskState>()(
             const messages = state.messages.get(taskId);
             if (!messages) return state;
 
-            const newMessages = new Map(state.messages);
-            newMessages.set(taskId, messages.slice(0, index));
-            return { messages: newMessages };
+            state.messages.set(taskId, messages.slice(0, index));
+            return { messages: state.messages };
           },
           false,
           'deleteMessagesFromIndex'
@@ -484,9 +465,8 @@ export const useTaskStore = create<TaskState>()(
       clearMessages: (taskId) => {
         set(
           (state) => {
-            const newMessages = new Map(state.messages);
-            newMessages.set(taskId, []);
-            return { messages: newMessages };
+            state.messages.set(taskId, []);
+            return { messages: state.messages };
           },
           false,
           'clearMessages'
@@ -499,9 +479,8 @@ export const useTaskStore = create<TaskState>()(
             const messages = state.messages.get(taskId);
             if (!messages) return state;
 
-            const newMessages = new Map(state.messages);
+            // 直接修改
             const updatedMessages = messages.map((msg) => {
-              // Clear both isStreaming and renderDoingUI flags
               const updates: Partial<UIMessage> = {};
 
               if ('isStreaming' in msg && msg.isStreaming) {
@@ -513,8 +492,8 @@ export const useTaskStore = create<TaskState>()(
 
               return Object.keys(updates).length > 0 ? { ...msg, ...updates } : msg;
             });
-            newMessages.set(taskId, updatedMessages);
-            return { messages: newMessages };
+            state.messages.set(taskId, updatedMessages);
+            return { messages: state.messages };
           },
           false,
           'stopStreaming'
@@ -566,9 +545,8 @@ export const useTaskStore = create<TaskState>()(
               logger.warn('[TaskStore] Parent message NOT FOUND for toolCallId:', parentToolCallId);
             }
 
-            const newMessages = new Map(state.messages);
-            newMessages.set(taskId, updatedMessages);
-            return { messages: newMessages };
+            state.messages.set(taskId, updatedMessages);
+            return { messages: state.messages };
           },
           false,
           'addNestedToolMessage'
@@ -607,15 +585,14 @@ export const useTaskStore = create<TaskState>()(
 
             if (toEvict.length === 0) return state;
 
-            const newMessages = new Map(state.messages);
             const newOrder = state.messageAccessOrder.filter((id) => !toEvict.includes(id));
 
             for (const taskId of toEvict) {
-              newMessages.delete(taskId);
+              state.messages.delete(taskId);
               logger.info('[TaskStore] Evicted messages for task', { taskId });
             }
 
-            return { messages: newMessages, messageAccessOrder: newOrder };
+            return { messages: state.messages, messageAccessOrder: newOrder };
           },
           false,
           'evictOldestMessages'
@@ -633,13 +610,12 @@ export const useTaskStore = create<TaskState>()(
       setLoadingMessages: (taskId, loading) => {
         set(
           (state) => {
-            const newLoadingMessages = new Set(state.loadingMessages);
             if (loading) {
-              newLoadingMessages.add(taskId);
+              state.loadingMessages.add(taskId);
             } else {
-              newLoadingMessages.delete(taskId);
+              state.loadingMessages.delete(taskId);
             }
-            return { loadingMessages: newLoadingMessages };
+            return { loadingMessages: state.loadingMessages };
           },
           false,
           'setLoadingMessages'

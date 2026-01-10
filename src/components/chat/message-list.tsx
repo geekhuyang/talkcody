@@ -94,6 +94,11 @@ export function MessageList({
   repositoryPath: _repositoryPath,
   onDiffApplied: _onDiffApplied,
 }: MessageListProps) {
+  const { filteredMessages, lastAssistantIdsInTurn } = useMemo(
+    () => computeDerivedMessages(messages),
+    [messages]
+  );
+
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const lastMessageIdRef = useRef<string | null>(null);
   const lastMessageLengthRef = useRef<number>(0);
@@ -107,8 +112,9 @@ export function MessageList({
 
   const scrollToBottom = useCallback(() => {
     const scrollContainer = getScrollContainer();
-    if (!scrollContainer) return;
-    scrollContainer.scrollTop = scrollContainer.scrollHeight;
+    if (scrollContainer) {
+      scrollContainer.scrollTop = scrollContainer.scrollHeight;
+    }
   }, [getScrollContainer]);
 
   const isNearBottom = useCallback(() => {
@@ -117,11 +123,6 @@ export function MessageList({
     const { scrollTop, scrollHeight, clientHeight } = scrollContainer;
     return scrollHeight - (scrollTop + clientHeight) < 120;
   }, [getScrollContainer]);
-
-  const { filteredMessages, lastAssistantIdsInTurn } = useMemo(
-    () => computeDerivedMessages(messages),
-    [messages]
-  );
 
   useEffect(() => {
     const lastMessage = filteredMessages[filteredMessages.length - 1];

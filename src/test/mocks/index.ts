@@ -1,5 +1,5 @@
 // src/test/mocks/index.ts
-// Centralized test mocks -统一导出
+// Centralized test mocks
 //
 // Usage:
 // ```typescript

@@ -36,6 +36,12 @@ export class WorktreeHasChangesError extends Error {
   }
 }
 
+interface PendingDeletionState {
+  taskId: string;
+  changesCount: number;
+  message: string;
+}
+
 interface WorktreeState {
   // Global worktree toggle (like plan mode)
   isWorktreeEnabled: boolean;
@@ -52,6 +58,9 @@ interface WorktreeState {
   mergeStatus: MergeStatus;
   lastMergeResult: MergeResult | null;
 
+  // Deletion confirmation state (shared with UI)
+  pendingDeletion: PendingDeletionState | null;
+
   // Loading state
   isLoading: boolean;
   isInitialized: boolean;
@@ -62,6 +71,9 @@ interface WorktreeActions {
   // Project info helpers (from settings-store)
   getProjectPath: () => string | null;
   getProjectId: () => string | null;
+
+  // Deletion confirmation bridge
+  setPendingDeletion: (state: PendingDeletionState | null) => void;
 
   // Initialization
   initialize: () => Promise<void>;
@@ -110,6 +122,7 @@ export const useWorktreeStore = create<WorktreeState & WorktreeActions>()(
       currentMergeTaskId: null,
       mergeStatus: 'idle',
       lastMergeResult: null,
+      pendingDeletion: null,
       isLoading: false,
       isInitialized: false,
       error: null,
@@ -124,6 +137,11 @@ export const useWorktreeStore = create<WorktreeState & WorktreeActions>()(
 
       getProjectId: () => {
         return settingsManager.getProject() || null;
+      },
+
+      // Deletion confirmation bridge
+      setPendingDeletion: (state) => {
+        set({ pendingDeletion: state }, false, 'setPendingDeletion');
       },
 
       // ============================================
@@ -304,7 +322,7 @@ export const useWorktreeStore = create<WorktreeState & WorktreeActions>()(
       // Worktree Management
       // ============================================
 
-      shouldUseWorktree: (taskId: string, runningTaskIds: string[]) => {
+      shouldUseWorktree: (_taskId: string, runningTaskIds: string[]) => {
         const { isWorktreeEnabled } = get();
         // Use worktree when:
         // 1. Global worktree mode is enabled
@@ -337,10 +355,12 @@ export const useWorktreeStore = create<WorktreeState & WorktreeActions>()(
 
         // Check if task already has a worktree
         if (taskWorktreeMap.has(taskId)) {
-          const poolIndex = taskWorktreeMap.get(taskId)!;
-          const wt = pool.get(poolIndex);
-          logger.info('[WorktreeStore] Task already has worktree', { taskId, path: wt?.path });
-          return wt?.path || null;
+          const poolIndex = taskWorktreeMap.get(taskId);
+          if (poolIndex !== undefined) {
+            const wt = pool.get(poolIndex);
+            logger.info('[WorktreeStore] Task already has worktree', { taskId, path: wt?.path });
+            return wt?.path || null;
+          }
         }
 
         // Find available pool index
@@ -392,9 +412,9 @@ export const useWorktreeStore = create<WorktreeState & WorktreeActions>()(
       releaseForTask: async (taskId: string) => {
         const projectPath = get().getProjectPath();
         const { taskWorktreeMap } = get();
-        if (!projectPath || !taskWorktreeMap.has(taskId)) return;
+        const poolIndex = taskWorktreeMap.get(taskId);
+        if (!projectPath || poolIndex === undefined) return;
 
-        const poolIndex = taskWorktreeMap.get(taskId)!;
         logger.info('[WorktreeStore] Releasing worktree', { taskId, poolIndex });
 
         try {
@@ -429,7 +449,8 @@ export const useWorktreeStore = create<WorktreeState & WorktreeActions>()(
           return null; // Task not using worktree
         }
 
-        const poolIndex = taskWorktreeMap.get(taskId)!;
+        const poolIndex = taskWorktreeMap.get(taskId);
+        if (poolIndex === undefined) return null;
         const wt = pool.get(poolIndex);
         return wt?.path || null;
       },
@@ -458,7 +479,10 @@ export const useWorktreeStore = create<WorktreeState & WorktreeActions>()(
           throw new Error('A merge is already in progress');
         }
 
-        const poolIndex = taskWorktreeMap.get(taskId)!;
+        const poolIndex = taskWorktreeMap.get(taskId);
+        if (poolIndex === undefined) {
+          throw new Error('Task is not using a worktree');
+        }
         logger.info('[WorktreeStore] Starting merge', { taskId, poolIndex });
 
         set({ isMerging: true, currentMergeTaskId: taskId, mergeStatus: 'merging' });
@@ -600,7 +624,8 @@ export const useWorktreeStore = create<WorktreeState & WorktreeActions>()(
         const { taskWorktreeMap } = get();
         if (!projectPath || !taskWorktreeMap.has(taskId)) return;
 
-        const poolIndex = taskWorktreeMap.get(taskId)!;
+        const poolIndex = taskWorktreeMap.get(taskId);
+        if (poolIndex === undefined) return;
         logger.info('[WorktreeStore] Cleaning up worktree for task', { taskId, poolIndex });
 
         try {
@@ -628,8 +653,8 @@ export const useWorktreeStore = create<WorktreeState & WorktreeActions>()(
 
       getWorktreeForTask: (taskId: string) => {
         const { pool, taskWorktreeMap } = get();
-        if (!taskWorktreeMap.has(taskId)) return null;
-        const poolIndex = taskWorktreeMap.get(taskId)!;
+        const poolIndex = taskWorktreeMap.get(taskId);
+        if (poolIndex === undefined) return null;
         return pool.get(poolIndex) || null;
       },
 
