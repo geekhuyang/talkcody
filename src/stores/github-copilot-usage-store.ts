@@ -28,7 +28,7 @@ type GitHubCopilotUsageStore = GitHubCopilotUsageState & GitHubCopilotUsageActio
 const CACHE_DURATION_MS = 2 * 60 * 1000;
 const AUTO_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 
-let refreshInterval: NodeJS.Timeout | null = null;
+let refreshInterval: ReturnType<typeof setInterval> | null = null;
 
 export const useGitHubCopilotUsageStore = create<GitHubCopilotUsageStore>((set, get) => ({
   usageData: null,
