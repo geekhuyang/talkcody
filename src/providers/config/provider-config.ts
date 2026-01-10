@@ -1,5 +1,6 @@
 // src/providers/config/provider-config.ts
 import { createAnthropic } from '@ai-sdk/anthropic';
+import { createDeepSeek } from '@ai-sdk/deepseek';
 import { createGateway } from '@ai-sdk/gateway';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { createOpenAI } from '@ai-sdk/openai';
@@ -182,9 +183,8 @@ export const PROVIDER_CONFIGS: ProviderRegistry = {
     required: false,
     type: 'openai-compatible',
     createProvider: (apiKey: string, baseUrl?: string) =>
-      createOpenAICompatible({
+      createDeepSeek({
         apiKey,
-        name: 'deepseek',
         baseURL: baseUrl || 'https://api.deepseek.com/v1/',
         fetch: streamFetch as typeof fetch,
       }),

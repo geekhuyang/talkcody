@@ -46,39 +46,6 @@ export namespace MessageTransform {
   }
 
   /**
-   * Check if the model is a DeepSeek model
-   */
-  function isDeepSeekModel(modelId: string, providerId?: string): boolean {
-    return providerId === 'deepseek' || modelId.toLowerCase().includes('deepseek');
-  }
-
-  /**
-   * Transform DeepSeek assistant content.
-   * Extracts reasoning parts and moves to providerOptions.
-   */
-  function transformDeepSeekContent(content: Array<TextPart | ReasoningPart>): {
-    content: Array<TextPart | ReasoningPart>;
-    providerOptions?: { openaiCompatible: { reasoning_content: string } };
-  } {
-    const reasoningParts = content.filter((part) => part.type === 'reasoning');
-    const nonReasoningContent = content.filter((part) => part.type !== 'reasoning');
-    const reasoningText = reasoningParts.map((part) => part.text).join('');
-
-    if (reasoningText) {
-      return {
-        content: nonReasoningContent,
-        providerOptions: {
-          openaiCompatible: {
-            reasoning_content: reasoningText,
-          },
-        },
-      };
-    }
-
-    return { content: nonReasoningContent };
-  }
-
-  /**
    * Unified transformation function for messages.
    *
    * Handles:
@@ -109,20 +76,7 @@ export namespace MessageTransform {
     }
 
     // Transform assistant content for DeepSeek if provided
-    let transformedContent:
-      | {
-          content: Array<TextPart | ReasoningPart>;
-          providerOptions?: { openaiCompatible: { reasoning_content: string } };
-        }
-      | undefined;
-
-    if (assistantContent) {
-      if (isDeepSeekModel(modelId, providerId)) {
-        transformedContent = transformDeepSeekContent(assistantContent);
-      } else {
-        transformedContent = { content: assistantContent };
-      }
-    }
+    const transformedContent = assistantContent ? { content: assistantContent } : undefined;
 
     return { messages: msgs, transformedContent };
   }
