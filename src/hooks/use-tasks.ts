@@ -59,7 +59,7 @@ export function useTasks(onTaskStart?: (taskId: string, title: string) => void) 
     try {
       setOffset(0);
       setHasMore(true);
-      const tasks = await taskService.loadTasksWithPagination(projectId, limit, 0, true);
+      const tasks = await taskService.loadTasksWithPagination(projectId, limit, 0, true, true);
       // Update offset for next load
       setOffset(tasks.length);
       // Check if there are more tasks
@@ -79,7 +79,13 @@ export function useTasks(onTaskStart?: (taskId: string, title: string) => void) 
 
       setLoadingMore(true);
       try {
-        const tasks = await taskService.loadTasksWithPagination(projectId, limit, offset, false);
+        const tasks = await taskService.loadTasksWithPagination(
+          projectId,
+          limit,
+          offset,
+          false,
+          false
+        );
         // Update offset for next load
         setOffset((prev) => prev + limit);
         // Check if there are more tasks

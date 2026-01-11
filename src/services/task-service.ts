@@ -320,10 +320,13 @@ class TaskService {
     projectId?: string,
     limit: number = 20,
     offset: number = 0,
-    replace: boolean = false
+    replace: boolean = false,
+    setLoadingState: boolean = true
   ): Promise<Task[]> {
     const taskStore = useTaskStore.getState();
-    taskStore.setLoadingTasks(true);
+    if (setLoadingState) {
+      taskStore.setLoadingTasks(true);
+    }
     taskStore.setError(null);
 
     try {
@@ -340,7 +343,9 @@ class TaskService {
       taskStore.setError('Failed to load tasks');
       throw error;
     } finally {
-      taskStore.setLoadingTasks(false);
+      if (setLoadingState) {
+        taskStore.setLoadingTasks(false);
+      }
     }
   }
 

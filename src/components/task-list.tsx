@@ -22,6 +22,8 @@ interface TaskListProps {
   loadingMore?: boolean;
   /** Callback to load more tasks */
   onLoadMore?: () => void;
+  /** Scroll container for intersection observer root */
+  scrollRoot?: Element | Document | null;
   editingId: string | null;
   editingTitle: string;
   /** IDs of currently running tasks */
@@ -43,6 +45,7 @@ export function TaskList({
   hasMore = false,
   loadingMore = false,
   onLoadMore,
+  scrollRoot,
   editingId,
   editingTitle,
   runningTaskIds = [],
@@ -54,7 +57,7 @@ export function TaskList({
   onCancelEdit,
   onTitleChange,
 }: TaskListProps) {
-  if (loading) {
+  if (loading && tasks.length === 0) {
     return (
       <div className="flex items-center justify-center py-8">
         <div className="text-muted-foreground text-sm">Loading...</div>
@@ -96,7 +99,13 @@ export function TaskList({
       ))}
 
       {onLoadMore && (
-        <InfiniteScroll hasMore={hasMore} isLoading={loadingMore} next={onLoadMore} threshold={1}>
+        <InfiniteScroll
+          hasMore={hasMore}
+          isLoading={loadingMore}
+          next={onLoadMore}
+          threshold={1}
+          root={scrollRoot}
+        >
           {hasMore && <LoadingIndicator />}
         </InfiniteScroll>
       )}

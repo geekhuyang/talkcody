@@ -1,6 +1,6 @@
 import { Folder, ListTodo, Plus, Search } from 'lucide-react';
 import type React from 'react';
-import { memo, useEffect, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { EmptyRepositoryState } from '@/components/empty-repository-state';
 import { FileTree } from '@/components/file-tree';
@@ -148,6 +148,8 @@ export const RepositorySidebar = memo(function RepositorySidebar({
     }
   }, [sidebarTaskSearch, taskSearchInputRef]);
 
+  const taskScrollContainerRef = useRef<HTMLDivElement | null>(null);
+
   return (
     <>
       <ResizablePanel
@@ -270,7 +272,7 @@ export const RepositorySidebar = memo(function RepositorySidebar({
                 </Tooltip>
               </div>
 
-              <div className="flex-1 overflow-auto">
+              <div ref={taskScrollContainerRef} className="flex-1 overflow-auto">
                 <TaskList
                   tasks={filteredTasks}
                   currentTaskId={currentTaskId ?? undefined}
@@ -301,6 +303,7 @@ export const RepositorySidebar = memo(function RepositorySidebar({
                   onStartEditing={startEditing}
                   onTitleChange={setEditingTitle}
                   runningTaskIds={stableRunningTaskIds}
+                  scrollRoot={taskScrollContainerRef.current}
                 />
               </div>
             </div>

@@ -39,7 +39,7 @@ vi.mock('@/stores/settings-store', () => ({
 
 vi.mock('@/services/task-service', () => ({
   taskService: {
-    loadTasks: vi.fn(),
+    loadTasksWithPagination: vi.fn(),
     loadMessages: vi.fn(),
     createTask: vi.fn(),
     selectTask: vi.fn(),
@@ -123,14 +123,14 @@ describe('useTasks', () => {
       await result.current.loadTasks('project1');
     });
 
-    expect(taskService.loadTasks).toHaveBeenCalledWith('project1');
+    expect(taskService.loadTasksWithPagination).toHaveBeenCalledWith('project1', 20, 0, true, true);
   });
 
   it('should handle load tasks error', async () => {
     const { taskService } = await import('@/services/task-service');
     const { logger } = await import('@/lib/logger');
     const loggerErrorSpy = vi.spyOn(logger, 'error');
-    (taskService.loadTasks as any).mockRejectedValueOnce(new Error('Network error'));
+    (taskService.loadTasksWithPagination as any).mockRejectedValueOnce(new Error('Network error'));
 
     const { result } = renderHook(() => useTasks());
     await act(async () => {
@@ -170,6 +170,17 @@ describe('useTasks', () => {
     });
 
     expect(taskService.selectTask).toHaveBeenCalledWith('task1');
+  });
+
+  it('should load more tasks without toggling global loading', async () => {
+    const { taskService } = await import('@/services/task-service');
+
+    const { result } = renderHook(() => useTasks());
+    await act(async () => {
+      await result.current.loadMoreTasks('project1');
+    });
+
+    expect(taskService.loadTasksWithPagination).toHaveBeenCalledWith('project1', 20, 0, false, false);
   });
 
   it('should delete a task', async () => {
