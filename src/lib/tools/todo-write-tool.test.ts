@@ -1,12 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock dependencies
-vi.mock('@/stores/settings-store', () => ({
-  settingsManager: {
-    getCurrentTaskId: vi.fn(),
-  },
-}));
-
 vi.mock('@/services/file-todo-service', () => ({
   fileTodoService: {
     getTodosByConversation: vi.fn(),
@@ -17,17 +11,14 @@ vi.mock('@/services/file-todo-service', () => ({
 import { render, screen } from '@testing-library/react';
 import { todoWriteTool } from './todo-write-tool';
 import { logger } from '@/lib/logger';
-import { settingsManager } from '@/stores/settings-store';
 import { fileTodoService } from '@/services/file-todo-service';
 
 const mockFileTodoService = fileTodoService as any;
-const mockSettingsManagerInstance = settingsManager as any;
 const mockLogger = logger as any;
 
 describe('todoWriteTool', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockSettingsManagerInstance.getCurrentTaskId.mockReturnValue('test-task-id');
   });
 
   afterEach(() => {
@@ -133,7 +124,9 @@ describe('todoWriteTool', () => {
         ],
       };
 
-      await expect(todoWriteTool.execute?.(input)).rejects.toThrow('Duplicate todo IDs found');
+      await expect(
+        todoWriteTool.execute?.(input, { taskId: 'test-task-id' })
+      ).rejects.toThrow('Duplicate todo IDs found');
     });
 
     it('should reject multiple in_progress tasks', async () => {
@@ -152,9 +145,9 @@ describe('todoWriteTool', () => {
         ],
       };
 
-      await expect(todoWriteTool.execute?.(input)).rejects.toThrow(
-        'Only one task can be in_progress at a time'
-      );
+      await expect(
+        todoWriteTool.execute?.(input, { taskId: 'test-task-id' })
+      ).rejects.toThrow('Only one task can be in_progress at a time');
     });
 
     it('should reject empty content after trim', async () => {
@@ -168,9 +161,9 @@ describe('todoWriteTool', () => {
         ],
       };
 
-      await expect(todoWriteTool.execute?.(input)).rejects.toThrow(
-        'Todo with ID "test-id" has empty content'
-      );
+      await expect(
+        todoWriteTool.execute?.(input, { taskId: 'test-task-id' })
+      ).rejects.toThrow('Todo with ID "test-id" has empty content');
     });
   });
 
@@ -193,7 +186,7 @@ describe('todoWriteTool', () => {
         ],
       };
 
-      const result = await todoWriteTool.execute?.(input);
+      const result = await todoWriteTool.execute?.(input, { taskId: 'test-task-id' });
 
       expect(mockFileTodoService.saveTodos).toHaveBeenCalledWith('test-task-id', [
         {
@@ -215,7 +208,7 @@ describe('todoWriteTool', () => {
       mockFileTodoService.saveTodos.mockResolvedValue(undefined);
 
       const input = { todos: [] };
-      const result = await todoWriteTool.execute?.(input);
+      const result = await todoWriteTool.execute?.(input, { taskId: 'test-task-id' });
 
       expect(mockFileTodoService.saveTodos).toHaveBeenCalledWith('test-task-id', []);
       expect(result).toEqual([]);
@@ -234,7 +227,7 @@ describe('todoWriteTool', () => {
         ],
       };
 
-      const result = await todoWriteTool.execute?.(input);
+      const result = await todoWriteTool.execute?.(input, { taskId: 'test-task-id' });
 
       expect(result).toEqual(input.todos);
     });
@@ -242,8 +235,6 @@ describe('todoWriteTool', () => {
 
   describe('error handling', () => {
     it('should handle missing task ID', async () => {
-      mockSettingsManagerInstance.getCurrentTaskId.mockReturnValue(null);
-
       const input = {
         todos: [
           {
@@ -272,7 +263,9 @@ describe('todoWriteTool', () => {
         ],
       };
 
-      await expect(todoWriteTool.execute?.(input)).rejects.toThrow('File error');
+      await expect(todoWriteTool.execute?.(input, { taskId: 'test-task-id' })).rejects.toThrow(
+        'File error'
+      );
       expect(mockLogger.error).toHaveBeenCalledWith('Error setting todos:', fileError);
     });
   });
@@ -374,7 +367,7 @@ describe('todoWriteTool', () => {
         ],
       };
 
-      const result = await todoWriteTool.execute?.(input);
+      const result = await todoWriteTool.execute?.(input, { taskId: 'test-task-id' });
       expect(result).toEqual(input.todos);
       expect(mockFileTodoService.saveTodos).toHaveBeenCalledTimes(1);
     });
@@ -394,7 +387,7 @@ describe('todoWriteTool', () => {
         ],
       };
 
-      await todoWriteTool.execute?.(input);
+      await todoWriteTool.execute?.(input, { taskId: 'test-task-id' });
 
       expect(mockFileTodoService.saveTodos).toHaveBeenCalledWith('test-task-id', [
         {

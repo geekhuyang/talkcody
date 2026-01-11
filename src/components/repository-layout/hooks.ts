@@ -119,7 +119,7 @@ export function useRepositoryTasks(currentTaskId: string | null) {
   const { task: currentTask, messages: currentMessages } = useTask(currentTaskId);
 
   const handleNewChat = useCallback(async () => {
-    taskService.startNewChat();
+    taskService.startNewTask();
   }, []);
 
   const handleHistoryTaskSelect = useCallback((taskId: string) => {

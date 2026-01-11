@@ -4,7 +4,6 @@ import { TodoWriteToolResult } from '@/components/tools/todo-write-tool-result';
 import { createTool } from '@/lib/create-tool';
 import { logger } from '@/lib/logger';
 import { fileTodoService } from '@/services/file-todo-service';
-import { settingsManager } from '@/stores/settings-store';
 import { DESCRIPTION, PROMPT } from './todo-write-tool-prompt';
 
 // Define the TodoItem interface to match the tool's expected format
@@ -24,14 +23,8 @@ const convertToolTodoToFileTodo = (toolTodo: TodoItem): import('@/types').Create
 };
 
 // Implementation of setTodos with task ID binding
-const setTodos = async (todos: TodoItem[]): Promise<void> => {
+const setTodos = async (taskId: string, todos: TodoItem[]): Promise<void> => {
   try {
-    const taskId = settingsManager.getCurrentTaskId();
-    if (!taskId) {
-      logger.warn('No current task ID found');
-      throw new Error('No current task ID found');
-    }
-
     const fileTodos = todos.map(convertToolTodoToFileTodo);
     await fileTodoService.saveTodos(taskId, fileTodos);
   } catch (error) {
@@ -90,9 +83,8 @@ function validateTodos(todos: TodoItem[]): { isValid: boolean; error?: string } 
 }
 
 // Execute function that will handle the todo updates
-async function executeTodoWrite(params: z.infer<typeof inputSchema>) {
+async function executeTodoWrite(params: z.infer<typeof inputSchema>, context: { taskId?: string }) {
   const { todos } = params;
-  // logger.info('Executing TodoWrite with todos:', todos);
 
   // Validate todos
   const validation = validateTodos(todos as TodoItem[]);
@@ -100,8 +92,14 @@ async function executeTodoWrite(params: z.infer<typeof inputSchema>) {
     throw new Error(validation.error || 'Invalid todo data');
   }
 
+  const taskId = context?.taskId;
+  if (!taskId) {
+    logger.warn('No current task ID found');
+    throw new Error('No current task ID found');
+  }
+
   // Store the todos
-  await setTodos(todos as TodoItem[]);
+  await setTodos(taskId, todos as TodoItem[]);
 
   return todos;
 }

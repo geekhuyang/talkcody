@@ -106,7 +106,7 @@ export const RepositorySidebar = memo(function RepositorySidebar({
     cancelEditing,
     selectTask,
     currentTaskId,
-    startNewChat,
+    startNewTask,
     loadTasks,
   } = useTasks();
 
@@ -256,7 +256,7 @@ export const RepositorySidebar = memo(function RepositorySidebar({
                       disabled={isMaxReached}
                       onClick={() => {
                         setSidebarTaskSearch('');
-                        startNewChat();
+                        startNewTask();
                       }}
                       size="sm"
                       variant="outline"

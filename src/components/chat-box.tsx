@@ -1,15 +1,7 @@
 // src/components/chat-box.tsx
 import type { ChatStatus } from 'ai';
 import { LoaderCircle, Square } from 'lucide-react';
-import {
-  forwardRef,
-  useCallback,
-  useEffect,
-  useImperativeHandle,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { forwardRef, useCallback, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { useExecutionState } from '@/hooks/use-execution-state';
 import { useMessages } from '@/hooks/use-task';
@@ -28,7 +20,6 @@ import { previewSystemPrompt } from '@/services/prompt/preview';
 import { getEffectiveWorkspaceRoot } from '@/services/workspace-root-service';
 import { useAuthStore } from '@/stores/auth-store';
 import { settingsManager, useSettingsStore } from '@/stores/settings-store';
-import { useTaskStore } from '@/stores/task-store';
 import { useWorktreeStore } from '@/stores/worktree-store';
 import type { MessageAttachment, UIMessage } from '@/types/agent';
 import type { Command, CommandContext, CommandResult } from '@/types/command';
@@ -81,8 +72,6 @@ export const ChatBox = forwardRef<ChatBoxRef, ChatBoxProps>(
     const [input, setInput] = useState('');
     const [showTalkCodyFreeLoginDialog, setShowTalkCodyFreeLoginDialog] = useState(false);
     const chatInputRef = useRef<ChatInputRef>(null);
-    // Ref to track the currently displayed taskId (from props) for background task UI isolation
-    const displayedTaskIdRef = useRef<string | undefined>(taskId);
     const language = useSettingsStore((state) => state.language);
     const t = useMemo(() => getLocale((language || 'en') as SupportedLocale), [language]);
 
@@ -125,14 +114,6 @@ export const ChatBox = forwardRef<ChatBoxRef, ChatBoxProps>(
       }),
       [handleExternalAddFileToChat]
     );
-
-    // Command registry is now initialized in InitializationManager during app startup
-
-    // Sync taskId prop to ref for background task UI isolation
-    // This ensures isCurrentlyDisplayed() checks always use the latest prop value
-    useEffect(() => {
-      displayedTaskIdRef.current = taskId;
-    }, [taskId]);
 
     // Note: State sync effect removed - isLoading and serverStatus now derived from store
     // Note: Streaming content sync effect removed - executionService handles message updates

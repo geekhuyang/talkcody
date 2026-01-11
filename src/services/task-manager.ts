@@ -4,6 +4,7 @@ import { logger } from '@/lib/logger';
 import { generateConversationTitle, generateId } from '@/lib/utils';
 import { databaseService, type StoredMessage } from '@/services/database-service';
 import { settingsManager } from '@/stores/settings-store';
+import { useTaskStore } from '@/stores/task-store';
 import type { MessageAttachment, UIMessage } from '@/types/agent';
 import { aiTaskTitleService } from './ai/ai-task-title-service';
 
@@ -101,7 +102,8 @@ export class TaskManager {
    * Get latest user message content
    */
   static async getLatestUserMessageContent(): Promise<string | null> {
-    const taskId = settingsManager.getCurrentTaskId();
+    const taskId = useTaskStore.getState().currentTaskId;
+    if (!taskId) return null;
     return await databaseService.getLatestUserMessageContent(taskId);
   }
 

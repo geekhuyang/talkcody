@@ -4,7 +4,6 @@ import { useCallback, useMemo, useState } from 'react';
 import { logger } from '@/lib/logger';
 import { databaseService } from '@/services/database-service';
 import { taskService } from '@/services/task-service';
-import { settingsManager } from '@/stores/settings-store';
 import { useTaskStore } from '@/stores/task-store';
 import { useUIStateStore } from '@/stores/ui-state-store';
 import { useWorktreeStore } from '@/stores/worktree-store';
@@ -120,7 +119,6 @@ export function useTasks(onTaskStart?: (taskId: string, title: string) => void) 
         }));
         onMessagesLoaded?.(formattedMessages);
         useTaskStore.getState().setCurrentTaskId(taskId);
-        settingsManager.setCurrentTaskId(taskId);
       } catch (err) {
         logger.error('Failed to load task:', err);
         setError('Failed to load task');
@@ -148,9 +146,6 @@ export function useTasks(onTaskStart?: (taskId: string, title: string) => void) 
   // Set current task ID
   const setCurrentTaskId = useCallback((taskId: string | undefined) => {
     useTaskStore.getState().setCurrentTaskId(taskId || null);
-    if (taskId) {
-      settingsManager.setCurrentTaskId(taskId);
-    }
   }, []);
 
   // Delete task - checks for worktree changes and returns warning if needed
@@ -208,19 +203,14 @@ export function useTasks(onTaskStart?: (taskId: string, title: string) => void) 
     []
   );
 
-  // Clear task state
-  const clearTask = useCallback(() => {
-    useTaskStore.getState().setCurrentTaskId(null);
-  }, []);
-
   // Get task details
   const getTaskDetails = useCallback(async (taskId: string) => {
     return await databaseService.getTaskDetails(taskId);
   }, []);
 
   // Start new chat
-  const startNewChat = useCallback(() => {
-    taskService.startNewChat();
+  const startNewTask = useCallback(() => {
+    taskService.startNewTask();
   }, []);
 
   // Editing functions
@@ -269,9 +259,8 @@ export function useTasks(onTaskStart?: (taskId: string, title: string) => void) 
     setCurrentTaskId,
     deleteTask,
     saveMessage,
-    clearTask,
     getTaskDetails,
-    startNewChat,
+    startNewTask,
     setError,
 
     // Editing actions

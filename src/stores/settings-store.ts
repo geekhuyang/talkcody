@@ -37,7 +37,6 @@ interface SettingsState {
 
   // Project Settings
   project: string;
-  current_task_id: string;
   current_root_path: string;
 
   // Custom Tools
@@ -111,7 +110,6 @@ interface SettingsActions {
   // Project Settings
   setProject: (project: string) => Promise<void>;
   setCurrentProjectId: (projectId: string) => Promise<void>;
-  setCurrentTaskId: (taskId: string) => void;
   setCurrentRootPath: (rootPath: string) => void;
 
   // Custom Tools
@@ -193,7 +191,6 @@ interface SettingsActions {
   getAgentId: () => string;
   getProject: () => string;
   getIsThink: () => boolean;
-  getCurrentTaskId: () => string;
   getCurrentRootPath: () => string;
   getAICompletionEnabled: () => boolean;
   getPlanModeEnabled: () => boolean;
@@ -214,7 +211,6 @@ const DEFAULT_SETTINGS: Omit<SettingsState, 'loading' | 'error' | 'isInitialized
   is_plan_mode_enabled: false,
   is_worktree_mode_enabled: false,
   project: DEFAULT_PROJECT,
-  current_task_id: '',
   current_root_path: '',
   custom_tools_dir: '',
   model_type_main: '',
@@ -277,7 +273,6 @@ class SettingsDatabase {
       agentId: 'planner',
       is_think: 'false',
       project: DEFAULT_PROJECT,
-      current_task_id: '',
       current_root_path: '',
       custom_tools_dir: '',
       ai_completion_enabled: 'false',
@@ -410,7 +405,6 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
         'get_context_tool_model',
         'is_plan_mode_enabled',
         'project',
-        'current_task_id',
         'current_root_path',
         'custom_tools_dir',
         'model_type_main',
@@ -485,7 +479,6 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
         is_plan_mode_enabled: rawSettings.is_plan_mode_enabled === 'true',
         is_worktree_mode_enabled: rawSettings.is_worktree_mode_enabled === 'true',
         project: rawSettings.project || DEFAULT_PROJECT,
-        current_task_id: rawSettings.current_task_id || '',
         current_root_path: rawSettings.current_root_path || '',
         custom_tools_dir: rawSettings.custom_tools_dir || '',
         model_type_main: rawSettings.model_type_main || '',
@@ -614,13 +607,6 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
   setCurrentProjectId: async (projectId: string) => {
     await settingsDb.set('project', projectId);
     set({ project: projectId });
-  },
-
-  setCurrentTaskId: (taskId: string) => {
-    set({ current_task_id: taskId });
-    settingsDb.set('current_task_id', taskId).catch((error) => {
-      logger.error('Failed to persist current_task_id:', error);
-    });
   },
 
   setCurrentRootPath: (rootPath: string) => {
@@ -972,10 +958,6 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     return get().is_think;
   },
 
-  getCurrentTaskId: () => {
-    return get().current_task_id;
-  },
-
   getCurrentRootPath: () => {
     return get().current_root_path;
   },
@@ -1009,7 +991,6 @@ export const settingsManager = {
   setApiKey: (apiKey: string) => useSettingsStore.getState().set('apiKey', apiKey),
   setProject: (project: string) => useSettingsStore.getState().setProject(project),
   setIsThink: (isThink: boolean) => useSettingsStore.getState().setIsThink(isThink),
-  setCurrentTaskId: (taskId: string) => useSettingsStore.getState().setCurrentTaskId(taskId),
   setCurrentRootPath: (rootPath: string) =>
     useSettingsStore.getState().setCurrentRootPath(rootPath),
   setCurrentProjectId: (projectId: string) =>
@@ -1025,7 +1006,6 @@ export const settingsManager = {
   getAgentId: () => useSettingsStore.getState().getAgentId(),
   getProject: () => useSettingsStore.getState().getProject(),
   getIsThink: () => useSettingsStore.getState().getIsThink(),
-  getCurrentTaskId: () => useSettingsStore.getState().getCurrentTaskId(),
   getCurrentRootPath: () => useSettingsStore.getState().getCurrentRootPath(),
   getCustomToolsDir: () => useSettingsStore.getState().getCustomToolsDir(),
   getAICompletionEnabled: () => useSettingsStore.getState().getAICompletionEnabled(),

@@ -249,7 +249,6 @@ describe('useTasks', () => {
     });
 
     expect(mockSetCurrentTaskId).toHaveBeenCalledWith('task1');
-    expect(settingsManager.setCurrentTaskId).toHaveBeenCalledWith('task1');
   });
 
   it('should handle editing flow', async () => {
@@ -295,20 +294,5 @@ describe('useTasks', () => {
     });
 
     expect(mockUIStateStoreState.cancelEditing).toHaveBeenCalled();
-  });
-
-  it('should clear task', async () => {
-    const { useTaskStore } = await import('@/stores/task-store');
-    const mockSetCurrentTaskId = vi.fn();
-    (useTaskStore as any).getState = vi.fn().mockReturnValue({
-      setCurrentTaskId: mockSetCurrentTaskId,
-    });
-
-    const { result } = renderHook(() => useTasks());
-    act(() => {
-      result.current.clearTask();
-    });
-
-    expect(mockSetCurrentTaskId).toHaveBeenCalledWith(null);
   });
 });

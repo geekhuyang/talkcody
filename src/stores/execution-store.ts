@@ -178,7 +178,7 @@ export interface ExecutionState {
   canStartNew: () => boolean;
 }
 
-const DEFAULT_MAX_CONCURRENT = 3;
+const DEFAULT_MAX_CONCURRENT = 5;
 
 export const useExecutionStore = create<ExecutionState>()(
   devtools(

@@ -143,7 +143,6 @@ class TaskService {
 
     // Set as current task
     taskStore.setCurrentTaskId(taskId);
-    settingsManager.setCurrentTaskId(taskId);
 
     // Load messages if not cached
     const existingMessages = taskStore.getMessages(taskId);
@@ -349,14 +348,8 @@ class TaskService {
     }
   }
 
-  /**
-   * Start a new chat (clear current task)
-   */
-  startNewChat(): void {
+  startNewTask(): void {
     useTaskStore.getState().setCurrentTaskId(null);
-    // Note: settingsManager.setCurrentTaskId requires a string,
-    // but clearing it requires passing empty string to indicate no selection
-    settingsManager.setCurrentTaskId('');
   }
 }
 

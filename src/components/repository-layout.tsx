@@ -161,18 +161,18 @@ export const RepositoryLayout = memo(function RepositoryLayout() {
     }
   };
 
-  const handleNewChat = async () => {
+  const handleNewTask = async () => {
     const hasConflict = await checkForConflicts();
     if (hasConflict) {
       return;
     }
-    taskService.startNewChat();
+    taskService.startNewTask();
   };
 
   const handleDiscardAndContinue = async () => {
     await discardChanges();
     resetWorktreeState();
-    taskService.startNewChat();
+    taskService.startNewTask();
     setIsHistoryOpen(false);
   };
 
@@ -180,7 +180,7 @@ export const RepositoryLayout = memo(function RepositoryLayout() {
     const result = await mergeToMain();
     if (result.success) {
       resetWorktreeState();
-      taskService.startNewChat();
+      taskService.startNewTask();
       setIsHistoryOpen(false);
     }
   };
@@ -450,7 +450,7 @@ export const RepositoryLayout = memo(function RepositoryLayout() {
                 currentTaskId={state.currentTaskId}
                 currentTask={currentTask}
                 messages={currentMessages}
-                onNewChat={handleNewChat}
+                onNewChat={handleNewTask}
                 onToggleFullscreen={() => toggleFullscreen('chat')}
                 chatBoxRef={chatBoxRef}
                 rootPath={rootPath}

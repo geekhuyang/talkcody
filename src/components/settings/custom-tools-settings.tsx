@@ -6,11 +6,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { useLocale } from '@/hooks/use-locale';
 import { useCustomToolsStore } from '@/stores/custom-tools-store';
 import { useSettingsStore } from '@/stores/settings-store';
+import { useTaskStore } from '@/stores/task-store';
 
 export function CustomToolsSettings() {
   const { t } = useLocale();
   const { tools, isLoading, refresh } = useCustomToolsStore();
-  const activeTaskId = useSettingsStore((state) => state.current_task_id) || '';
+  const activeTaskId = useTaskStore((state) => state.currentTaskId) || '';
   const activeRootPath = useSettingsStore((state) => state.current_root_path) || '';
   const customToolsDir = useSettingsStore((state) => state.custom_tools_dir) || '';
   const setCustomToolsDir = useSettingsStore((state) => state.setCustomToolsDir);

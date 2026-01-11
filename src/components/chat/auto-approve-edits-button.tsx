@@ -8,14 +8,14 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/h
 import { useLocale } from '@/hooks/use-locale';
 import { logger } from '@/lib/logger';
 import { TaskManager } from '@/services/task-manager';
-import { useSettingsStore } from '@/stores/settings-store';
+import { useTaskStore } from '@/stores/task-store';
 import type { TaskSettings } from '@/types/task';
 
 export function AutoApproveEditsButton() {
   const { t } = useLocale();
   const [isEnabled, setIsEnabled] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const currentTaskId = useSettingsStore((state) => state.current_task_id);
+  const currentTaskId = useTaskStore((state) => state.currentTaskId);
 
   // Load current task settings on mount and when task changes
   useEffect(() => {
