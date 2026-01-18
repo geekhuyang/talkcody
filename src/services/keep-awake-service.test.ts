@@ -74,10 +74,7 @@ describe('KeepAwakeService', () => {
 
       expect(invoke).toHaveBeenCalledWith('keep_awake_acquire');
       expect(result).toBe(true);
-      expect(toast).toHaveBeenCalledWith(
-        'Sleep prevented while tasks are running',
-        expect.any(Object)
-      );
+      expect(toast).not.toHaveBeenCalled();
     });
 
     it('should return false on subsequent acquire calls', async () => {

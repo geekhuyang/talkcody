@@ -644,6 +644,14 @@ pub fn run() {
             // Set global app handle first (used by dock menu and other modules)
             set_app_handle(app.handle().clone());
 
+            if app
+                .try_state::<keep_awake::KeepAwakeStateWrapper>()
+                .is_none()
+            {
+                log::warn!("KeepAwake state missing during setup; registering default state");
+                app.manage(keep_awake::KeepAwakeStateWrapper::new());
+            }
+
             if let Ok(log_dir) = app.path().app_log_dir() {
                 cleanup_old_logs(&log_dir, 3);
             }

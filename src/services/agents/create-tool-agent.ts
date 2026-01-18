@@ -18,23 +18,83 @@ When the user requests a tool, you will:
 
 Use this structure:
 
-- import React from 'react'
-- import { toolHelper } from '@/lib/custom-tool-sdk'
-- import { z } from 'zod'
-- export default toolHelper({
-    name: 'your_tool_name',
-    description: { en: '...', zh: '...' },
-    args: z.object({ ... }),
-    permissions: ['net' | 'fs' | 'command'],
-    async execute(params, context) { ... },
-    renderToolDoing(params) { ... },
-    renderToolResult(result, params) { ... },
-  })
+import { toolHelper } from '@/lib/custom-tool-sdk';
+import { simpleFetch } from '@/lib/tauri-fetch';
+import { z } from 'zod';
+
+const argsSchema = z.object({
+  url: z.string().url(),
+});
+
+export default toolHelper({
+  name: 'api_caller',
+  description: 'call API',
+  args: argsSchema,
+  permissions: ['net'],
+  async execute(params) {
+    const response = await simpleFetch(params.url, {
+      method: 'GET',
+    });
+    const data = await response.json();
+    return { status: response.status, data };
+  },
+  renderToolDoing(params) {
+    return <div>request: {params.url}</div>;
+  },
+  renderToolResult(result) {
+    return (
+      <div>
+        <div>status: {result.status}</div>
+        <pre>{JSON.stringify(result.data, null, 2)}</pre>
+      </div>
+    );
+  },
+});
+
+## tool interface
+
+- ✅ **Real Network Requests** - Send real HTTP requests via Tauri's simpleFetch
+- ✅ **Real File Operations** - Read and write files using the Tauri fs plugin
+- ✅ **Real Command Execution** - Execute system commands via the Tauri shell plugin
+- ✅ **Full React Component Rendering** - Supports custom UI components
+
+import { toolHelper } from '@/lib/custom-tool-sdk';
+import { simpleFetch } from '@/lib/tauri-fetch';
+import { z } from 'zod';
+import React from 'react';
+
+## tool UI
+
+You could use all shadcn UI components and recharts
+
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { ChartContainer } from '@/components/ui/chart';
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Progress } from '@/components/ui/progress';
+
 
 Guidelines:
 - Use simpleFetch from @/lib/tauri-fetch for any network requests.
 - Keep the args schema minimal and fully validated.
-- Use snake_case for tool name. File name should end with -tool.tsx or _tool.tsx.
+- Use snake_case for tool name. File name should end with -tool.tsx.
 - Provide bilingual description (en/zh) for user-visible text.
 - Avoid dynamic imports.
 
@@ -67,13 +127,14 @@ export class CreateToolAgent {
       writeFile: getToolSync('writeFile'),
       editFile: getToolSync('editFile'),
       bash: getToolSync('bash'),
+      askUserQuestions: getToolSync('askUserQuestions'),
     };
 
     return {
       id: 'create-tool',
       name: 'Create Tool Agent',
       description: 'Guides users to create and install custom tools',
-      modelType: ModelType.SMALL,
+      modelType: ModelType.MAIN,
       version: CreateToolAgent.VERSION,
       systemPrompt: CreateToolPromptTemplate,
       tools: selectedTools,

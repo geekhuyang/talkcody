@@ -86,13 +86,14 @@ export class CreateSkillAgent {
       writeFile: getToolSync('writeFile'),
       editFile: getToolSync('editFile'),
       bash: getToolSync('bash'),
+      askUserQuestions: getToolSync('askUserQuestions'),
     };
 
     return {
       id: 'create-skill',
       name: 'Create Skill Agent',
       description: 'Guides users to create custom local skills (SKILL.md based)',
-      modelType: ModelType.SMALL,
+      modelType: ModelType.MAIN,
       version: CreateSkillAgent.VERSION,
       systemPrompt: CreateSkillPromptTemplate,
       tools: selectedTools,

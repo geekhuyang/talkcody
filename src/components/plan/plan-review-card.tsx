@@ -1,5 +1,5 @@
 import { Check, Edit2, X } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import MyMarkdown from '@/components/chat/my-markdown';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -24,30 +24,33 @@ export function PlanReviewCard({ planContent, taskId }: PlanReviewCardProps) {
 
   const { t } = useLocale();
   const { approvePlan, rejectPlan } = usePlanModeStore();
-  const taskSettings = useTaskStore((state) => {
+  const taskSettingsJson = useTaskStore((state) => {
     if (!taskId) return null;
-    const task = state.getTask(taskId);
-    if (!task?.settings) return null;
-    try {
-      return JSON.parse(task.settings) as TaskSettings;
-    } catch {
-      return null;
-    }
+    return state.getTask(taskId)?.settings ?? null;
   });
+  const autoApprovePlan = useMemo(() => {
+    if (!taskSettingsJson) return undefined;
+    try {
+      const parsed = JSON.parse(taskSettingsJson) as TaskSettings;
+      return parsed.autoApprovePlan;
+    } catch {
+      return undefined;
+    }
+  }, [taskSettingsJson]);
   const lastNotifiedKeyRef = useRef<string | null>(null);
   const autoApprovedRef = useRef(false);
 
   useEffect(() => {
     if (!taskId || autoApprovedRef.current) return;
-    if (taskSettings?.autoApprovePlan !== true) return;
+    if (autoApprovePlan !== true) return;
 
     autoApprovedRef.current = true;
     approvePlan(taskId);
     setSubmitted(true);
-  }, [approvePlan, taskId, taskSettings?.autoApprovePlan]);
+  }, [approvePlan, autoApprovePlan, taskId]);
 
   useEffect(() => {
-    if (taskSettings?.autoApprovePlan === true) {
+    if (autoApprovePlan === true) {
       return;
     }
 
@@ -68,7 +71,7 @@ export function PlanReviewCard({ planContent, taskId }: PlanReviewCardProps) {
     taskId,
     t.PlanReview.notificationBody,
     t.PlanReview.notificationTitle,
-    taskSettings?.autoApprovePlan,
+    autoApprovePlan,
   ]);
 
   const handleApprove = () => {
