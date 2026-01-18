@@ -31,14 +31,7 @@ import { FileChangesSummary } from './chat/file-changes-summary';
 import { MessageList } from './chat/message-list';
 import { TalkCodyFreeLoginDialog } from './talkcody-free-login-dialog';
 import { Button } from './ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from './ui/dialog';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
 
 interface ChatBoxProps {
   onMessageSent?: (message: string) => void;
@@ -595,7 +588,6 @@ export const ChatBox = forwardRef<ChatBoxRef, ChatBoxProps>(
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle>{t.Chat.compaction.dialogTitle}</DialogTitle>
-              <DialogDescription>{t.Chat.compaction.dialogDescription}</DialogDescription>
             </DialogHeader>
             <div className="space-y-3">
               {isCompacting ? (

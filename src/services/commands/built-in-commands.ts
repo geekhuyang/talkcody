@@ -256,9 +256,6 @@ export async function getBuiltInCommands(): Promise<Command[]> {
   return commands;
 }
 
-/**
- * Execute compact command logic directly
- */
 async function executeCompactCommand(context: CommandContext) {
   const { taskId } = context;
 

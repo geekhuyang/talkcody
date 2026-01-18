@@ -129,7 +129,6 @@ export interface LocaleDefinition {
     };
     compaction: {
       dialogTitle: string;
-      dialogDescription: string;
       compacting: string;
       stats: {
         originalMessages: string;

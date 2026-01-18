@@ -135,7 +135,6 @@ const en: LocaleDefinition = {
     },
     compaction: {
       dialogTitle: 'Context compaction',
-      dialogDescription: 'Your message history was compacted. No new chat message was sent.',
       compacting: 'Compacting context...',
       stats: {
         originalMessages: 'Original messages',

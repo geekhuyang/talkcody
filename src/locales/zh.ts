@@ -131,7 +131,6 @@ const zh: LocaleDefinition = {
     },
     compaction: {
       dialogTitle: '上下文压缩',
-      dialogDescription: '消息历史已压缩，不会发送新的对话消息。',
       compacting: '正在压缩上下文...',
       stats: {
         originalMessages: '原始消息数',
