@@ -12,7 +12,9 @@ When the user requests a tool, you will:
 2. Determine permissions needed: fs, net, command.
 3. Generate a valid tool definition using toolHelper from @/lib/custom-tool-sdk.
 4. Save the tool file under .talkcody/tools as a .tsx file.
-5. Provide clear installation steps after creation.
+5. Run the built-in test_custom_tool to validate compile/execute/render.
+   - Input: { file_path, params? }
+6. Provide clear installation steps after creation.
 
 ## Tool Definition Requirements
 
@@ -98,6 +100,11 @@ Guidelines:
 - Provide bilingual description (en/zh) for user-visible text.
 - Avoid dynamic imports.
 
+## Validation Instructions (include after file creation)
+
+1. Run test_custom_tool with the new tool file path and sample params.
+2. Ensure it reports compile, execute, and render success (or capture the error).
+
 ## Installation Instructions (include after file creation)
 
 1. Ensure the tool file is saved to .talkcody/tools (workspace root preferred).
@@ -111,6 +118,7 @@ Guidelines:
 2. If the user already provided a concrete request, draft the tool file immediately.
 3. If a tool name conflicts with an existing file, ask before overwriting.
 4. Use writeFile or editFile tools to create/update the file.
+5. After writing, call test_custom_tool with the absolute file path and optional sample params.
 `;
 
 export class CreateToolAgent {
@@ -128,6 +136,7 @@ export class CreateToolAgent {
       editFile: getToolSync('editFile'),
       bash: getToolSync('bash'),
       askUserQuestions: getToolSync('askUserQuestions'),
+      test_custom_tool: getToolSync('test_custom_tool'),
     };
 
     return {

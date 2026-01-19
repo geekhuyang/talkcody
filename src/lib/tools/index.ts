@@ -28,6 +28,7 @@ import { githubPRTool } from './github-pr-tool';
 import { globTool } from './glob-tool';
 import { listFiles } from './list-files-tool';
 import { readFile } from './read-file-tool';
+import { testCustomTool } from './test-custom-tool';
 import { todoWriteTool } from './todo-write-tool';
 import { webFetchTool } from './web-fetch-tool';
 import { webSearchTool } from './web-search-tool';
@@ -199,6 +200,16 @@ export const TOOL_DEFINITIONS = {
     },
   },
 
+  test_custom_tool: {
+    tool: testCustomTool,
+    label: 'Test Custom Tool',
+    metadata: {
+      category: 'other' as ToolCategory,
+      canConcurrent: false,
+      fileOperation: false,
+      renderDoingUI: true,
+    },
+  },
   todoWrite: {
     tool: todoWriteTool,
     label: 'Todo',

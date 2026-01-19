@@ -170,9 +170,6 @@ class CommandRegistry {
     return commands.sort((a, b) => a.name.localeCompare(b.name));
   }
 
-  /**
-   * Search commands and return suggestions
-   */
   search(query: string, limit?: number): CommandSuggestion[] {
     if (!query.trim()) {
       // Return all enabled commands when no query

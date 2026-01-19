@@ -156,6 +156,11 @@ export function normalizeToolName(toolName: string): string | null {
     GithubPRTool: 'githubPR',
     GithubPR: 'githubPR',
     githubpr: 'githubPR',
+
+    // Test custom tool variations
+    test_custom_tool: 'test_custom_tool',
+    testCustomTool: 'test_custom_tool',
+    TestCustomTool: 'test_custom_tool',
   };
 
   // Try exact match first

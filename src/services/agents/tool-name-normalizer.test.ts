@@ -22,6 +22,7 @@ vi.mock('@/lib/tools', () => ({
     'getSkill',
     'executeSkillScript',
     'githubPR',
+    'test_custom_tool',
   ]),
   getAllToolNamesWithCustom: vi.fn(() => [
     'readFile',
@@ -40,6 +41,7 @@ vi.mock('@/lib/tools', () => ({
     'getSkill',
     'executeSkillScript',
     'githubPR',
+    'test_custom_tool',
   ]),
 }));
 
@@ -188,6 +190,12 @@ describe('ToolNameNormalizer', () => {
       expect(normalizeToolName('githubPR')).toBe('githubPR');
       expect(normalizeToolName('githubPRTool')).toBe('githubPR');
       expect(normalizeToolName('GithubPR')).toBe('githubPR');
+    });
+
+    it('should normalize test custom tool variations', () => {
+      expect(normalizeToolName('test_custom_tool')).toBe('test_custom_tool');
+      expect(normalizeToolName('testCustomTool')).toBe('test_custom_tool');
+      expect(normalizeToolName('TestCustomTool')).toBe('test_custom_tool');
     });
 
     it('should handle MCP tool names', () => {
