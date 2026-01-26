@@ -114,6 +114,14 @@ export interface LocaleDefinition {
       enabledTooltip: string;
       disabledTooltip: string;
     };
+    ralphLoop: {
+      label: string;
+      title: string;
+      description: string;
+      learnMore: string;
+      enabledTooltip: string;
+      disabledTooltip: string;
+    };
     worktree: {
       label: string;
       title: string;

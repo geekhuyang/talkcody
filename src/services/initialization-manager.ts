@@ -8,6 +8,7 @@ import { useAgentStore } from '@/stores/agent-store';
 import { useAuthStore } from '@/stores/auth-store';
 import { initializeLspSettings } from '@/stores/lsp-store';
 import { usePlanModeStore } from '@/stores/plan-mode-store';
+import { useRalphLoopStore } from '@/stores/ralph-loop-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import { useSkillsStore } from '@/stores/skills-store';
 
@@ -161,6 +162,11 @@ class InitializationManager {
           // Plan mode store
           Promise.resolve(usePlanModeStore.getState().initialize()).then(() => {
             logger.info('[InitManager] ✓ Plan mode initialized (background)');
+          }),
+
+          // Ralph Loop store
+          Promise.resolve(useRalphLoopStore.getState().initialize()).then(() => {
+            logger.info('[InitManager] ✓ Ralph Loop initialized (background)');
           }),
 
           // LSP settings (sync from persisted settings)

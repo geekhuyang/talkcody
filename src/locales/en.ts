@@ -119,6 +119,15 @@ const en: LocaleDefinition = {
       enabledTooltip: 'Plan Mode: AI will create a plan for approval first',
       disabledTooltip: 'Act Mode: AI will execute tasks directly',
     },
+    ralphLoop: {
+      label: 'Ralph Loop',
+      title: 'Ralph Loop',
+      description:
+        'Keep re-running the task with fresh context until the completion promise is met.',
+      learnMore: 'Learn more',
+      enabledTooltip: 'Ralph Loop: iterate until completion criteria are met.',
+      disabledTooltip: 'Run a single pass without Ralph Loop iterations.',
+    },
     worktree: {
       label: 'Worktree',
       title: 'Git Worktree',

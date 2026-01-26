@@ -63,6 +63,7 @@ export interface AgentLoopOptions {
   maxIterations?: number;
   compression?: Partial<CompressionConfig>;
   agentId?: string; // Agent identifier for special handling (e.g., image-generator)
+  freshContext?: boolean; // Skip cached compaction and compression for fresh-context loops
 }
 
 export interface AgentLoopState {

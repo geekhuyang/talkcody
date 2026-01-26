@@ -34,6 +34,7 @@ import { modelService, useProviderStore } from '@/providers/stores/provider-stor
 import { fileUploadService } from '@/services/file-upload-service';
 import { repositoryService } from '@/services/repository-service';
 import { usePlanModeStore } from '@/stores/plan-mode-store';
+import { useRalphLoopStore } from '@/stores/ralph-loop-store';
 import { useWorktreeStore } from '@/stores/worktree-store';
 import type { MessageAttachment } from '@/types/agent';
 import type { Command } from '@/types/command';
@@ -88,6 +89,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
     const { t } = useLocale();
     const { loading: settingsLoading } = useAppSettings();
     const { isPlanModeEnabled, togglePlanMode } = usePlanModeStore();
+    const { isRalphLoopEnabled, toggleRalphLoop } = useRalphLoopStore();
 
     // Global worktree toggle (like plan mode)
     const { isWorktreeEnabled, toggleWorktreeMode } = useWorktreeStore();
@@ -931,6 +933,37 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
                           className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
                         >
                           {t.Chat.planMode.learnMore}
+                          <ExternalLink className="h-3 w-3" />
+                        </a>
+                      </div>
+                    </HoverCardContent>
+                  </HoverCard>
+                  <HoverCard>
+                    <HoverCardTrigger asChild>
+                      <div className="flex items-center gap-1 rounded-md border-input bg-background px-2 py-1.5 @sm:gap-2 @sm:px-3">
+                        <span className="hidden text-xs font-medium @md:inline">
+                          {t.Chat.ralphLoop.label}
+                        </span>
+                        <Switch
+                          checked={isRalphLoopEnabled}
+                          onCheckedChange={toggleRalphLoop}
+                          disabled={isLoading}
+                        />
+                      </div>
+                    </HoverCardTrigger>
+                    <HoverCardContent side="top" className="w-72">
+                      <div className="space-y-2">
+                        <h4 className="font-medium text-sm">{t.Chat.ralphLoop.title}</h4>
+                        <p className="text-xs text-muted-foreground">
+                          {t.Chat.ralphLoop.description}
+                        </p>
+                        <a
+                          href={getDocLinks().features.ralphLoop}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                        >
+                          {t.Chat.ralphLoop.learnMore}
                           <ExternalLink className="h-3 w-3" />
                         </a>
                       </div>

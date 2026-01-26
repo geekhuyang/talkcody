@@ -35,6 +35,7 @@ interface SettingsState {
   get_context_tool_model: string;
   is_plan_mode_enabled: boolean;
   is_worktree_mode_enabled: boolean;
+  is_ralph_loop_enabled: boolean;
   auto_approve_edits_global: boolean;
   auto_approve_plan_global: boolean;
   auto_code_review_global: boolean;
@@ -116,6 +117,7 @@ interface SettingsActions {
   setGetContextToolModel: (model: string) => Promise<void>;
   setPlanModeEnabled: (enabled: boolean) => Promise<void>;
   setWorktreeModeEnabled: (enabled: boolean) => Promise<void>;
+  setRalphLoopEnabled: (enabled: boolean) => Promise<void>;
   setAutoApproveEditsGlobal: (enabled: boolean) => Promise<void>;
   setAutoApprovePlanGlobal: (enabled: boolean) => Promise<void>;
   setAutoCodeReviewGlobal: (enabled: boolean) => Promise<void>;
@@ -212,6 +214,7 @@ interface SettingsActions {
   getAICompletionEnabled: () => boolean;
   getPlanModeEnabled: () => boolean;
   getWorktreeModeEnabled: () => boolean;
+  getRalphLoopEnabled: () => boolean;
   getHooksEnabled: () => boolean;
 }
 
@@ -229,6 +232,7 @@ const DEFAULT_SETTINGS: Omit<SettingsState, 'loading' | 'error' | 'isInitialized
   get_context_tool_model: GROK_CODE_FAST,
   is_plan_mode_enabled: false,
   is_worktree_mode_enabled: false,
+  is_ralph_loop_enabled: false,
   auto_approve_edits_global: false,
   auto_approve_plan_global: false,
   auto_code_review_global: false,
@@ -304,6 +308,8 @@ class SettingsDatabase {
       ai_completion_enabled: 'false',
       get_context_tool_model: GROK_CODE_FAST,
       is_plan_mode_enabled: 'false',
+      is_worktree_mode_enabled: 'false',
+      is_ralph_loop_enabled: 'false',
       auto_approve_edits_global: 'false',
       auto_approve_plan_global: 'false',
       auto_code_review_global: 'false',
@@ -437,6 +443,8 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
         'ai_completion_enabled',
         'get_context_tool_model',
         'is_plan_mode_enabled',
+        'is_worktree_mode_enabled',
+        'is_ralph_loop_enabled',
         'auto_approve_edits_global',
         'auto_approve_plan_global',
         'auto_code_review_global',
@@ -520,6 +528,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
         get_context_tool_model: rawSettings.get_context_tool_model || GROK_CODE_FAST,
         is_plan_mode_enabled: rawSettings.is_plan_mode_enabled === 'true',
         is_worktree_mode_enabled: rawSettings.is_worktree_mode_enabled === 'true',
+        is_ralph_loop_enabled: rawSettings.is_ralph_loop_enabled === 'true',
         auto_approve_edits_global: rawSettings.auto_approve_edits_global === 'true',
         auto_approve_plan_global: rawSettings.auto_approve_plan_global === 'true',
         auto_code_review_global: rawSettings.auto_code_review_global === 'true',
@@ -650,6 +659,11 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
   setWorktreeModeEnabled: async (enabled: boolean) => {
     await settingsDb.set('is_worktree_mode_enabled', enabled.toString());
     set({ is_worktree_mode_enabled: enabled });
+  },
+
+  setRalphLoopEnabled: async (enabled: boolean) => {
+    await settingsDb.set('is_ralph_loop_enabled', enabled.toString());
+    set({ is_ralph_loop_enabled: enabled });
   },
 
   setAutoApproveEditsGlobal: async (enabled: boolean) => {
@@ -1059,6 +1073,10 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     return get().is_worktree_mode_enabled;
   },
 
+  getRalphLoopEnabled: () => {
+    return get().is_ralph_loop_enabled;
+  },
+
   getAutoApproveEditsGlobal: () => {
     return get().auto_approve_edits_global;
   },
@@ -1103,6 +1121,8 @@ export const settingsManager = {
   setPlanModeEnabled: (enabled: boolean) => useSettingsStore.getState().setPlanModeEnabled(enabled),
   setWorktreeModeEnabled: (enabled: boolean) =>
     useSettingsStore.getState().setWorktreeModeEnabled(enabled),
+  setRalphLoopEnabled: (enabled: boolean) =>
+    useSettingsStore.getState().setRalphLoopEnabled(enabled),
   setAutoApproveEditsGlobal: (enabled: boolean) =>
     useSettingsStore.getState().setAutoApproveEditsGlobal(enabled),
   setAutoApprovePlanGlobal: (enabled: boolean) =>
@@ -1121,6 +1141,7 @@ export const settingsManager = {
   getAICompletionEnabled: () => useSettingsStore.getState().getAICompletionEnabled(),
   getPlanModeEnabled: () => useSettingsStore.getState().getPlanModeEnabled(),
   getWorktreeModeEnabled: () => useSettingsStore.getState().getWorktreeModeEnabled(),
+  getRalphLoopEnabled: () => useSettingsStore.getState().getRalphLoopEnabled(),
   getAutoApproveEditsGlobal: () => useSettingsStore.getState().getAutoApproveEditsGlobal(),
   getAutoApprovePlanGlobal: () => useSettingsStore.getState().getAutoApprovePlanGlobal(),
   getAutoCodeReviewGlobal: () => useSettingsStore.getState().getAutoCodeReviewGlobal(),

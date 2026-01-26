@@ -344,6 +344,7 @@ export class LLMService {
           maxIterations = 500,
           compression,
           agentId,
+          freshContext = false,
         } = options;
 
         // Merge compression config with defaults
@@ -401,7 +402,7 @@ export class LLMService {
         // Lazy load: only try to load compacted messages if we have enough messages
         // to potentially benefit from caching
         let compacted = null;
-        if (inputMessages.length > compressionConfig.preserveRecentMessages) {
+        if (!freshContext && inputMessages.length > compressionConfig.preserveRecentMessages) {
           compacted = await this.loadCompactedMessages();
         }
         const { providerId } = parseModelIdentifier(model);
@@ -540,40 +541,44 @@ export class LLMService {
 
           // Check and perform message compression if needed
           try {
-            const compressionResult = await this.messageCompactor.performCompressionIfNeeded(
-              loopState.messages,
-              compressionConfig,
-              loopState.lastRequestTokens,
-              model,
-              systemPrompt,
-              abortController,
-              onStatus
-            );
-
-            if (compressionResult) {
-              // Apply Anthropic format conversion to compressed messages
-              loopState.messages = convertToAnthropicFormat(compressionResult.messages, {
-                autoFix: true,
-                trimAssistantWhitespace: true,
-              });
-              onStatus?.(
-                t.LLMService.status.compressed(compressionResult.result.compressionRatio.toFixed(2))
+            if (!freshContext) {
+              const compressionResult = await this.messageCompactor.performCompressionIfNeeded(
+                loopState.messages,
+                compressionConfig,
+                loopState.lastRequestTokens,
+                model,
+                systemPrompt,
+                abortController,
+                onStatus
               );
 
-              // Save compacted messages to file (only when compression is triggered)
-              if (this.taskId && !isSubagent) {
-                // Query taskStore for current UI message count
-                const currentUIMessageCount = useTaskStore
-                  .getState()
-                  .getMessages(this.taskId).length;
-
-                this.saveCompactedMessages(
-                  loopState.messages,
-                  currentUIMessageCount,
-                  loopState.lastRequestTokens
-                ).catch((err) => {
-                  logger.warn('Failed to save compacted messages', err);
+              if (compressionResult) {
+                // Apply Anthropic format conversion to compressed messages
+                loopState.messages = convertToAnthropicFormat(compressionResult.messages, {
+                  autoFix: true,
+                  trimAssistantWhitespace: true,
                 });
+                onStatus?.(
+                  t.LLMService.status.compressed(
+                    compressionResult.result.compressionRatio.toFixed(2)
+                  )
+                );
+
+                // Save compacted messages to file (only when compression is triggered)
+                if (this.taskId && !isSubagent) {
+                  // Query taskStore for current UI message count
+                  const currentUIMessageCount = useTaskStore
+                    .getState()
+                    .getMessages(this.taskId).length;
+
+                  this.saveCompactedMessages(
+                    loopState.messages,
+                    currentUIMessageCount,
+                    loopState.lastRequestTokens
+                  ).catch((err) => {
+                    logger.warn('Failed to save compacted messages', err);
+                  });
+                }
               }
             }
           } catch (error) {

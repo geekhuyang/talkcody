@@ -116,6 +116,14 @@ const zh: LocaleDefinition = {
       enabledTooltip: '计划模式：AI 会先创建计划供您审批',
       disabledTooltip: '执行模式：AI 会直接执行任务',
     },
+    ralphLoop: {
+      label: 'Ralph Loop',
+      title: 'Ralph Loop',
+      description: '重复运行任务并使用新上下文，直到满足完成承诺。',
+      learnMore: '了解更多',
+      enabledTooltip: 'Ralph Loop：持续迭代直到满足完成标准。',
+      disabledTooltip: '单次执行，不启用 Ralph Loop 迭代。',
+    },
     worktree: {
       label: 'Worktree',
       title: 'Git Worktree',

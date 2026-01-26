@@ -139,6 +139,16 @@ export type {
   ProviderRegistry,
   ProviderType,
 } from './provider';
+// Ralph Loop types
+export type {
+  RalphLoopConfig,
+  RalphLoopContextFreshness,
+  RalphLoopIterationResult,
+  RalphLoopMemoryStrategy,
+  RalphLoopStateFile,
+  RalphLoopStopCriteria,
+  RalphLoopStopReason,
+} from './ralph-loop';
 // Shortcuts types
 export type {
   ModifierKeys,

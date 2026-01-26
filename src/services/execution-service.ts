@@ -15,10 +15,12 @@
 
 import { logger } from '@/lib/logger';
 import { createLLMService, type LLMService } from '@/services/agents/llm-service';
+import { ralphLoopService } from '@/services/agents/ralph-loop-service';
 import { messageService } from '@/services/message-service';
 import { notificationService } from '@/services/notification-service';
 import { taskService } from '@/services/task-service';
 import { useExecutionStore } from '@/stores/execution-store';
+import { useSettingsStore } from '@/stores/settings-store';
 import { useTaskStore } from '@/stores/task-store';
 import { useWorktreeStore } from '@/stores/worktree-store';
 import type { AgentToolSet, UIMessage } from '@/types/agent';
@@ -87,125 +89,161 @@ class ExecutionService {
     let streamedContent = '';
 
     try {
-      // 4. Run agent loop with callbacks that route through services
-      await llmService.runAgentLoop(
-        {
+      const finalizeExecution = async () => {
+        if (currentMessageId && streamedContent) {
+          await messageService.finalizeMessage(taskId, currentMessageId, streamedContent);
+          streamedContent = '';
+        }
+
+        const runningUsage = useTaskStore.getState().runningTaskUsage.get(taskId);
+        if (runningUsage) {
+          await taskService
+            .updateTaskUsage(
+              taskId,
+              runningUsage.costDelta,
+              runningUsage.inputTokensDelta,
+              runningUsage.outputTokensDelta,
+              runningUsage.requestCountDelta,
+              runningUsage.contextUsage
+            )
+            .then(() => {
+              useTaskStore.getState().flushRunningTaskUsage(taskId);
+            })
+            .finally(() => {
+              useTaskStore.getState().clearRunningTaskUsage(taskId);
+            });
+        }
+      };
+
+      const handleCompletion = async (fullText: string) => {
+        if (abortController.signal.aborted) return;
+
+        await finalizeExecution();
+
+        await notificationService.notifyHooked(
+          taskId,
+          'Task Complete',
+          'TalkCody agent has finished processing',
+          'agent_complete'
+        );
+
+        callbacks?.onComplete?.({ success: true, fullText });
+      };
+
+      if (useSettingsStore.getState().getRalphLoopEnabled()) {
+        if (currentMessageId && streamedContent) {
+          await messageService.finalizeMessage(taskId, currentMessageId, streamedContent);
+          streamedContent = '';
+          currentMessageId = '';
+        }
+
+        const result = await ralphLoopService.runLoop({
+          taskId,
           messages,
           model,
           systemPrompt,
           tools,
           agentId,
-        },
-        {
-          onAssistantMessageStart: () => {
-            if (abortController.signal.aborted) return;
-
-            // Skip if a message was just created but hasn't received content
-            if (currentMessageId && !streamedContent) {
-              logger.info('[ExecutionService] Skipping duplicate message start', { taskId });
-              return;
-            }
-
-            // Finalize previous message if any
-            if (currentMessageId && streamedContent) {
-              messageService
-                .finalizeMessage(taskId, currentMessageId, streamedContent)
-                .catch((err) => logger.error('Failed to finalize previous message:', err));
-            }
-
-            // Reset for new message
-            streamedContent = '';
-            currentMessageId = messageService.createAssistantMessage(taskId, agentId);
-          },
-
-          onChunk: (chunk: string) => {
-            if (abortController.signal.aborted) return;
-            streamedContent += chunk;
-            if (currentMessageId) {
-              messageService.updateStreamingContent(taskId, currentMessageId, streamedContent);
-            }
-          },
-
-          onComplete: async (fullText: string) => {
-            if (abortController.signal.aborted) return;
-
-            // Finalize the last message
-            if (currentMessageId && streamedContent) {
-              await messageService.finalizeMessage(taskId, currentMessageId, streamedContent);
-              streamedContent = '';
-            }
-
-            // Persist running usage into task record once per execution
-            const runningUsage = useTaskStore.getState().runningTaskUsage.get(taskId);
-            if (runningUsage) {
-              // Use finally to ensure clearRunningTaskUsage is called only after DB write completes
-              await taskService
-                .updateTaskUsage(
-                  taskId,
-                  runningUsage.costDelta,
-                  runningUsage.inputTokensDelta,
-                  runningUsage.outputTokensDelta,
-                  runningUsage.requestCountDelta,
-                  runningUsage.contextUsage
-                )
-                .then(() => {
-                  // Flush running usage into task record after persistence
-                  useTaskStore.getState().flushRunningTaskUsage(taskId);
-                })
-                .finally(() => {
-                  // Clear running usage only after DB write completes
-                  useTaskStore.getState().clearRunningTaskUsage(taskId);
-                });
-            }
-
-            await notificationService.notifyHooked(
-              taskId,
-              'Task Complete',
-              'TalkCody agent has finished processing',
-              'agent_complete'
-            );
-
-            // Call external callback
-            callbacks?.onComplete?.({ success: true, fullText });
-          },
-
-          onError: (error: Error) => {
-            if (abortController.signal.aborted) return;
-
-            logger.error('[ExecutionService] Agent loop error', error);
-            executionStore.setError(taskId, error.message);
-
-            // Clear running usage on error to avoid stale data
-            useTaskStore.getState().clearRunningTaskUsage(taskId);
-
-            callbacks?.onError?.(error);
-          },
-
-          onStatus: (status: string) => {
+          userMessage: config.userMessage,
+          llmService,
+          abortController,
+          onStatus: (status) => {
             if (abortController.signal.aborted) return;
             executionStore.setServerStatus(taskId, status);
           },
-
-          onToolMessage: async (uiMessage: UIMessage) => {
-            if (abortController.signal.aborted) return;
-
-            const toolMessage: UIMessage = {
-              ...uiMessage,
-              assistantId: uiMessage.assistantId || agentId,
-            };
-
-            await messageService.addToolMessage(taskId, toolMessage);
-          },
-
           onAttachment: async (attachment) => {
             if (abortController.signal.aborted) return;
             if (currentMessageId) {
               await messageService.addAttachment(taskId, currentMessageId, attachment);
             }
           },
-        },
-        abortController
-      );
+        });
+
+        await handleCompletion(result.fullText);
+      } else {
+        // 4. Run agent loop with callbacks that route through services
+        await llmService.runAgentLoop(
+          {
+            messages,
+            model,
+            systemPrompt,
+            tools,
+            agentId,
+          },
+          {
+            onAssistantMessageStart: () => {
+              if (abortController.signal.aborted) return;
+
+              // Skip if a message was just created but hasn't received content
+              if (currentMessageId && !streamedContent) {
+                logger.info('[ExecutionService] Skipping duplicate message start', { taskId });
+                return;
+              }
+
+              // Finalize previous message if any
+              if (currentMessageId && streamedContent) {
+                messageService
+                  .finalizeMessage(taskId, currentMessageId, streamedContent)
+                  .catch((err) => logger.error('Failed to finalize previous message:', err));
+              }
+
+              // Reset for new message
+              streamedContent = '';
+              currentMessageId = messageService.createAssistantMessage(taskId, agentId);
+            },
+
+            onChunk: (chunk: string) => {
+              if (abortController.signal.aborted) return;
+              streamedContent += chunk;
+              if (currentMessageId) {
+                messageService.updateStreamingContent(taskId, currentMessageId, streamedContent);
+              }
+            },
+
+            onComplete: async (fullText: string) => {
+              if (abortController.signal.aborted) return;
+
+              await handleCompletion(fullText);
+            },
+
+            onError: (error: Error) => {
+              if (abortController.signal.aborted) return;
+
+              logger.error('[ExecutionService] Agent loop error', error);
+              executionStore.setError(taskId, error.message);
+
+              // Clear running usage on error to avoid stale data
+              useTaskStore.getState().clearRunningTaskUsage(taskId);
+
+              callbacks?.onError?.(error);
+            },
+
+            onStatus: (status: string) => {
+              if (abortController.signal.aborted) return;
+              executionStore.setServerStatus(taskId, status);
+            },
+
+            onToolMessage: async (uiMessage: UIMessage) => {
+              if (abortController.signal.aborted) return;
+
+              const toolMessage: UIMessage = {
+                ...uiMessage,
+                assistantId: uiMessage.assistantId || agentId,
+              };
+
+              await messageService.addToolMessage(taskId, toolMessage);
+            },
+
+            onAttachment: async (attachment) => {
+              if (abortController.signal.aborted) return;
+              if (currentMessageId) {
+                await messageService.addAttachment(taskId, currentMessageId, attachment);
+              }
+            },
+          },
+          abortController
+        );
+      }
     } catch (error) {
       if (!abortController.signal.aborted) {
         const execError = error instanceof Error ? error : new Error(String(error));

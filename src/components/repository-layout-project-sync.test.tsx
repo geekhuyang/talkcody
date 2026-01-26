@@ -252,6 +252,14 @@ const mockTranslations = {
       enabledTooltip: 'Plan Mode enabled',
       disabledTooltip: 'Plan Mode disabled',
     },
+    ralphLoop: {
+      label: 'Ralph Loop',
+      title: 'Ralph Loop',
+      description: 'Description',
+      learnMore: 'Learn More',
+      enabledTooltip: 'Ralph Loop enabled',
+      disabledTooltip: 'Ralph Loop disabled',
+    },
     worktree: {
       label: 'Worktree',
       title: 'Worktree',

@@ -34,6 +34,7 @@ export interface TaskSettings {
   autoApproveEdits?: boolean; // When true, skip review dialog for file edits in this task
   autoApprovePlan?: boolean; // When true, auto-approve plan for this task
   autoCodeReview?: boolean; // When true, auto-run code review for this task
+  ralphLoopEnabled?: boolean; // When true, run Ralph Loop for this task
 }
 
 export interface CreateProjectData {
