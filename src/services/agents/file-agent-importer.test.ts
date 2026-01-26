@@ -66,4 +66,29 @@ You are a file-based agent.`);
 		expect(result.agents[0]?.name).toBe('file-reviewer');
 		expect(result.agents[0]?.category).toBe('local');
 	});
+
+	it('accepts file entries without boolean isFile flag', async () => {
+		vi.mocked(exists).mockResolvedValue(true);
+		vi.mocked(readDir).mockImplementation(async (path: string) => {
+			if (path.endsWith('.talkcody/agents')) {
+				return [
+					{ name: 'buyer.md', isFile: () => true, isDirectory: () => false },
+					{ name: 'ignored.txt', isFile: () => true, isDirectory: () => false },
+				];
+			}
+			return [];
+		});
+		vi.mocked(readTextFile).mockResolvedValue(`---
+name: china-options-buyer
+description: From file
+---
+
+You are a file-based agent.`);
+
+		const result = await FileAgentImporter.importAgentsFromDirectories();
+
+		expect(result.agents).toHaveLength(1);
+		expect(result.agents[0]?.id).toBe('china-options-buyer');
+		expect(result.errors).toHaveLength(0);
+	});
 });

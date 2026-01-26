@@ -45,7 +45,6 @@ export function useUnifiedAgents(): UseUnifiedAgentsReturn {
   const marketplace = useMarketplace();
 
   // Subscribe to agent store state to trigger refresh when agents change
-  const loadAgents = useAgentStore((state) => state.loadAgents);
   const agentsMap = useAgentStore((state) => state.agents);
 
   const [localAgents, setLocalAgents] = useState<Agent[]>([]);
@@ -54,8 +53,8 @@ export function useUnifiedAgents(): UseUnifiedAgentsReturn {
   const refreshLocalAgents = useCallback(async () => {
     setIsLoadingLocal(true);
     try {
-      // Ensure registry and store are loaded
-      await loadAgents();
+      // Ensure registry and store are refreshed (includes local file agents)
+      await useAgentStore.getState().refreshAgents();
 
       // Get all agents from database (user agents only)
       const dbAgents = await agentService.listAgents({ includeHidden: false });
@@ -94,7 +93,7 @@ export function useUnifiedAgents(): UseUnifiedAgentsReturn {
     } finally {
       setIsLoadingLocal(false);
     }
-  }, [loadAgents, agentsMap]);
+  }, [agentsMap]);
 
   // Note: We don't automatically load local agents on mount anymore
   // This is now handled explicitly by the component when needed

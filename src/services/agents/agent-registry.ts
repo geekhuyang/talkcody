@@ -38,6 +38,12 @@ class AgentRegistry {
       return;
     }
 
+    // If loaded with zero agents, force a reset and reload to allow file agents to appear
+    if (this.loaded && totalAgents === 0) {
+      logger.warn('loadAllAgents: Loaded flag set but no agents found, forcing reload');
+      this.loaded = false;
+    }
+
     logger.info('loadAllAgents: Loading agents...');
 
     try {
@@ -142,6 +148,7 @@ class AgentRegistry {
 
     try {
       const { agents } = await FileAgentImporter.importAgentsFromDirectories();
+      const loadedFileIds = new Set(agents.map((agent) => agent.id));
 
       for (const agentConfig of agents) {
         try {
@@ -171,6 +178,24 @@ class AgentRegistry {
           this.persistentAgents.set(agentDef.id, agentDef);
         } catch (error) {
           logger.warn('loadFileAgents: Failed to load local agent:', error);
+        }
+      }
+
+      if (agents.length > 0) {
+        try {
+          const dbAgents = await agentService.listAgents({ includeHidden: true });
+          const fileAgentIds = new Set(dbAgents.map((agent) => agent.id));
+
+          for (const agentDef of this.persistentAgents.values()) {
+            if (agentDef.isDefault) continue;
+            if (!loadedFileIds.has(agentDef.id)) continue;
+            if (fileAgentIds.has(agentDef.id)) continue;
+
+            const createData = await this.definitionToCreateData(agentDef);
+            await agentService.createAgent(createData);
+          }
+        } catch (error) {
+          logger.warn('loadFileAgents: Failed to persist local file agents:', error);
         }
       }
 

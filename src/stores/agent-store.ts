@@ -175,7 +175,10 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
     try {
       set({ isLoading: true, error: null });
 
-      // Reload from database
+      // Reset to allow file-based agents to be reloaded
+      agentRegistry.reset();
+
+      // Reload from database and local files
       await agentRegistry.loadAllAgents();
 
       // Get fresh agents from registry

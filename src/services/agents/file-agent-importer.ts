@@ -14,6 +14,35 @@ import { logger } from '@/lib/logger';
 import { getEffectiveWorkspaceRoot } from '@/services/workspace-root-service';
 import { buildRemoteAgentConfig, parseAgentMarkdown } from './github-import-agent-service';
 
+type DirEntryKey = 'isDirectory' | 'isFile';
+
+type DirEntryFlag = boolean | (() => boolean);
+
+function getEntryBoolean(entry: unknown, key: DirEntryKey): boolean | undefined {
+  const value = (entry as Record<string, unknown>)[key] as DirEntryFlag | undefined;
+  if (typeof value === 'function') {
+    return value();
+  }
+  if (typeof value === 'boolean') {
+    return value;
+  }
+  return undefined;
+}
+
+function isFileEntry(entry: unknown): boolean {
+  const entryType = (entry as Record<string, unknown>).type;
+  if (entryType === 'file') return true;
+  if (entryType === 'directory') return false;
+
+  const isFile = getEntryBoolean(entry, 'isFile');
+  if (isFile !== undefined) return isFile;
+
+  const isDirectory = getEntryBoolean(entry, 'isDirectory');
+  if (isDirectory !== undefined) return !isDirectory;
+
+  return false;
+}
+
 export interface ClaudeCodeAgentLocation {
   path: string;
   type: 'personal' | 'project';
@@ -90,7 +119,7 @@ export class FileAgentImporter {
       try {
         const entries = await readDir(directory.path);
         const markdownFiles = entries.filter(
-          (entry) => entry.isFile && entry.name.toLowerCase().endsWith('.md')
+          (entry) => isFileEntry(entry) && entry.name.toLowerCase().endsWith('.md')
         );
 
         for (const entry of markdownFiles) {

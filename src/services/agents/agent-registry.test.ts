@@ -201,6 +201,41 @@ describe('Agent Registry - Auto-load Behavior', () => {
     useToolOverrideStore.getState().clearAll();
   });
 
+  it('should persist file-based agents when loaded', async () => {
+    const { FileAgentImporter } = await import('./file-agent-importer');
+    const { agentService } = await import('../database/agent-service');
+
+    vi.spyOn(FileAgentImporter, 'importAgentsFromDirectories').mockResolvedValue({
+      agents: [
+        {
+          id: 'file-agent',
+          name: 'File Agent',
+          description: 'From file',
+          modelType: 'main_model',
+          systemPrompt: 'File prompt',
+          tools: {},
+          repository: 'local-project',
+          githubPath: '/mock/.talkcody/agents/file-agent.md',
+          category: 'local',
+        },
+      ],
+      errors: [],
+    });
+
+    await agentRegistry.loadAllAgents();
+
+    const createCalls = vi.mocked(agentService.createAgent).mock.calls;
+    const fileAgentCall = createCalls.find((call) => call[0]?.id === 'file-agent');
+    expect(fileAgentCall).toBeDefined();
+    expect(fileAgentCall?.[0]).toEqual(
+      expect.objectContaining({
+        id: 'file-agent',
+        name: 'File Agent',
+        source_type: 'local',
+      })
+    );
+  });
+
   it('should auto-load agents when get() is called before loadAllAgents()', async () => {
     // Don't call loadAllAgents() explicitly
     // The registry should auto-load when we call get()
