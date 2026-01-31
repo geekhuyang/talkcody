@@ -1,8 +1,9 @@
 // src/lib/mcp/multi-mcp-adapter.ts
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { logger } from '@/lib/logger';
 import { databaseService } from '@/services/database-service';
-import { llmClient } from '@/services/llm/llm-client';
 import type { MCPServer } from '@/types';
+import { type MCPTransport, TransportFactory } from './transport-factory';
 
 export interface MCPToolInfo {
   id: string;
@@ -19,11 +20,13 @@ export interface MCPServerConnection {
   tools: Record<string, MCPToolInfo>;
   isConnected: boolean;
   lastError?: string;
+  client?: Client;
+  transport?: MCPTransport;
 }
 
 /**
- * Multi-MCP Adapter (Rust-backed)
- * Manages connections to MCP servers through Tauri commands.
+ * Multi-MCP Adapter (SDK-backed)
+ * Manages connections to MCP servers through MCP client transports.
  */
 export class MultiMCPAdapter {
   private connections: Map<string, MCPServerConnection> = new Map();
@@ -63,19 +66,35 @@ export class MultiMCPAdapter {
 
   private async connectToServer(server: MCPServer): Promise<void> {
     try {
-      const tools = await llmClient.listMcpTools();
-      const serverTools = tools.filter((tool) => tool.serverId === server.id);
+      const existing = this.connections.get(server.id);
+      if (existing?.transport) {
+        try {
+          await existing.transport.close();
+        } catch (error) {
+          logger.warn(`Failed to close existing MCP transport for ${server.id}:`, error);
+        }
+      }
+
+      const transport = TransportFactory.createTransport(server);
+      const client = new Client({
+        name: 'talkcody-mcp-client',
+        version: '1.0.0',
+      });
+
+      await client.connect(transport);
+
+      const toolsResult = await client.listTools();
       const toolMap: Record<string, MCPToolInfo> = {};
 
-      for (const tool of serverTools) {
-        const prefixedName = `${tool.serverId}__${tool.name}`;
+      for (const tool of toolsResult.tools) {
+        const prefixedName = `${server.id}__${tool.name}`;
         toolMap[tool.name] = {
           id: tool.name,
           name: tool.name,
-          description: tool.description || `Tool from ${server.name}`,
+          description: tool.description || tool.title || `Tool from ${server.name}`,
           prefixedName,
-          serverId: tool.serverId,
-          serverName: tool.serverName || server.name,
+          serverId: server.id,
+          serverName: server.name,
           isAvailable: true,
         };
       }
@@ -85,10 +104,12 @@ export class MultiMCPAdapter {
         tools: toolMap,
         isConnected: true,
         lastError: undefined,
+        client,
+        transport,
       });
 
       logger.info(
-        `Connected to MCP server ${server.id} (${server.name}) with ${serverTools.length} tools`
+        `Connected to MCP server ${server.id} (${server.name}) with ${toolsResult.tools.length} tools`
       );
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -132,7 +153,7 @@ export class MultiMCPAdapter {
     }
 
     const connection = this.connections.get(serverId);
-    if (!connection || !connection.isConnected) {
+    if (!connection || !connection.isConnected || !connection.client) {
       throw new Error(`MCP server '${serverId}' is not connected`);
     }
 
@@ -141,15 +162,23 @@ export class MultiMCPAdapter {
       throw new Error(`Tool '${toolName}' not found in MCP server '${serverId}'`);
     }
 
-    const details = await llmClient.getMcpTool(prefixedName);
+    const toolDefinition = await connection.client.listTools();
+    const matching = toolDefinition.tools.find((t) => t.name === toolName);
 
     return {
       name: toolName,
-      description: details.description || tool.description,
-      inputSchema: details.inputSchema || null,
+      description: matching?.description || matching?.title || tool.description,
+      inputSchema: matching?.inputSchema || null,
       serverId,
-      serverName: details.serverName || tool.serverName,
+      serverName: tool.serverName,
       prefixedName,
+      execute: async (args: Record<string, unknown>) => {
+        const result = await connection.client?.callTool({
+          name: toolName,
+          arguments: args,
+        });
+        return result;
+      },
     };
   }
 
@@ -175,11 +204,33 @@ export class MultiMCPAdapter {
     }
 
     const connection = this.connections.get(serverId);
-    if (!connection) {
+    if (!connection || !connection.client) {
       return [];
     }
 
-    return Object.values(connection.tools);
+    try {
+      const toolsResult = await connection.client.listTools();
+      const toolMap: Record<string, MCPToolInfo> = {};
+
+      for (const tool of toolsResult.tools) {
+        const prefixedName = `${serverId}__${tool.name}`;
+        toolMap[tool.name] = {
+          id: tool.name,
+          name: tool.name,
+          description: tool.description || tool.title || `Tool from ${connection.server.name}`,
+          prefixedName,
+          serverId,
+          serverName: connection.server.name,
+          isAvailable: true,
+        };
+      }
+
+      connection.tools = toolMap;
+      return Object.values(connection.tools);
+    } catch (error) {
+      logger.warn(`Failed to list tools for server '${serverId}':`, error);
+      return Object.values(connection.tools);
+    }
   }
 
   getToolInfo(prefixedName: string): Promise<any> {
@@ -218,7 +269,16 @@ export class MultiMCPAdapter {
 
   async refreshConnections(): Promise<void> {
     try {
-      await llmClient.refreshMcpConnections();
+      for (const connection of this.connections.values()) {
+        if (connection.transport) {
+          try {
+            await connection.transport.close();
+          } catch (error) {
+            logger.warn(`Failed to close MCP transport for ${connection.server.id}:`, error);
+          }
+        }
+      }
+
       const servers = await databaseService.getEnabledMCPServers();
       this.connections.clear();
       await this.initializeConnections(servers);
@@ -232,7 +292,6 @@ export class MultiMCPAdapter {
 
   async refreshServer(serverId: string): Promise<void> {
     try {
-      await llmClient.refreshMcpServer(serverId);
       const server = await databaseService.getMCPServer(serverId);
       if (!server || !server.is_enabled) {
         logger.info(`Server ${serverId} is disabled or not found, skipping refresh`);
@@ -251,11 +310,12 @@ export class MultiMCPAdapter {
     server: MCPServer
   ): Promise<{ success: boolean; error?: string; toolCount?: number }> {
     try {
-      const result = await llmClient.testMcpConnection(server.id);
+      await this.connectToServer(server);
+      const connection = this.connections.get(server.id);
       return {
-        success: result.success,
-        error: result.error || undefined,
-        toolCount: result.toolCount ?? undefined,
+        success: connection?.isConnected ?? false,
+        error: connection?.lastError,
+        toolCount: connection ? Object.keys(connection.tools).length : 0,
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -277,7 +337,7 @@ export class MultiMCPAdapter {
       }
     }
 
-    return llmClient.mcpHealthCheck();
+    return true;
   }
 
   private parsePrefixedName(prefixedName: string): {

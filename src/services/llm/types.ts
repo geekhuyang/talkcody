@@ -59,6 +59,12 @@ export type ToolDefinition = {
   strict: true;
 };
 
+export type TraceContext = {
+  trace_id: string;
+  span_name: string;
+  parent_span_id: string | null;
+};
+
 export type StreamTextRequest = {
   model: string;
   messages: Message[];
@@ -70,6 +76,7 @@ export type StreamTextRequest = {
   topK?: number | null;
   providerOptions?: ProviderOptions;
   requestId?: number | null;
+  traceContext?: TraceContext | null;
 };
 
 export type StreamResponse = {

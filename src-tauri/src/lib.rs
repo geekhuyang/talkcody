@@ -32,6 +32,7 @@ use archive::{
 use code_navigation::{CodeNavState, CodeNavigationService};
 use database::Database;
 use file_watcher::FileWatcher;
+use llm::tracing::writer::TraceWriter;
 use script_executor::{ScriptExecutionRequest, ScriptExecutionResult, ScriptExecutor};
 use serde::{Deserialize, Serialize};
 use std::process::Stdio;
@@ -662,6 +663,14 @@ pub fn run() {
             let database = Arc::new(Database::new(db_path_str));
             app.manage(database.clone());
 
+            // Initialize LLM tracing
+            let trace_writer = TraceWriter::new(database.clone());
+            let trace_writer_clone = trace_writer.clone();
+            tauri::async_runtime::spawn(async move {
+                trace_writer_clone.start();
+            });
+            app.manage(trace_writer.clone());
+
             let llm_state = llm::auth::api_key_manager::LlmState::new(
                 database.clone(),
                 llm::providers::provider_configs::builtin_providers(),
@@ -870,6 +879,11 @@ pub fn run() {
                 // Send session_end synchronously before exit
                 if let Some(analytics_state) = app_handle.try_state::<AnalyticsState>() {
                     analytics::send_session_end_sync(analytics_state.inner());
+                }
+
+                // Shutdown trace writer
+                if let Some(trace_writer) = app_handle.try_state::<TraceWriter>() {
+                    trace_writer.inner().shutdown_blocking();
                 }
 
                 // Close database connection to release file handles

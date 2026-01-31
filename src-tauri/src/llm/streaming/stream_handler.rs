@@ -2,12 +2,16 @@ use crate::llm::auth::api_key_manager::ApiKeyManager;
 use crate::llm::protocols::{ProtocolStreamState, ToolCallAccum};
 use crate::llm::providers::provider_registry::ProviderRegistry;
 use crate::llm::testing::{Recorder, RecordingContext, TestConfig, TestMode};
+use crate::llm::tracing::helpers;
+use crate::llm::tracing::{generate_span_id, TraceWriter, TracingSpan};
 use crate::llm::types::{StreamEvent, StreamTextRequest};
 use futures_util::StreamExt;
 use serde_json;
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
-use tauri::Emitter;
+use tauri::{Emitter, Manager};
 use tokio::time::timeout;
 
 static REQUEST_COUNTER: AtomicU32 = AtomicU32::new(1000);
@@ -85,6 +89,62 @@ impl<'a> StreamHandler<'a> {
             request_id,
             provider_model_name
         );
+
+        // Initialize tracing span if trace_context is provided
+        let mut tracing_span: Option<TracingSpan> = None;
+        let mut trace_usage: Option<(i32, i32, Option<i32>, Option<i32>, Option<i32>)> = None;
+        let mut trace_finish_reason: Option<String> = None;
+
+        if let Some(ref trace_context) = request.trace_context {
+            let trace_writer = window.app_handle().state::<Arc<TraceWriter>>();
+            let span_id = generate_span_id();
+            let mut attributes = HashMap::new();
+
+            // Add model and provider attributes
+            attributes.insert(
+                crate::llm::tracing::types::attributes::GEN_AI_REQUEST_MODEL.to_string(),
+                crate::llm::tracing::types::string_attr(&provider_model_name),
+            );
+            attributes.insert(
+                crate::llm::tracing::types::attributes::GEN_AI_SYSTEM.to_string(),
+                crate::llm::tracing::types::string_attr(&provider_id),
+            );
+
+            // Add request parameters
+            helpers::add_request_params(
+                &mut attributes,
+                request.temperature,
+                request.top_p,
+                request.top_k,
+                request.max_tokens,
+            );
+
+            let span_name = trace_context
+                .span_name
+                .as_deref()
+                .unwrap_or("llm.stream_completion");
+
+            let trace_id = trace_context
+                .trace_id
+                .clone()
+                .unwrap_or_else(|| span_id.clone());
+
+            let span = TracingSpan::new(
+                &trace_writer,
+                trace_id,
+                trace_context.parent_span_id.clone(),
+                span_name.to_string(),
+                attributes,
+            );
+
+            tracing_span = Some(span);
+
+            log::info!(
+                "[LLM Stream {}] Tracing span created: {}",
+                request_id,
+                span_id
+            );
+        }
 
         let credentials = self.api_keys.get_credentials(provider).await?;
         log::info!(
@@ -166,6 +226,14 @@ impl<'a> StreamHandler<'a> {
             ),
         }
 
+        // Record request event for tracing
+        if let Some(ref span) = tracing_span {
+            span.add_event(
+                crate::llm::tracing::types::attributes::HTTP_REQUEST_BODY,
+                Some(body.clone()),
+            );
+        }
+
         let test_config = TestConfig::from_env();
         let base_url = if test_config.mode != TestMode::Off {
             test_config.base_url_override.clone().unwrap_or(base_url)
@@ -236,6 +304,23 @@ impl<'a> StreamHandler<'a> {
             if let Some(recorder) = recorder.as_mut() {
                 let _ = recorder.finish_error(status, &response_headers, &text);
             }
+            // Record error in tracing span
+            if let Some(ref span) = tracing_span {
+                let mut error_attrs = HashMap::new();
+                helpers::add_error(
+                    &mut error_attrs,
+                    "http_error",
+                    &format!("HTTP {}: {}", status, text),
+                );
+                span.add_event(
+                    crate::llm::tracing::types::attributes::ERROR_TYPE,
+                    Some(serde_json::json!({
+                        "error_type": "http_error",
+                        "status_code": status,
+                        "message": text,
+                    })),
+                );
+            }
             let error_event = StreamEvent::Error {
                 message: format!("HTTP {}: {}", status, text),
             };
@@ -273,6 +358,17 @@ impl<'a> StreamHandler<'a> {
                         request_id,
                         stream_timeout.as_secs()
                     );
+                    // Record error in tracing span
+                    if let Some(ref span) = tracing_span {
+                        span.add_event(
+                            crate::llm::tracing::types::attributes::ERROR_TYPE,
+                            Some(serde_json::json!({
+                                "error_type": "stream_timeout",
+                                "timeout_seconds": stream_timeout.as_secs(),
+                                "message": format!("Stream timeout - no data received for {} seconds", stream_timeout.as_secs()),
+                            })),
+                        );
+                    }
                     let error_event = StreamEvent::Error {
                         message: format!(
                             "Stream timeout - no data received for {} seconds",
@@ -304,6 +400,17 @@ impl<'a> StreamHandler<'a> {
                         chunk_count,
                         e
                     );
+                    // Record error in tracing span
+                    if let Some(ref span) = tracing_span {
+                        span.add_event(
+                            crate::llm::tracing::types::attributes::ERROR_TYPE,
+                            Some(serde_json::json!({
+                                "error_type": "stream_error",
+                                "chunk_count": chunk_count,
+                                "message": format!("Stream error: {}", e),
+                            })),
+                        );
+                    }
                     let error_event = StreamEvent::Error {
                         message: format!("Stream error: {}", e),
                     };
@@ -332,6 +439,16 @@ impl<'a> StreamHandler<'a> {
                             request_id,
                             e
                         );
+                        // Record error in tracing span
+                        if let Some(ref span) = tracing_span {
+                            span.add_event(
+                                crate::llm::tracing::types::attributes::ERROR_TYPE,
+                                Some(serde_json::json!({
+                                    "error_type": "utf8_error",
+                                    "message": format!("Invalid UTF-8 in SSE event: {}", e),
+                                })),
+                            );
+                        }
                         let error_event = StreamEvent::Error {
                             message: format!("Invalid UTF-8 in SSE event: {}", e),
                         };
@@ -376,6 +493,29 @@ impl<'a> StreamHandler<'a> {
                     };
                     match parsed_result {
                         Ok(Some(event)) => {
+                            // Capture usage and finish_reason for tracing
+                            match &event {
+                                StreamEvent::Usage {
+                                    input_tokens,
+                                    output_tokens,
+                                    total_tokens,
+                                    cached_input_tokens,
+                                    cache_creation_input_tokens,
+                                } => {
+                                    trace_usage = Some((
+                                        *input_tokens,
+                                        *output_tokens,
+                                        *total_tokens,
+                                        *cached_input_tokens,
+                                        *cache_creation_input_tokens,
+                                    ));
+                                }
+                                StreamEvent::Done { finish_reason } => {
+                                    trace_finish_reason = finish_reason.clone();
+                                }
+                                _ => {}
+                            }
+
                             Self::append_text_delta(&mut response_text, &event);
                             self.emit_stream_event(&window, &event_name, request_id, &event);
                             if !state.pending_events.is_empty() {
@@ -421,6 +561,16 @@ impl<'a> StreamHandler<'a> {
                                 request_id,
                                 err
                             );
+                            // Record error in tracing span
+                            if let Some(ref span) = tracing_span {
+                                span.add_event(
+                                    crate::llm::tracing::types::attributes::ERROR_TYPE,
+                                    Some(serde_json::json!({
+                                        "error_type": "parse_error",
+                                        "message": err,
+                                    })),
+                                );
+                            }
                             let _ = window.emit(
                                 &event_name,
                                 &StreamEvent::Error {
@@ -457,6 +607,66 @@ impl<'a> StreamHandler<'a> {
         if let Some(recorder) = recorder.as_mut() {
             let _ = recorder.finish_stream(status, &response_headers);
         }
+
+        // Record response event and usage for tracing
+        if let Some(ref span) = tracing_span {
+            // Add usage attributes if available
+            if let Some((
+                input_tokens,
+                output_tokens,
+                total_tokens,
+                cached_input_tokens,
+                cache_creation_input_tokens,
+            )) = trace_usage
+            {
+                let mut usage_attrs = HashMap::new();
+                helpers::add_usage(
+                    &mut usage_attrs,
+                    input_tokens,
+                    output_tokens,
+                    total_tokens,
+                    cached_input_tokens,
+                    cache_creation_input_tokens,
+                );
+                // Record usage as an event
+                span.add_event(
+                    "gen_ai.usage",
+                    Some(serde_json::json!({
+                        "input_tokens": input_tokens,
+                        "output_tokens": output_tokens,
+                        "total_tokens": total_tokens,
+                        "cached_input_tokens": cached_input_tokens,
+                        "cache_creation_input_tokens": cache_creation_input_tokens,
+                    })),
+                );
+            }
+
+            // Add finish reason if available
+            if let Some(ref finish_reason) = trace_finish_reason {
+                span.add_event(
+                    "gen_ai.finish_reason",
+                    Some(serde_json::json!({"finish_reason": finish_reason})),
+                );
+            }
+
+            // Record response event
+            span.add_event(
+                crate::llm::tracing::types::attributes::HTTP_RESPONSE_BODY,
+                Some(serde_json::json!({
+                    "finish_reason": trace_finish_reason,
+                    "usage": trace_usage.map(|(i, o, t, c, cc)| serde_json::json!({
+                        "input_tokens": i,
+                        "output_tokens": o,
+                        "total_tokens": t,
+                        "cached_input_tokens": c,
+                        "cache_creation_input_tokens": cc,
+                    })),
+                })),
+            );
+
+            // Span will be automatically closed when dropped
+        }
+
         let _ = window.emit(
             &event_name,
             &StreamEvent::Done {
@@ -1380,6 +1590,7 @@ mod tests {
             top_k: None,
             provider_options: None,
             request_id: None,
+            trace_context: None,
         };
 
         let body = handler

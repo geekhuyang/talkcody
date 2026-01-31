@@ -95,6 +95,18 @@ pub struct AvailableModel {
     pub input_pricing: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct TraceContext {
+    #[serde(rename = "traceId")]
+    pub trace_id: Option<String>,
+    #[serde(rename = "parentSpanId")]
+    pub parent_span_id: Option<String>,
+    #[serde(rename = "spanName")]
+    pub span_name: Option<String>,
+    #[serde(rename = "metadata")]
+    pub metadata: Option<HashMap<String, String>>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StreamTextRequest {
     pub model: String,
@@ -112,6 +124,8 @@ pub struct StreamTextRequest {
     pub provider_options: Option<serde_json::Value>,
     #[serde(rename = "requestId")]
     pub request_id: Option<u32>,
+    #[serde(rename = "traceContext")]
+    pub trace_context: Option<TraceContext>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

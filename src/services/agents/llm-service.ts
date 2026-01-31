@@ -11,6 +11,7 @@ import { convertToAnthropicFormat } from '@/lib/message-convert';
 import { MessageTransform } from '@/lib/message-transform';
 import { validateAnthropicMessages } from '@/lib/message-validate';
 import { toOpenAIToolDefinition } from '@/lib/tool-schema';
+import { createLlmTraceContext, generateTraceId } from '@/lib/trace-utils';
 import { UsageTokenUtils } from '@/lib/usage-token-utils';
 import { generateId } from '@/lib/utils';
 import { getLocale, type SupportedLocale } from '@/locales';
@@ -320,6 +321,11 @@ export class LLMService {
     callbacks: AgentLoopCallbacks,
     abortController?: AbortController
   ): Promise<void> {
+    // Generate trace ID at the start of the agent loop
+    // This ID will persist across all iterations
+    const traceId = generateTraceId();
+    logger.info('[LLMService] Generated trace ID for agent loop', { traceId, taskId: this.taskId });
+
     // biome-ignore lint/suspicious/noAsyncPromiseExecutor: Complex agent loop requires async Promise executor
     return new Promise<void>(async (resolve, reject) => {
       const { onChunk, onComplete, onError, onStatus, onToolMessage, onAssistantMessageStart } =
@@ -690,6 +696,9 @@ export class LLMService {
                 return toOpenAIToolDefinition(name, toolDef.description, toolDef.inputSchema);
               });
 
+              // Create trace context for this LLM call
+              const traceContext = createLlmTraceContext(traceId, model);
+
               streamResult = await llmClient.streamText(
                 {
                   model,
@@ -700,6 +709,7 @@ export class LLMService {
                   topP,
                   topK,
                   providerOptions: providerOptions ?? undefined,
+                  traceContext,
                 },
                 abortController?.signal
               );

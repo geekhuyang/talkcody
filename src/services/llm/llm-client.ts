@@ -82,11 +82,12 @@ export class LlmClient {
       `[LLM Client ${requestId}] Event listener setup complete, now invoking Rust command`
     );
 
-    // Now invoke Rust command with the requestId
+    // Now invoke Rust command with the requestId and traceContext
     let response: StreamResponse;
     try {
       response = await invoke<StreamResponse>('llm_stream_text', {
         request: { ...request, requestId },
+        traceContext: request.traceContext ?? undefined,
       });
     } catch (error) {
       // Ensure cleanup on invoke failure to prevent listener leaks
@@ -293,10 +294,11 @@ export class LlmClient {
       inputSchema?: unknown;
     }>
   > {
-    return invoke('mcp_list_tools');
+    logger.warn('[LLM Client] listMcpTools is deprecated and returns empty results');
+    return [];
   }
 
-  async getMcpTool(prefixedName: string): Promise<{
+  async getMcpTool(_prefixedName: string): Promise<{
     name: string;
     description?: string | null;
     inputSchema?: unknown;
@@ -304,33 +306,36 @@ export class LlmClient {
     serverName?: string | null;
     prefixedName: string;
   }> {
-    return invoke('mcp_get_tool', { prefixedName });
+    throw new Error('getMcpTool is no longer supported from llm-client');
   }
 
   async getMcpServerStatuses(): Promise<
     Record<string, { isConnected: boolean; error?: string | null; toolCount: number }>
   > {
-    return invoke('mcp_get_statuses');
+    logger.warn('[LLM Client] getMcpServerStatuses is deprecated and returns empty status');
+    return {};
   }
 
   async refreshMcpConnections(): Promise<void> {
-    await invoke('mcp_refresh_connections');
+    logger.warn('[LLM Client] refreshMcpConnections is deprecated and ignored');
   }
 
-  async refreshMcpServer(serverId: string): Promise<void> {
-    await invoke('mcp_refresh_server', { serverId });
+  async refreshMcpServer(_serverId: string): Promise<void> {
+    logger.warn('[LLM Client] refreshMcpServer is deprecated and ignored');
   }
 
-  async testMcpConnection(serverId: string): Promise<{
+  async testMcpConnection(_serverId: string): Promise<{
     success: boolean;
     error?: string | null;
     toolCount?: number | null;
   }> {
-    return invoke('mcp_test_connection', { serverId });
+    logger.warn('[LLM Client] testMcpConnection is deprecated and returns failure');
+    return { success: false, error: 'deprecated', toolCount: null };
   }
 
   async mcpHealthCheck(): Promise<boolean> {
-    return invoke('mcp_health_check');
+    logger.warn('[LLM Client] mcpHealthCheck is deprecated and returns false');
+    return false;
   }
 }
 
