@@ -30,6 +30,7 @@ export class LlmClient {
     abortSignal?: AbortSignal
   ): Promise<StreamTextResult> {
     logger.info(`[LLM Client] Starting streamText for model: ${request.model}`);
+    const clientStartMs = Date.now();
 
     // Generate request ID first and set up listener BEFORE calling Rust
     // This prevents race condition where events are emitted before listener is ready
@@ -84,10 +85,19 @@ export class LlmClient {
 
     // Now invoke Rust command with the requestId and traceContext
     // traceContext must be inside the request object for Rust to receive it
+    const traceContext = request.traceContext
+      ? {
+          ...request.traceContext,
+          metadata: {
+            ...(request.traceContext.metadata ?? {}),
+            client_start_ms: clientStartMs.toString(),
+          },
+        }
+      : undefined;
     const requestPayload = {
       ...request,
       requestId,
-      traceContext: request.traceContext ?? undefined,
+      traceContext,
     };
     logger.info(
       `[LLM Client ${requestId}] Sending request with traceContext: ${JSON.stringify(requestPayload.traceContext)}`

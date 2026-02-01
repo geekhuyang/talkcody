@@ -1,5 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 
+vi.mock('@/services/database-service', () => ({
+  databaseService: {
+    startSpan: vi.fn().mockResolvedValue(undefined),
+    endSpan: vi.fn().mockResolvedValue(undefined),
+  },
+}));
+
 vi.mock('@/providers/core/provider-factory', () => ({
   aiProviderService: {
     getProviderByModel: vi.fn(),

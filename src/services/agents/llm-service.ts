@@ -701,7 +701,11 @@ export class LLMService {
                 return toOpenAIToolDefinition(name, toolDef.description, toolDef.inputSchema);
               });
 
-              const traceContext = createLlmTraceContext(traceId, model);
+              const traceContext = createLlmTraceContext(
+                traceId,
+                model,
+                loopState.currentIteration
+              );
 
               streamResult = await llmClient.streamText(
                 {

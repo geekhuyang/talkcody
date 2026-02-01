@@ -251,6 +251,31 @@ export class DatabaseService {
     return this.traceService.getTraceDetails(traceId);
   }
 
+  async ensureTrace(traceId: string, startedAt?: number) {
+    await this.ensureInitialized();
+    if (!this.traceService) throw new Error('Trace service not initialized');
+    return this.traceService.ensureTrace(traceId, startedAt);
+  }
+
+  async startSpan(input: {
+    spanId: string;
+    traceId: string;
+    parentSpanId?: string | null;
+    name: string;
+    startedAt?: number;
+    attributes?: Record<string, unknown> | null;
+  }) {
+    await this.ensureInitialized();
+    if (!this.traceService) throw new Error('Trace service not initialized');
+    return this.traceService.startSpan(input);
+  }
+
+  async endSpan(spanId: string, endedAt?: number) {
+    await this.ensureInitialized();
+    if (!this.traceService) throw new Error('Trace service not initialized');
+    return this.traceService.endSpan(spanId, endedAt);
+  }
+
   async getAttachmentsForMessage(messageId: string): Promise<MessageAttachment[]> {
     await this.ensureInitialized();
     if (!this.taskService) throw new Error('Task service not initialized');

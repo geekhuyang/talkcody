@@ -172,6 +172,13 @@ vi.mock('@/services/llm/llm-client', () => ({
   },
 }));
 
+vi.mock('@/services/database-service', () => ({
+  databaseService: {
+    startSpan: vi.fn().mockResolvedValue(undefined),
+    endSpan: vi.fn().mockResolvedValue(undefined),
+  },
+}));
+
 describe('ChatService.runManualAgentLoop', () => {
   let chatService: LLMService;
   let mockCallbacks: {
@@ -244,7 +251,7 @@ describe('ChatService.runManualAgentLoop', () => {
   });
 
   afterEach(() => {
-    vi.resetAllMocks();
+    vi.clearAllMocks();
   });
 
   const createMockMessages = (): UIMessage[] => [

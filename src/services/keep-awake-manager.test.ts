@@ -106,4 +106,38 @@ describe('keepAwakeManager', () => {
     expect(listeners.size).toBe(0);
     expect(keepAwakeManager.getSnapshot().runningCount).toBe(0);
   });
+
+  it('should reconcile running count changes during initial sync', async () => {
+    executionState.runningCount = 1;
+
+    let resolveAcquire: (() => void) | null = null;
+    const acquirePromise = new Promise<void>((resolve) => {
+      resolveAcquire = resolve;
+    });
+
+    let notifyAcquireStarted: (() => void) | null = null;
+    const acquireStarted = new Promise<void>((resolve) => {
+      notifyAcquireStarted = resolve;
+    });
+
+    vi.mocked(keepAwakeService.getRefCount).mockResolvedValue(0);
+    vi.mocked(keepAwakeService.acquire).mockImplementation(async () => {
+      notifyAcquireStarted?.();
+      await acquirePromise;
+      return true;
+    });
+
+    keepAwakeManager.start();
+
+    await acquireStarted;
+    executionState.runningCount = 0;
+    emit();
+
+    resolveAcquire?.();
+    await keepAwakeManager.waitForIdle();
+
+    expect(keepAwakeService.acquire).toHaveBeenCalledTimes(1);
+    expect(keepAwakeService.release).toHaveBeenCalledTimes(1);
+    expect(keepAwakeManager.getSnapshot().runningCount).toBe(0);
+  });
 });

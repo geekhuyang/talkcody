@@ -10,12 +10,13 @@ use futures_util::StreamExt;
 use serde_json;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 use tauri::{Emitter, Manager};
 use tokio::time::timeout;
 
 static REQUEST_COUNTER: AtomicU32 = AtomicU32::new(1000);
+static HTTP_CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
 
 pub struct StreamHandler {
     registry: ProviderRegistry,
@@ -93,6 +94,8 @@ impl StreamHandler {
         let mut trace_span_id: Option<String> = None;
         let mut trace_usage: Option<(i32, i32, Option<i32>, Option<i32>, Option<i32>)> = None;
         let mut trace_finish_reason: Option<String> = None;
+        let mut trace_client_start_ms: Option<i64> = None;
+        let mut trace_ttft_emitted = false;
         let mut done_emitted = false;
 
         log::info!(
@@ -120,6 +123,12 @@ impl StreamHandler {
                 .span_name
                 .as_deref()
                 .unwrap_or("llm.stream_completion");
+
+            trace_client_start_ms = trace_context
+                .metadata
+                .as_ref()
+                .and_then(|metadata| metadata.get("client_start_ms"))
+                .and_then(|value| value.parse::<i64>().ok());
 
             let mut attributes = HashMap::new();
             attributes.insert(
@@ -337,16 +346,18 @@ impl StreamHandler {
             });
         }
 
-        let client = reqwest::Client::builder()
-            .connect_timeout(Duration::from_secs(10))
-            .timeout(Duration::from_secs(300)) // Add overall request timeout
-            .gzip(false)
-            .brotli(false)
-            .tcp_nodelay(true)
-            .pool_max_idle_per_host(5)
-            .build()
-            .map_err(|e| format!("Failed to build client: {}", e))?;
-        log::debug!("[LLM Stream {}] HTTP client built", request_id);
+        let client = HTTP_CLIENT.get_or_init(|| {
+            reqwest::Client::builder()
+                .connect_timeout(Duration::from_secs(10))
+                .timeout(Duration::from_secs(300)) // Add overall request timeout
+                .gzip(false)
+                .brotli(false)
+                .tcp_nodelay(true)
+                .pool_max_idle_per_host(5)
+                .build()
+                .expect("Failed to build HTTP client")
+        });
+        log::debug!("[LLM Stream {}] HTTP client ready", request_id);
 
         let mut req_builder = client.post(&url);
         for (key, value) in headers {
@@ -535,28 +546,7 @@ impl StreamHandler {
                     }
                 };
 
-                if use_openai_oauth {
-                    log::info!("[LLM Stream {}] Raw SSE event:\n{}", request_id, event_str);
-                } else {
-                    log::debug!("[LLM Stream {}] Raw SSE event:\n{}", request_id, event_str);
-                }
-
                 if let Some(parsed) = Self::parse_sse_event(&event_str) {
-                    if use_openai_oauth {
-                        log::info!(
-                            "[LLM Stream {}] Parsed SSE - event: {:?}, data: {}",
-                            request_id,
-                            parsed.event,
-                            parsed.data
-                        );
-                    } else {
-                        log::debug!(
-                            "[LLM Stream {}] Parsed SSE - event: {:?}, data: {}",
-                            request_id,
-                            parsed.event,
-                            parsed.data
-                        );
-                    }
                     if let Some(recorder) = recorder.as_mut() {
                         recorder.record_sse_event(parsed.event.as_deref(), &parsed.data);
                     }
@@ -599,6 +589,27 @@ impl StreamHandler {
                             }
                             Self::append_text_delta(&mut response_text, &event);
                             self.emit_stream_event(&window, &event_name, request_id, &event);
+
+                            if !trace_ttft_emitted {
+                                if let (Some(ref span_id), Some(client_start_ms)) =
+                                    (trace_span_id.as_ref(), trace_client_start_ms)
+                                {
+                                    let now_ms = chrono::Utc::now().timestamp_millis();
+                                    if now_ms >= client_start_ms {
+                                        let ttft_ms = now_ms - client_start_ms;
+                                        let trace_writer =
+                                            window.app_handle().state::<Arc<TraceWriter>>();
+                                        trace_writer.add_event(
+                                            span_id.to_string(),
+                                            crate::llm::tracing::types::attributes::GEN_AI_TTFT_MS
+                                                .to_string(),
+                                            Some(serde_json::json!({ "ttft_ms": ttft_ms })),
+                                        );
+                                    }
+                                }
+                                trace_ttft_emitted = true;
+                            }
+
                             if !state.pending_events.is_empty() {
                                 for pending in state.pending_events.drain(..) {
                                     if let Some(recorder) = recorder.as_mut() {
@@ -687,12 +698,6 @@ impl StreamHandler {
         );
         if response_text.is_empty() {
             log::info!("[LLM Stream {}] Final response: <empty>", request_id);
-        } else {
-            log::info!(
-                "[LLM Stream {}] Final response:\n{}",
-                request_id,
-                response_text
-            );
         }
         if let Some(recorder) = recorder.as_mut() {
             if state.finish_reason.as_deref() == Some("tool_calls") {
@@ -758,20 +763,20 @@ impl StreamHandler {
                 );
             }
 
+            let ttft_ms = trace_client_start_ms
+                .map(|client_start_ms| chrono::Utc::now().timestamp_millis() - client_start_ms)
+                .filter(|value| *value >= 0);
+
             // Record response event
             trace_writer.add_event(
                 span_id.clone(),
                 crate::llm::tracing::types::attributes::HTTP_RESPONSE_BODY.to_string(),
-                Some(serde_json::json!({
-                    "finish_reason": trace_finish_reason,
-                    "usage": trace_usage.map(|(i, o, t, c, cc)| serde_json::json!({
-                        "input_tokens": i,
-                        "output_tokens": o,
-                        "total_tokens": t,
-                        "cached_input_tokens": c,
-                        "cache_creation_input_tokens": cc,
-                    })),
-                })),
+                Some(Self::build_response_payload(
+                    trace_finish_reason.as_deref(),
+                    ttft_ms,
+                    trace_usage,
+                    response_text.as_str(),
+                )),
             );
 
             trace_writer.end_span(span_id.clone(), chrono::Utc::now().timestamp_millis());
@@ -915,6 +920,26 @@ impl StreamHandler {
     ) {
         log::debug!("[LLM Stream {}] Emitting event: {:?}", request_id, event);
         let _ = window.emit(event_name, event);
+    }
+
+    fn build_response_payload(
+        finish_reason: Option<&str>,
+        ttft_ms: Option<i64>,
+        trace_usage: Option<(i32, i32, Option<i32>, Option<i32>, Option<i32>)>,
+        response_text: &str,
+    ) -> serde_json::Value {
+        serde_json::json!({
+            "finish_reason": finish_reason,
+            "ttft_ms": ttft_ms,
+            "usage": trace_usage.map(|(i, o, t, c, cc)| serde_json::json!({
+                "input_tokens": i,
+                "output_tokens": o,
+                "total_tokens": t,
+                "cached_input_tokens": c,
+                "cache_creation_input_tokens": cc,
+            })),
+            "response_text": response_text,
+        })
     }
 
     fn recording_channel(
@@ -1955,6 +1980,28 @@ mod tests {
         let data = b"event: ping\r\n\r\n";
         let delimiter = StreamHandler::find_sse_delimiter(data);
         assert_eq!(delimiter, Some((11, 4)));
+    }
+
+    #[test]
+    fn build_response_payload_includes_response_text() {
+        let payload = StreamHandler::build_response_payload(
+            Some("stop"),
+            Some(12),
+            Some((10, 20, Some(30), None, Some(5))),
+            "final response",
+        );
+
+        assert_eq!(payload["finish_reason"], json!("stop"));
+        assert_eq!(payload["ttft_ms"], json!(12));
+        assert_eq!(payload["usage"]["input_tokens"], json!(10));
+        assert_eq!(payload["usage"]["output_tokens"], json!(20));
+        assert_eq!(payload["usage"]["total_tokens"], json!(30));
+        assert_eq!(
+            payload["usage"]["cached_input_tokens"],
+            serde_json::Value::Null
+        );
+        assert_eq!(payload["usage"]["cache_creation_input_tokens"], json!(5));
+        assert_eq!(payload["response_text"], json!("final response"));
     }
 
     #[test]

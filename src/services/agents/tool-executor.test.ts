@@ -3,6 +3,13 @@ import { z } from 'zod';
 import type { AgentLoopState, AgentToolSet } from '@/types/agent';
 import { ToolExecutor } from './tool-executor';
 
+vi.mock('@/services/database-service', () => ({
+  databaseService: {
+    startSpan: vi.fn().mockResolvedValue(undefined),
+    endSpan: vi.fn().mockResolvedValue(undefined),
+  },
+}));
+
 describe('tool-executor - callAgent toolCallId passing', () => {
   let mockCallAgentExecute: any;
   let mockTools: AgentToolSet;

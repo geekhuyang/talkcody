@@ -77,6 +77,44 @@ function toSpanEventRecord(row: {
 export class TraceService {
   constructor(private db: TursoClient) {}
 
+  async ensureTrace(traceId: string, startedAt = Date.now()): Promise<void> {
+    await this.db.execute(
+      'INSERT OR IGNORE INTO traces (id, started_at, ended_at, metadata) VALUES ($1, $2, $3, $4)',
+      [traceId, startedAt, null, null]
+    );
+  }
+
+  async startSpan(input: {
+    spanId: string;
+    traceId: string;
+    parentSpanId?: string | null;
+    name: string;
+    startedAt?: number;
+    attributes?: Record<string, unknown> | null;
+  }): Promise<void> {
+    const startedAt = input.startedAt ?? Date.now();
+    const attributes = input.attributes ? JSON.stringify(input.attributes) : '{}';
+
+    await this.ensureTrace(input.traceId, startedAt);
+
+    await this.db.execute(
+      'INSERT INTO spans (id, trace_id, parent_span_id, name, started_at, ended_at, attributes) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+      [
+        input.spanId,
+        input.traceId,
+        input.parentSpanId ?? null,
+        input.name,
+        startedAt,
+        null,
+        attributes,
+      ]
+    );
+  }
+
+  async endSpan(spanId: string, endedAt = Date.now()): Promise<void> {
+    await this.db.execute('UPDATE spans SET ended_at = $1 WHERE id = $2', [endedAt, spanId]);
+  }
+
   async getTraces(limit = DEFAULT_TRACE_LIMIT, offset = 0): Promise<TraceSummary[]> {
     const rows = await this.db.select<
       Array<{
@@ -89,12 +127,14 @@ export class TraceService {
     >(
       `SELECT
         t.id,
-        t.started_at,
-        t.ended_at,
+        COALESCE(MIN(s.started_at), t.started_at) AS started_at,
+        COALESCE(MAX(s.ended_at), MAX(s.started_at), t.ended_at) AS ended_at,
         t.metadata,
-        (SELECT COUNT(*) FROM spans s WHERE s.trace_id = t.id) AS span_count
+        COUNT(s.id) AS span_count
       FROM traces t
-      ORDER BY t.started_at DESC
+      LEFT JOIN spans s ON s.trace_id = t.id
+      GROUP BY t.id
+      ORDER BY started_at DESC
       LIMIT $1 OFFSET $2`,
       [limit, offset]
     );
@@ -114,12 +154,14 @@ export class TraceService {
     >(
       `SELECT
         t.id,
-        t.started_at,
-        t.ended_at,
+        COALESCE(MIN(s.started_at), t.started_at) AS started_at,
+        COALESCE(MAX(s.ended_at), MAX(s.started_at), t.ended_at) AS ended_at,
         t.metadata,
-        (SELECT COUNT(*) FROM spans s WHERE s.trace_id = t.id) AS span_count
+        COUNT(s.id) AS span_count
       FROM traces t
-      WHERE t.id = $1`,
+      LEFT JOIN spans s ON s.trace_id = t.id
+      WHERE t.id = $1
+      GROUP BY t.id`,
       [traceId]
     );
 

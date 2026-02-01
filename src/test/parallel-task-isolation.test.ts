@@ -39,6 +39,8 @@ vi.mock('@/services/database-service', () => ({
         name: 'Test Project',
       })
     ),
+    startSpan: vi.fn().mockResolvedValue(undefined),
+    endSpan: vi.fn().mockResolvedValue(undefined),
   },
 }));
 

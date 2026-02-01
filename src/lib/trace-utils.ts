@@ -25,24 +25,32 @@ export interface TraceContext {
   spanName: string;
   /** Parent span ID for nested spans (null if root) */
   parentSpanId: string | null;
+  /** Optional metadata for backend tracing */
+  metadata?: Record<string, string>;
 }
 
 /**
  * Creates a trace context for LLM operations
  * @param traceId The trace ID (should be taskId for agent loop traces)
  * @param model The model identifier (used in span name)
+ * @param stepNumber The agent loop step number (1-based)
  * @param parentSpanId Optional parent span ID for nested spans
  * @returns TraceContext object
  */
 export function createLlmTraceContext(
   traceId: string,
   model: string,
-  parentSpanId?: string | null
+  stepNumber?: number,
+  parentSpanId?: string | null,
+  metadata?: Record<string, string>
 ): TraceContext {
+  const stepLabel = typeof stepNumber === 'number' && stepNumber > 0 ? stepNumber : null;
+  const spanName = stepLabel ? `Step${stepLabel}-llm` : `chat ${model}`;
   const context = {
     traceId: traceId,
-    spanName: `chat ${model}`,
+    spanName,
     parentSpanId: parentSpanId ?? null,
+    metadata,
   };
   logger.info(`[Trace] Creating LLM trace context: ${JSON.stringify(context)}`);
   return context;

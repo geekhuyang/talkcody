@@ -63,6 +63,7 @@ export type TraceContext = {
   traceId: string;
   spanName: string;
   parentSpanId: string | null;
+  metadata?: Record<string, string>;
 };
 
 export type StreamTextRequest = {

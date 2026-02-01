@@ -87,6 +87,9 @@ pub mod attributes {
 
     // Error attributes
     pub const ERROR_TYPE: &str = "error.type";
+
+    // Latency attributes
+    pub const GEN_AI_TTFT_MS: &str = "gen_ai.ttft_ms";
 }
 
 /// Helper functions for building attributes

@@ -24,6 +24,7 @@ vi.mock('@tauri-apps/api/event', () => ({
 describe('llmClient', () => {
   it('collects text from streamed events', async () => {
     // Mock invoke to return the same requestId that was sent
+    let capturedRequest: { traceContext?: { metadata?: Record<string, string> } } | null = null;
     (invoke as unknown as {
       mockImplementation: (
         fn: (cmd: string, args: { request: { requestId?: number; model?: string } }) => Promise<{
@@ -31,6 +32,7 @@ describe('llmClient', () => {
         }>
       ) => void;
     }).mockImplementation(async (_cmd, args) => {
+      capturedRequest = args.request as { traceContext?: { metadata?: Record<string, string> } };
       return { request_id: args.request.requestId ?? 42 };
     });
 
@@ -38,10 +40,16 @@ describe('llmClient', () => {
       model: 'test',
       messages: [{ role: 'user', content: 'Hello' }],
       stream: true,
+      traceContext: {
+        traceId: 'trace-1',
+        spanName: 'Step1-llm',
+        parentSpanId: null,
+      },
     });
 
     expect(result.text).toBe('Hello world');
     expect(result.finishReason).toBe('stop');
+    expect(capturedRequest?.traceContext?.metadata?.client_start_ms).toBeTypeOf('string');
   });
 
 });

@@ -108,6 +108,8 @@ vi.mock('@/services/database-service', () => ({
   databaseService: {
     initialize: vi.fn().mockResolvedValue(undefined),
     insertApiUsageEvent: vi.fn().mockResolvedValue(undefined),
+    startSpan: vi.fn().mockResolvedValue(undefined),
+    endSpan: vi.fn().mockResolvedValue(undefined),
     db: {
       select: vi.fn().mockResolvedValue([]),
       execute: vi.fn().mockResolvedValue({ rowsAffected: 0 }),

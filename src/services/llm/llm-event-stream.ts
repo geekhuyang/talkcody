@@ -28,6 +28,7 @@ export class LlmEventStream {
 export function createEventQueue<T>() {
   let resolveNext: ((value: IteratorResult<T>) => void) | null = null;
   const queue: T[] = [];
+  let queueIndex = 0;
   let done = false;
 
   return {
@@ -49,8 +50,13 @@ export function createEventQueue<T>() {
     },
     async *iterate() {
       while (true) {
-        if (queue.length > 0) {
-          const value = queue.shift() as T;
+        if (queueIndex < queue.length) {
+          const value = queue[queueIndex] as T;
+          queueIndex += 1;
+          if (queueIndex > 1024 && queueIndex === queue.length) {
+            queue.length = 0;
+            queueIndex = 0;
+          }
           yield value;
           continue;
         }

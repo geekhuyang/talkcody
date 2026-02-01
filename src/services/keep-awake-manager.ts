@@ -114,6 +114,8 @@ class KeepAwakeManager {
 
       const targetCount = this.runningCount;
       this.previousRunningCount = targetCount;
+      // Allow deltas while the initial sync is in flight.
+      this.isInitialized = true;
 
       const delta = targetCount - count;
       if (delta !== 0) {
@@ -121,8 +123,6 @@ class KeepAwakeManager {
       }
     } catch (error) {
       logger.error('[KeepAwakeManager] Failed to sync keep-awake state:', error);
-    } finally {
-      this.isInitialized = true;
     }
   }
 

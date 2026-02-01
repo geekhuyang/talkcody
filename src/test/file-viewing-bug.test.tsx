@@ -26,6 +26,8 @@ vi.mock('@/services/database-service', () => ({
     createOrGetProjectForRepository: vi.fn(() =>
       Promise.resolve({ id: 'test-project', name: 'Test Project' })
     ),
+    startSpan: vi.fn().mockResolvedValue(undefined),
+    endSpan: vi.fn().mockResolvedValue(undefined),
   },
 }));
 

@@ -1,4 +1,4 @@
-import { BarChart3, ChevronDown, ChevronRight, Clock } from 'lucide-react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -11,6 +11,7 @@ import { databaseService } from '@/services/database-service';
 import type { SpanEventRecord, SpanRecord, TraceDetail, TraceSummary } from '@/types/trace';
 
 const MAX_JSON_PREVIEW = 2000;
+const MAX_PAYLOAD_HEIGHT = '24rem';
 
 function formatTimestamp(value: number) {
   const date = new Date(value);
@@ -47,6 +48,14 @@ function formatJsonPreview(value: unknown) {
   } catch {
     return String(value);
   }
+}
+
+function shouldShowFullPayload(event: SpanEventRecord) {
+  return (
+    event.eventType === 'http.request.body' ||
+    event.eventType === 'http.response.body' ||
+    event.eventType === 'gen_ai.response.body'
+  );
 }
 
 function getSpanLabel(span: SpanRecord) {
@@ -103,7 +112,6 @@ export function LLMTracingPage() {
   const [loadingList, setLoadingList] = useState(true);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'list' | 'timeline'>('timeline');
   const [expandedSpans, setExpandedSpans] = useState<Set<string>>(new Set());
 
   const loadTraces = useCallback(async () => {
@@ -173,8 +181,23 @@ export function LLMTracingPage() {
     if (!detail?.spans?.length) return null;
     const start = Math.min(...detail.spans.map((s) => s.startedAt));
     const end = Math.max(...detail.spans.map((s) => s.endedAt ?? s.startedAt));
-    return { start, end, duration: end - start };
+    return { start, end, duration: Math.max(end - start, 0) };
   }, [detail?.spans]);
+
+  const traceTiming = useMemo(() => {
+    if (timelineBounds) {
+      return {
+        startedAt: timelineBounds.start,
+        endedAt: timelineBounds.end,
+      };
+    }
+    return selectedTrace
+      ? {
+          startedAt: selectedTrace.startedAt,
+          endedAt: selectedTrace.endedAt ?? null,
+        }
+      : null;
+  }, [selectedTrace, timelineBounds]);
 
   const toggleSpanExpanded = useCallback((spanId: string) => {
     setExpandedSpans((prev) => {
@@ -331,13 +354,6 @@ export function LLMTracingPage() {
 
     return (
       <div className="space-y-4">
-        {/* Timeline header */}
-        <div className="flex items-center justify-between text-sm text-muted-foreground px-4">
-          <span>Start: {formatTimestamp(start)}</span>
-          <span>Duration: {formatDurationMs(duration)}</span>
-        </div>
-
-        {/* Timeline grid */}
         <div className="relative">
           {/* Time markers */}
           <div className="relative h-6 border-b border-gray-200 dark:border-gray-800 mb-2">
@@ -419,6 +435,9 @@ export function LLMTracingPage() {
       return <div className="p-6 text-sm text-muted-foreground">{t.Tracing.selectTrace}</div>;
     }
 
+    const startedAt = traceTiming?.startedAt ?? selectedTrace.startedAt;
+    const endedAt = traceTiming?.endedAt ?? selectedTrace.endedAt;
+
     return (
       <div className="space-y-6 p-6">
         {/* Trace Header */}
@@ -428,11 +447,11 @@ export function LLMTracingPage() {
           <div className="mt-3 grid gap-2 text-sm text-muted-foreground sm:grid-cols-2">
             <div>
               <span className="font-medium text-foreground">{t.Tracing.startedAtLabel}:</span>{' '}
-              {formatTimestamp(selectedTrace.startedAt)}
+              {formatTimestamp(startedAt)}
             </div>
             <div>
               <span className="font-medium text-foreground">{t.Tracing.durationLabel}:</span>{' '}
-              {formatDuration(selectedTrace.startedAt, selectedTrace.endedAt)}
+              {formatDuration(startedAt, endedAt ?? null)}
             </div>
             <div>
               <span className="font-medium text-foreground">{t.Tracing.spanCountLabel}:</span>{' '}
@@ -441,51 +460,18 @@ export function LLMTracingPage() {
           </div>
         </div>
 
-        {/* View Mode Toggle */}
-        <div className="flex gap-2">
-          <Button
-            variant={viewMode === 'timeline' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setViewMode('timeline')}
-          >
-            <BarChart3 className="w-4 h-4 mr-2" />
-            Timeline
-          </Button>
-          <Button
-            variant={viewMode === 'list' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setViewMode('list')}
-          >
-            <Clock className="w-4 h-4 mr-2" />
-            List
-          </Button>
-        </div>
-
         {/* Span Content */}
         <div>
           <h3 className="text-base font-semibold mb-3">{t.Tracing.spansTitle}</h3>
           {detail?.spans.length ? (
-            viewMode === 'timeline' ? (
-              renderTimelineView()
-            ) : (
-              <div className="space-y-2">{spanTree.map((node) => renderSpanNode(node))}</div>
-            )
+            renderTimelineView()
           ) : (
             <div className="text-sm text-muted-foreground">{t.Tracing.noSpans}</div>
           )}
         </div>
       </div>
     );
-  }, [
-    detail,
-    loadingDetail,
-    selectedTrace,
-    spanTree,
-    viewMode,
-    renderTimelineView,
-    renderSpanNode,
-    t.Tracing,
-  ]);
+  }, [detail, loadingDetail, selectedTrace, traceTiming, renderTimelineView, t.Tracing]);
 
   return (
     <div className="flex h-full flex-col bg-white dark:bg-gray-950">
@@ -519,7 +505,10 @@ export function LLMTracingPage() {
 }
 
 function TraceEventRow({ event }: { event: SpanEventRecord }) {
-  const payloadPreview = formatJsonPreview(event.payload);
+  const showFullPayload = shouldShowFullPayload(event);
+  const payloadPreview = showFullPayload
+    ? JSON.stringify(event.payload, null, 2)
+    : formatJsonPreview(event.payload);
 
   return (
     <details className="rounded border px-3 py-2 text-xs">
@@ -530,7 +519,10 @@ function TraceEventRow({ event }: { event: SpanEventRecord }) {
         </div>
         <span className="text-muted-foreground truncate max-w-[200px]">{event.id}</span>
       </summary>
-      <pre className="mt-2 max-h-48 overflow-auto rounded bg-gray-50 p-2 text-xs dark:bg-gray-900">
+      <pre
+        className="mt-2 overflow-auto rounded bg-gray-50 p-2 text-xs dark:bg-gray-900"
+        style={{ maxHeight: MAX_PAYLOAD_HEIGHT }}
+      >
         {payloadPreview}
       </pre>
     </details>
