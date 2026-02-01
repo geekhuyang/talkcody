@@ -84,10 +84,10 @@ impl ModelRegistry {
         for (model_key, model_cfg) in &config.models {
             let providers = &model_cfg.providers;
             for provider_id in providers {
-                if custom_providers.providers.contains_key(provider_id) {
-                    let key = format!("{}-{}", model_key, provider_id);
-                    if !model_map.contains_key(&key) {
-                        if let Some(custom) = custom_providers.providers.get(provider_id) {
+                if let Some(custom) = custom_providers.providers.get(provider_id) {
+                    if custom.enabled {
+                        let key = format!("{}-{}", model_key, provider_id);
+                        if !model_map.contains_key(&key) {
                             model_map.insert(
                                 key,
                                 AvailableModel {
@@ -235,7 +235,7 @@ mod tests {
         .expect("create settings");
         TestContext {
             _dir: dir,
-            api_keys: ApiKeyManager::new(db),
+            api_keys: ApiKeyManager::new(db, std::path::PathBuf::from("/tmp")),
         }
     }
 

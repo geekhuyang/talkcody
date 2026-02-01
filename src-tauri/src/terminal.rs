@@ -33,10 +33,15 @@ lazy_static::lazy_static! {
 
 /// Windows shell configurations: (command, version_args, shell_args)
 /// Note: cmd.exe /? returns exit code 1, so we use /c exit 0 to check availability
+/// PowerShell detection uses -NoLogo -NoProfile -Command "exit 0" to reliably exit with success
 #[cfg(target_os = "windows")]
 const WINDOWS_SHELLS: &[(&str, &[&str], &[&str])] = &[
     ("pwsh", &["--version"], &["-NoLogo", "-NoExit"]),
-    ("powershell", &["-Version"], &["-NoLogo", "-NoExit"]),
+    (
+        "powershell",
+        &["-NoLogo", "-NoProfile", "-Command", "exit 0"],
+        &["-NoLogo", "-NoExit"],
+    ),
     ("cmd.exe", &["/c", "exit", "0"], &[]),
 ];
 
@@ -84,7 +89,7 @@ fn get_default_shell(preferred_shell: Option<&str>) -> String {
 
         // Final fallback
         warn!("No shell detected, falling back to COMSPEC or cmd.exe");
-        std::env::var("COMSPEC").unwrap_or_else(|_| "cmd.exe".to_string())
+        crate::shell_utils::get_windows_shell()
     }
 
     #[cfg(not(target_os = "windows"))]

@@ -68,8 +68,9 @@ class ExecutionService {
 
     // 2. Try to acquire worktree for parallel execution (if enabled and needed)
     const runningTaskIds = this.getRunningTaskIds().filter((id) => id !== taskId);
+    let worktreePath: string | null = null;
     try {
-      const worktreePath = await useWorktreeStore.getState().acquireForTask(taskId, runningTaskIds);
+      worktreePath = await useWorktreeStore.getState().acquireForTask(taskId, runningTaskIds);
       if (worktreePath) {
         logger.info('[ExecutionService] Task using worktree', { taskId, worktreePath });
       }
@@ -81,52 +82,62 @@ class ExecutionService {
       );
     }
 
-    // 3. Create independent LLMService instance for this task
-    const llmService = createLLMService(taskId);
-    this.llmServiceInstances.set(taskId, llmService);
-
     let currentMessageId = '';
     let streamedContent = '';
+    let llmService: LLMService | undefined;
 
     try {
-      const finalizeExecution = async () => {
-        if (currentMessageId && streamedContent) {
-          await messageService.finalizeMessage(taskId, currentMessageId, streamedContent);
+      // 3. Create independent LLMService instance for this task
+      llmService = createLLMService(taskId);
+      this.llmServiceInstances.set(taskId, llmService);
+
+      const finalizeExecution = async (finalText?: string) => {
+        // Prefer finalText if it's longer (complete) over potentially truncated streamedContent
+        const text =
+          finalText && finalText.length >= streamedContent.length
+            ? finalText
+            : streamedContent || '';
+        if (currentMessageId && text) {
+          await messageService.finalizeMessage(taskId, currentMessageId, text);
           streamedContent = '';
         }
 
         const runningUsage = useTaskStore.getState().runningTaskUsage.get(taskId);
         if (runningUsage) {
-          await taskService
-            .updateTaskUsage(
+          try {
+            await taskService.updateTaskUsage(
               taskId,
               runningUsage.costDelta,
               runningUsage.inputTokensDelta,
               runningUsage.outputTokensDelta,
               runningUsage.requestCountDelta,
               runningUsage.contextUsage
-            )
-            .then(() => {
-              useTaskStore.getState().flushRunningTaskUsage(taskId);
-            })
-            .finally(() => {
-              useTaskStore.getState().clearRunningTaskUsage(taskId);
-            });
+            );
+            useTaskStore.getState().flushRunningTaskUsage(taskId);
+          } catch (err) {
+            logger.warn('[ExecutionService] Failed to persist task usage', err);
+          } finally {
+            useTaskStore.getState().clearRunningTaskUsage(taskId);
+          }
         }
       };
 
       const handleCompletion = async (fullText: string, success: boolean = true) => {
         if (abortController.signal.aborted) return;
 
-        await finalizeExecution();
+        await finalizeExecution(fullText);
 
         if (success) {
-          await notificationService.notifyHooked(
-            taskId,
-            'Task Complete',
-            'TalkCody agent has finished processing',
-            'agent_complete'
-          );
+          try {
+            await notificationService.notifyHooked(
+              taskId,
+              'Task Complete',
+              'TalkCody agent has finished processing',
+              'agent_complete'
+            );
+          } catch (err) {
+            logger.warn('[ExecutionService] Notification failed', err);
+          }
         }
 
         callbacks?.onComplete?.({ success, fullText });
@@ -156,6 +167,10 @@ class ExecutionService {
           currentMessageId = '';
         }
 
+        // Create a message ID for Ralph loop responses
+        const ralphMessageId = messageService.createAssistantMessage(taskId, agentId);
+        currentMessageId = ralphMessageId;
+
         const result = await ralphLoopService.runLoop({
           taskId,
           messages,
@@ -172,13 +187,28 @@ class ExecutionService {
           },
           onAttachment: async (attachment) => {
             if (abortController.signal.aborted) return;
-            if (currentMessageId) {
-              await messageService.addAttachment(taskId, currentMessageId, attachment);
-            }
+            await messageService.addAttachment(taskId, ralphMessageId, attachment);
           },
         });
 
-        await handleCompletion(result.fullText, result.success);
+        // Set streamedContent so finalizeExecution can persist the response
+        streamedContent = result.fullText;
+
+        // Handle failed Ralph loop runs
+        if (!result.success && !abortController.signal.aborted) {
+          // Finalize message with whatever content we have before erroring
+          if (currentMessageId && streamedContent) {
+            await messageService.finalizeMessage(taskId, currentMessageId, streamedContent);
+          }
+          // Clear running usage to avoid stale metrics
+          useTaskStore.getState().clearRunningTaskUsage(taskId);
+
+          executionStore.setError(taskId, 'Ralph loop failed');
+          callbacks?.onError?.(new Error('Ralph loop failed'));
+          return;
+        }
+
+        await handleCompletion(result.fullText, true);
       } else {
         // 4. Run agent loop with callbacks that route through services
         await llmService.runAgentLoop(
@@ -272,7 +302,17 @@ class ExecutionService {
     } finally {
       this.llmServiceInstances.delete(taskId);
 
-      // Ensure execution is marked as completed/stopped
+      // Release worktree if acquired
+      if (worktreePath && useWorktreeStore.getState().isTaskUsingWorktree(taskId)) {
+        useWorktreeStore
+          .getState()
+          .releaseForTask(taskId)
+          .catch((err) => {
+            logger.warn('[ExecutionService] Failed to release worktree', err);
+          });
+      }
+
+      // Only mark as completed if still running (not already stopped or errored)
       if (executionStore.isRunning(taskId)) {
         executionStore.completeExecution(taskId);
       }
@@ -289,6 +329,9 @@ class ExecutionService {
 
     // Stop streaming in task store
     useTaskStore.getState().stopStreaming(taskId);
+
+    // Clear running usage to avoid stale metrics
+    useTaskStore.getState().clearRunningTaskUsage(taskId);
 
     logger.info('[ExecutionService] Execution stopped', { taskId });
   }

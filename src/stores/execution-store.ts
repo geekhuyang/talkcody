@@ -258,7 +258,8 @@ export const useExecutionStore = create<ExecutionState>()((set, get) => ({
     set((state) => {
       const newExecutions = new Map(state.executions);
       const existing = newExecutions.get(taskId);
-      if (existing) {
+      // Only mark as completed if not already in a terminal state (stopped, error)
+      if (existing && existing.status === 'running') {
         newExecutions.set(taskId, {
           ...existing,
           status: 'completed',

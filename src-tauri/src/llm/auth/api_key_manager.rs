@@ -2,6 +2,7 @@ use crate::llm::types::CustomProvidersConfiguration;
 use crate::llm::types::{AuthType, ProviderConfig};
 use serde_json::Value;
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::State;
 use tokio::sync::Mutex;
@@ -9,14 +10,20 @@ use tokio::sync::Mutex;
 use crate::database::Database;
 
 const SETTINGS_SELECT: &str = "SELECT value FROM settings WHERE key = $1";
+const CUSTOM_PROVIDERS_FILENAME: &str = "custom-providers.json";
 
 pub struct ApiKeyManager {
     db: Arc<Database>,
+    app_data_dir: PathBuf,
 }
 
 impl ApiKeyManager {
-    pub fn new(db: Arc<Database>) -> Self {
-        Self { db }
+    pub fn new(db: Arc<Database>, app_data_dir: PathBuf) -> Self {
+        Self { db, app_data_dir }
+    }
+
+    fn custom_providers_path(&self) -> PathBuf {
+        self.app_data_dir.join(CUSTOM_PROVIDERS_FILENAME)
     }
 
     pub async fn get_setting(&self, key: &str) -> Result<Option<String>, String> {
@@ -74,26 +81,57 @@ impl ApiKeyManager {
     }
 
     pub async fn load_custom_providers(&self) -> Result<CustomProvidersConfiguration, String> {
-        let value = self.get_setting("custom_providers_json").await?;
-        if let Some(raw) = value {
-            let parsed: CustomProvidersConfiguration = serde_json::from_str(&raw)
-                .map_err(|e| format!("Failed to parse custom providers: {}", e))?;
-            Ok(parsed)
-        } else {
-            Ok(CustomProvidersConfiguration {
+        let path = self.custom_providers_path();
+
+        // Check if file exists
+        if !path.exists() {
+            return Ok(CustomProvidersConfiguration {
                 version: chrono::Utc::now().to_rfc3339(),
                 providers: HashMap::new(),
-            })
+            });
         }
+
+        // Read file content
+        let content = tokio::fs::read_to_string(&path)
+            .await
+            .map_err(|e| format!("Failed to read custom providers file: {}", e))?;
+
+        if content.trim().is_empty() {
+            return Ok(CustomProvidersConfiguration {
+                version: chrono::Utc::now().to_rfc3339(),
+                providers: HashMap::new(),
+            });
+        }
+
+        // Parse JSON
+        let parsed: CustomProvidersConfiguration = serde_json::from_str(&content)
+            .map_err(|e| format!("Failed to parse custom providers: {}", e))?;
+
+        Ok(parsed)
     }
 
     pub async fn save_custom_providers(
         &self,
         config: &CustomProvidersConfiguration,
     ) -> Result<(), String> {
+        let path = self.custom_providers_path();
+
+        // Ensure parent directory exists
+        if let Some(parent) = path.parent() {
+            tokio::fs::create_dir_all(parent)
+                .await
+                .map_err(|e| format!("Failed to create directory for custom providers: {}", e))?;
+        }
+
+        // Serialize and write to file
         let raw = serde_json::to_string_pretty(config)
             .map_err(|e| format!("Failed to serialize custom providers: {}", e))?;
-        self.set_setting("custom_providers_json", &raw).await
+
+        tokio::fs::write(&path, raw)
+            .await
+            .map_err(|e| format!("Failed to write custom providers file: {}", e))?;
+
+        Ok(())
     }
 
     pub async fn get_credentials(
@@ -209,12 +247,12 @@ pub struct LlmState {
 }
 
 impl LlmState {
-    pub fn new(db: Arc<Database>, providers: Vec<ProviderConfig>) -> Self {
+    pub fn new(db: Arc<Database>, app_data_dir: PathBuf, providers: Vec<ProviderConfig>) -> Self {
         Self {
             registry: Mutex::new(
                 crate::llm::providers::provider_registry::ProviderRegistry::new(providers),
             ),
-            api_keys: Mutex::new(ApiKeyManager::new(db)),
+            api_keys: Mutex::new(ApiKeyManager::new(db, app_data_dir)),
         }
     }
 }
@@ -256,7 +294,7 @@ mod tests {
         .expect("create settings");
         TestContext {
             _dir: dir,
-            api_keys: ApiKeyManager::new(db),
+            api_keys: ApiKeyManager::new(db, std::path::PathBuf::from("/tmp")),
         }
     }
 

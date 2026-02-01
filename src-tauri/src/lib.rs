@@ -20,6 +20,7 @@ mod lsp;
 mod oauth_callback_server;
 mod script_executor;
 mod search;
+mod shell_utils;
 mod terminal;
 mod walker;
 mod websocket;
@@ -467,9 +468,12 @@ async fn execute_user_shell(
     }
     #[cfg(windows)]
     {
-        let shell = std::env::var("COMSPEC").unwrap_or_else(|_| "cmd.exe".to_string());
+        // Get shell from COMSPEC or default to cmd.exe
+        // Remove surrounding quotes if present (Windows env vars sometimes have quotes)
+        let shell = shell_utils::get_windows_shell();
+
         let mut cmd = TokioCommand::new(&shell);
-        if shell.to_lowercase().contains("powershell") {
+        if shell_utils::is_powershell(&shell) {
             cmd.arg("-Command").arg(&command);
         } else {
             cmd.arg("/C").arg(&command);
@@ -505,23 +509,52 @@ async fn execute_with_idle_timeout(
     idle_timeout: TokioDuration,
     child_pid: Option<u32>,
 ) -> Result<ShellResult, String> {
-    use tokio::io::AsyncBufReadExt;
+    use tokio::io::AsyncReadExt;
+
+    // Maximum output size to prevent memory exhaustion (256KB per stream)
+    const MAX_OUTPUT_BYTES: usize = 256 * 1024;
+
     let start_time = Instant::now();
-    let mut stdout_lines: Vec<String> = Vec::new();
-    let mut stderr_lines: Vec<String> = Vec::new();
+    let mut stdout_buffer = Vec::new();
+    let mut stderr_buffer = Vec::new();
     let mut last_output_time = Instant::now();
     let mut timed_out = false;
     let mut idle_timed_out = false;
-    let mut stdout_reader = stdout.map(|s| BufReader::new(s).lines());
-    let mut stderr_reader = stderr.map(|s| BufReader::new(s).lines());
+
+    // Use raw byte readers instead of line-based readers
+    // This ensures idle timeout resets on ANY output, not just newlines
+    let mut stdout_reader = stdout.map(BufReader::new);
+    let mut stderr_reader = stderr.map(BufReader::new);
+    let mut stdout_buf = [0u8; 4096];
+    let mut stderr_buf = [0u8; 4096];
+
+    // Helper function to append data with size cap
+    fn append_capped(buf: &mut Vec<u8>, chunk: &[u8]) {
+        let remaining = MAX_OUTPUT_BYTES.saturating_sub(buf.len());
+        if remaining > 0 {
+            buf.extend_from_slice(&chunk[..chunk.len().min(remaining)]);
+        }
+    }
 
     loop {
         if start_time.elapsed() >= max_timeout {
             timed_out = true;
+            // Kill the child process on timeout to prevent process leaks
+            if let Err(e) = child.kill().await {
+                log::warn!("Failed to kill timed out process: {}", e);
+            }
+            // Wait briefly for process to terminate
+            let _ = tokio::time::timeout(std::time::Duration::from_secs(2), child.wait()).await;
             break;
         }
         if last_output_time.elapsed() >= idle_timeout {
             idle_timed_out = true;
+            // Kill the child process on idle timeout to prevent process leaks
+            if let Err(e) = child.kill().await {
+                log::warn!("Failed to kill idle timed out process: {}", e);
+            }
+            // Wait briefly for process to terminate
+            let _ = tokio::time::timeout(std::time::Duration::from_secs(2), child.wait()).await;
             break;
         }
         let remaining_idle = idle_timeout.saturating_sub(last_output_time.elapsed());
@@ -532,11 +565,28 @@ async fn execute_with_idle_timeout(
             status = child.wait() => {
                 match status {
                     Ok(exit_status) => {
-                        if let Some(ref mut reader) = stdout_reader { while let Ok(Some(line)) = reader.next_line().await { stdout_lines.push(line); } }
-                        if let Some(ref mut reader) = stderr_reader { while let Ok(Some(line)) = reader.next_line().await { stderr_lines.push(line); } }
+                        // Flush any remaining output
+                        if let Some(ref mut reader) = stdout_reader {
+                            loop {
+                                match reader.read(&mut stdout_buf).await {
+                                    Ok(0) => break,
+                                    Ok(n) => append_capped(&mut stdout_buffer, &stdout_buf[..n]),
+                                    Err(_) => break,
+                                }
+                            }
+                        }
+                        if let Some(ref mut reader) = stderr_reader {
+                            loop {
+                                match reader.read(&mut stderr_buf).await {
+                                    Ok(0) => break,
+                                    Ok(n) => append_capped(&mut stderr_buffer, &stderr_buf[..n]),
+                                    Err(_) => break,
+                                }
+                            }
+                        }
                         return Ok(ShellResult {
-                            stdout: stdout_lines.join("\n"),
-                            stderr: stderr_lines.join("\n"),
+                            stdout: String::from_utf8_lossy(&stdout_buffer).to_string(),
+                            stderr: String::from_utf8_lossy(&stderr_buffer).to_string(),
                             code: exit_status.code().unwrap_or(-1),
                             timed_out: false,
                             idle_timed_out: false,
@@ -546,22 +596,80 @@ async fn execute_with_idle_timeout(
                     Err(e) => return Err(format!("Failed to wait for process: {}", e)),
                 }
             }
-            result = async { if let Some(ref mut reader) = stdout_reader { reader.next_line().await } else { std::future::pending().await } } => {
-                match result { Ok(Some(line)) => { stdout_lines.push(line); last_output_time = Instant::now(); } _ => stdout_reader = None }
+            result = async {
+                if let Some(ref mut reader) = stdout_reader {
+                    reader.read(&mut stdout_buf).await
+                } else {
+                    std::future::pending().await
+                }
+            } => {
+                match result {
+                    Ok(0) => { stdout_reader = None; }
+                    Ok(n) => {
+                        append_capped(&mut stdout_buffer, &stdout_buf[..n]);
+                        last_output_time = Instant::now();
+                    }
+                    Err(_) => { stdout_reader = None; }
+                }
             }
-            result = async { if let Some(ref mut reader) = stderr_reader { reader.next_line().await } else { std::future::pending().await } } => {
-                match result { Ok(Some(line)) => { stderr_lines.push(line); last_output_time = Instant::now(); } _ => stderr_reader = None }
+            result = async {
+                if let Some(ref mut reader) = stderr_reader {
+                    reader.read(&mut stderr_buf).await
+                } else {
+                    std::future::pending().await
+                }
+            } => {
+                match result {
+                    Ok(0) => { stderr_reader = None; }
+                    Ok(n) => {
+                        append_capped(&mut stderr_buffer, &stderr_buf[..n]);
+                        last_output_time = Instant::now();
+                    }
+                    Err(_) => { stderr_reader = None; }
+                }
             }
             _ = tokio::time::sleep(wait_duration) => {}
         }
         if stdout_reader.is_none() && stderr_reader.is_none() {
-            break;
+            // Both stdout and stderr are closed, but child may still be running
+            // Wait for child to exit (respecting remaining timeout) to avoid orphan processes
+            let remaining_max = max_timeout.saturating_sub(start_time.elapsed());
+            match tokio::time::timeout(remaining_max, child.wait()).await {
+                Ok(Ok(exit_status)) => {
+                    return Ok(ShellResult {
+                        stdout: String::from_utf8_lossy(&stdout_buffer).to_string(),
+                        stderr: String::from_utf8_lossy(&stderr_buffer).to_string(),
+                        code: exit_status.code().unwrap_or(-1),
+                        timed_out: false,
+                        idle_timed_out: false,
+                        pid: child_pid,
+                    });
+                }
+                Ok(Err(e)) => return Err(format!("Failed to wait for process: {}", e)),
+                Err(_) => {
+                    // Timeout waiting for child exit
+                    timed_out = true;
+                    if let Err(e) = child.kill().await {
+                        log::warn!("Failed to kill process after timeout: {}", e);
+                    }
+                    // Wait briefly after kill
+                    let _ =
+                        tokio::time::timeout(std::time::Duration::from_secs(2), child.wait()).await;
+                    break;
+                }
+            }
         }
     }
+    // Try to get the exit code after timeout/kill
+    let exit_code = match child.try_wait() {
+        Ok(Some(status)) => status.code().unwrap_or(-1),
+        _ => -1,
+    };
+
     Ok(ShellResult {
-        stdout: stdout_lines.join("\n"),
-        stderr: stderr_lines.join("\n"),
-        code: -1,
+        stdout: String::from_utf8_lossy(&stdout_buffer).to_string(),
+        stderr: String::from_utf8_lossy(&stderr_buffer).to_string(),
+        code: exit_code,
         timed_out,
         idle_timed_out,
         pid: child_pid,
@@ -680,11 +788,57 @@ pub fn run() {
             // Initialize LLM tracing
             init_trace_writer_state(app, database.clone());
 
+            let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
             let llm_state = llm::auth::api_key_manager::LlmState::new(
                 database.clone(),
+                app_data_dir.clone(),
                 llm::providers::provider_configs::builtin_providers(),
             );
             app.manage(llm_state);
+
+            // Load custom providers from filesystem and register them asynchronously
+            let app_handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                if let Some(state) = app_handle.try_state::<llm::auth::api_key_manager::LlmState>() {
+                    let api_keys = state.api_keys.lock().await;
+                    match api_keys.load_custom_providers().await {
+                        Ok(custom_config) => {
+                            let mut registry = state.registry.lock().await;
+                            let provider_count = custom_config.providers.len();
+                            for (provider_id, config) in custom_config.providers {
+                                if config.enabled {
+                                    registry.register_provider(crate::llm::types::ProviderConfig {
+                                        id: provider_id.clone(),
+                                        name: config.name.clone(),
+                                        protocol: match config.provider_type {
+                                            crate::llm::types::CustomProviderType::Anthropic => {
+                                                crate::llm::types::ProtocolType::Claude
+                                            }
+                                            crate::llm::types::CustomProviderType::OpenAiCompatible => {
+                                                crate::llm::types::ProtocolType::OpenAiCompatible
+                                            }
+                                        },
+                                        base_url: config.base_url.clone(),
+                                        api_key_name: format!("custom_{}", provider_id),
+                                        supports_oauth: false,
+                                        supports_coding_plan: false,
+                                        supports_international: false,
+                                        coding_plan_base_url: None,
+                                        international_base_url: None,
+                                        headers: None,
+                                        extra_body: None,
+                                        auth_type: crate::llm::types::AuthType::Bearer,
+                                    });
+                                }
+                            }
+                            log::info!("Loaded {} custom providers from filesystem", provider_count);
+                        }
+                        Err(e) => {
+                            log::warn!("Failed to load custom providers: {}", e);
+                        }
+                    }
+                }
+            });
 
             let ws_state = Arc::new(TokioMutex::new(WebSocketState::new()));
             app.manage(ws_state);

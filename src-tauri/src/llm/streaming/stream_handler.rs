@@ -95,6 +95,7 @@ impl<'a> StreamHandler<'a> {
         let mut trace_span_id: Option<String> = None;
         let mut trace_usage: Option<(i32, i32, Option<i32>, Option<i32>, Option<i32>)> = None;
         let mut trace_finish_reason: Option<String> = None;
+        let mut done_emitted = false;
 
         if let Some(ref trace_context) = request.trace_context {
             let trace_writer = window.app_handle().state::<Arc<TraceWriter>>();
@@ -241,16 +242,6 @@ impl<'a> StreamHandler<'a> {
             )?
         };
 
-        // Log the complete request body
-        match serde_json::to_string_pretty(&body) {
-            Ok(body_str) => log::info!("[LLM Stream {}] Request body:\n{}", request_id, body_str),
-            Err(e) => log::warn!(
-                "[LLM Stream {}] Failed to serialize request body: {}",
-                request_id,
-                e
-            ),
-        }
-
         // Record request event for tracing
         if let Some(ref span_id) = trace_span_id {
             let trace_writer = window.app_handle().state::<Arc<TraceWriter>>();
@@ -262,6 +253,18 @@ impl<'a> StreamHandler<'a> {
         }
 
         let test_config = TestConfig::from_env();
+
+        // Log request body size only (not content) to avoid leaking sensitive data
+        if test_config.mode != TestMode::Off {
+            if let Ok(body_str) = serde_json::to_string_pretty(&body) {
+                log::debug!(
+                    "[LLM Stream {}] Request body size: {} bytes",
+                    request_id,
+                    body_str.len()
+                );
+            }
+        }
+
         let base_url = if test_config.mode != TestMode::Off {
             test_config.base_url_override.clone().unwrap_or(base_url)
         } else {
@@ -593,6 +596,7 @@ impl<'a> StreamHandler<'a> {
                                     "[LLM Stream {}] Done event received, ending stream loop",
                                     request_id
                                 );
+                                done_emitted = true;
                                 break;
                             }
                         }
@@ -750,12 +754,14 @@ impl<'a> StreamHandler<'a> {
             trace_writer.end_span(span_id.clone(), chrono::Utc::now().timestamp_millis());
         }
 
-        let _ = window.emit(
-            &event_name,
-            &StreamEvent::Done {
-                finish_reason: state.finish_reason.clone(),
-            },
-        );
+        if !done_emitted {
+            let _ = window.emit(
+                &event_name,
+                &StreamEvent::Done {
+                    finish_reason: state.finish_reason.clone(),
+                },
+            );
+        }
 
         log::info!(
             "[LLM Stream {}] Stream completion finished successfully",
@@ -1670,7 +1676,7 @@ mod tests {
         let db_path = dir.path().join("talkcody-test.db");
         let db = Arc::new(Database::new(db_path.to_string_lossy().to_string()));
         db.connect().await.expect("db connect");
-        let api_keys = ApiKeyManager::new(db);
+        let api_keys = ApiKeyManager::new(db, std::path::PathBuf::from("/tmp"));
         let registry = ProviderRegistry::new(builtin_providers());
         let handler = StreamHandler::new(&registry, &api_keys);
 
@@ -1922,7 +1928,7 @@ mod tests {
         .await
         .expect("create settings");
 
-        let api_keys = ApiKeyManager::new(db);
+        let api_keys = ApiKeyManager::new(db, std::path::PathBuf::from("/tmp"));
         api_keys
             .set_setting("use_coding_plan_zhipu", "true")
             .await
@@ -1963,7 +1969,7 @@ mod tests {
         .await
         .expect("create settings");
 
-        let api_keys = ApiKeyManager::new(db);
+        let api_keys = ApiKeyManager::new(db, std::path::PathBuf::from("/tmp"));
         api_keys
             .set_setting("use_coding_plan_moonshot", "true")
             .await

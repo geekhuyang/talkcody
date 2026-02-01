@@ -294,7 +294,7 @@ pub async fn spawn_background_task(
     let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_string());
 
     #[cfg(windows)]
-    let shell = std::env::var("COMSPEC").unwrap_or_else(|_| "cmd.exe".to_string());
+    let shell = crate::shell_utils::get_windows_shell();
 
     // Build command
     let mut cmd = if cfg!(unix) {
@@ -303,7 +303,7 @@ pub async fn spawn_background_task(
         c
     } else {
         let mut c = TokioCommand::new(&shell);
-        if shell.to_lowercase().contains("powershell") {
+        if crate::shell_utils::is_powershell(&shell) {
             c.arg("-Command").arg(&request.command);
         } else {
             c.arg("/C").arg(&request.command);
@@ -420,12 +420,15 @@ pub async fn spawn_background_task(
 }
 
 /// Pipe output from reader to file with graceful shutdown
+/// Uses raw byte reading to handle non-UTF8 output and avoid line-buffering issues
 async fn pipe_output_to_file(
     reader: impl tokio::io::AsyncRead + Unpin,
     file_path: &PathBuf,
     bytes_written: Arc<Mutex<u64>>,
     shutdown_rx: &mut broadcast::Receiver<()>,
 ) -> Result<(), String> {
+    use tokio::io::AsyncReadExt;
+
     let mut file = OpenOptions::new()
         .create(true)
         .append(true)
@@ -434,26 +437,24 @@ async fn pipe_output_to_file(
         .map_err(|e| e.to_string())?;
 
     let mut buf_reader = BufReader::new(reader);
-    let mut line = String::new();
+    let mut buf = [0u8; 8192];
 
     loop {
         tokio::select! {
-            result = buf_reader.read_line(&mut line) => {
+            result = buf_reader.read(&mut buf) => {
                 match result {
                     Ok(0) => {
                         // EOF
                         break;
                     }
                     Ok(n) => {
-                        // Write to file
-                        file.write_all(line.as_bytes()).await.map_err(|e| e.to_string())?;
+                        // Write raw bytes to file (handles non-UTF8 output)
+                        file.write_all(&buf[..n]).await.map_err(|e| e.to_string())?;
                         file.flush().await.map_err(|e| e.to_string())?;
 
-                        // Update bytes written
+                        // Update bytes written with actual byte count
                         let mut bytes = bytes_written.lock().await;
                         *bytes += n as u64;
-
-                        line.clear();
                     }
                     Err(e) => {
                         log::warn!("Error reading output: {}", e);
@@ -516,7 +517,7 @@ async fn monitor_task_timeout(task_id: String, timeout_ms: u64) {
                 timeout_ms
             );
 
-            // Mark task as timed out and kill it
+            // Mark task as timed out and kill it (without removing from registry)
             let registry = get_registry().await;
             let handle_opt = {
                 let registry_guard = registry.lock().await;
@@ -526,9 +527,32 @@ async fn monitor_task_timeout(task_id: String, timeout_ms: u64) {
             if let Some(handle) = handle_opt {
                 let mut guard = handle.lock().await;
                 guard.is_timed_out = true;
-            }
 
-            let _ = kill_background_task(task_id.clone()).await;
+                // Kill the process directly without removing from registry
+                // This allows users to still query the task status and output
+                log::info!("Killing timed out background task {}", task_id);
+
+                // Send shutdown signal to output tasks
+                if let Some(shutdown_tx) = guard.shutdown_tx.take() {
+                    let _ = shutdown_tx.send(());
+                }
+
+                // Kill the process
+                if let Err(e) = guard.child.kill().await {
+                    log::warn!("Failed to kill timed out task {}: {}", task_id, e);
+                }
+
+                // Wait briefly for process to terminate
+                let _ = tokio::time::timeout(Duration::from_secs(2), guard.child.wait()).await;
+
+                // Try to get exit code
+                match guard.child.try_wait() {
+                    Ok(Some(status)) => {
+                        guard.exit_code = status.code();
+                    }
+                    _ => {}
+                }
+            }
             break;
         }
 
@@ -601,21 +625,21 @@ pub async fn get_background_task_output(
         let output_file = &guard.output_file;
         let error_file = &guard.error_file;
 
-        let new_stdout = read_file_content(output_file, stdout_bytes_read).await?;
-        let new_stderr = read_file_content(error_file, stderr_bytes_read).await?;
+        // Returns (content, next_offset) to prevent skipping data when reads are capped
+        let (new_stdout, next_stdout_offset) =
+            read_file_content(output_file, stdout_bytes_read).await?;
+        let (new_stderr, next_stderr_offset) =
+            read_file_content(error_file, stderr_bytes_read).await?;
 
-        // Check if process is complete
-        let is_complete = guard.exit_code.is_some();
-
-        let stdout_bytes = *guard.stdout_bytes_written.lock().await;
-        let stderr_bytes = *guard.stderr_bytes_written.lock().await;
+        // Check if process is complete (including timed out tasks)
+        let is_complete = guard.exit_code.is_some() || guard.is_timed_out;
 
         Ok(GetIncrementalOutputResponse {
             task_id,
             new_stdout,
             new_stderr,
-            stdout_bytes_read: stdout_bytes,
-            stderr_bytes_read: stderr_bytes,
+            stdout_bytes_read: next_stdout_offset,
+            stderr_bytes_read: next_stderr_offset,
             is_complete,
         })
     } else {
@@ -623,12 +647,17 @@ pub async fn get_background_task_output(
     }
 }
 
+/// Maximum bytes to read in a single call to prevent memory issues
+const MAX_READ_BYTES: usize = 64 * 1024; // 64KB
+
 /// Read file content from specific byte offset with efficient seeking
-async fn read_file_content(file_path: &PathBuf, from_byte: u64) -> Result<String, String> {
+/// Returns (content, next_offset) where next_offset is from_byte + bytes_read
+/// This ensures incremental output doesn't skip data when capping reads
+async fn read_file_content(file_path: &PathBuf, from_byte: u64) -> Result<(String, u64), String> {
     use tokio::io::AsyncSeekExt;
 
     if !file_path.exists() {
-        return Ok(String::new());
+        return Ok((String::new(), from_byte));
     }
 
     let mut file = OpenOptions::new()
@@ -641,7 +670,7 @@ async fn read_file_content(file_path: &PathBuf, from_byte: u64) -> Result<String
     let file_size = metadata.len();
 
     if from_byte >= file_size {
-        return Ok(String::new());
+        return Ok((String::new(), from_byte));
     }
 
     // Seek to the position
@@ -649,25 +678,36 @@ async fn read_file_content(file_path: &PathBuf, from_byte: u64) -> Result<String
         .await
         .map_err(|e| e.to_string())?;
 
-    // Read only the needed portion
-    let bytes_to_read = (file_size - from_byte) as usize;
+    // Limit bytes to read to prevent memory issues with large files
+    let remaining = (file_size - from_byte) as usize;
+    let bytes_to_read = remaining.min(MAX_READ_BYTES);
     let mut buffer = vec![0u8; bytes_to_read];
-    file.read_exact(&mut buffer)
-        .await
-        .map_err(|e| e.to_string())?;
 
-    String::from_utf8(buffer).map_err(|e| e.to_string())
+    // Use read instead of read_exact to handle partial reads
+    let n = file.read(&mut buffer).await.map_err(|e| e.to_string())?;
+
+    // Truncate buffer to actual bytes read
+    buffer.truncate(n);
+
+    // Calculate next offset based on actual bytes read
+    let next_offset = from_byte + n as u64;
+
+    // Use lossy decoding to handle non-UTF8 output gracefully
+    let content = String::from_utf8_lossy(&buffer).to_string();
+    Ok((content, next_offset))
 }
 
 /// Kill a background task
+/// Keeps the task registered until the process is confirmed terminated
 #[tauri::command]
 pub async fn kill_background_task(task_id: String) -> Result<bool, String> {
     validate_task_id(&task_id)?;
 
     let registry = get_registry().await;
+    // Get handle without removing from registry yet
     let handle = {
-        let mut registry_guard = registry.lock().await;
-        registry_guard.remove(&task_id)
+        let registry_guard = registry.lock().await;
+        registry_guard.get(&task_id).map(|h| h.clone())
     };
 
     if let Some(handle) = handle {
@@ -680,23 +720,22 @@ pub async fn kill_background_task(task_id: String) -> Result<bool, String> {
             let _ = shutdown_tx.send(());
         }
 
-        // Kill the process
-        let kill_result = guard.child.kill().await;
+        // Kill the process and return error if it fails
+        guard.child.kill().await.map_err(|e| {
+            log::error!("Failed to kill task {}: {}", task_id, e);
+            format!("Failed to kill task {}: {}", task_id, e)
+        })?;
 
         // Wait for process to terminate (with timeout)
         let _ = tokio::time::timeout(Duration::from_secs(2), guard.child.wait()).await;
 
-        match kill_result {
-            Ok(_) => {
-                log::info!("Background task {} killed successfully", task_id);
-                Ok(true)
-            }
-            Err(e) => {
-                log::error!("Failed to kill task {}: {}", task_id, e);
-                // Still return true if process might have already exited
-                Ok(true)
-            }
-        }
+        log::info!("Background task {} killed successfully", task_id);
+
+        // Only remove from registry after successful kill
+        let mut registry_guard = registry.lock().await;
+        registry_guard.remove(&task_id);
+
+        Ok(true)
     } else {
         Ok(false)
     }
