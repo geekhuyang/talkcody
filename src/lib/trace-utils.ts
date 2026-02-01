@@ -4,52 +4,46 @@
  * Example: "20260131143025012-a1b2c3d4"
  */
 
+import { logger } from './logger';
 import { generateId } from './utils';
 
 /**
- * Generates a trace ID in the format "YYYYMMDDhhmmssfff-uuid"
- * Matches the format used by the Rust backend
+ * Generates a span ID (16 hex characters)
  */
-export function generateTraceId(): string {
-  const now = new Date();
-
-  // Format date components with leading zeros
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  const hours = String(now.getHours()).padStart(2, '0');
-  const minutes = String(now.getMinutes()).padStart(2, '0');
-  const seconds = String(now.getSeconds()).padStart(2, '0');
-  const milliseconds = String(now.getMilliseconds()).padStart(3, '0');
-
-  // Generate a short UUID (8 characters)
-  const shortUuid = generateId().slice(0, 8);
-
-  return `${year}${month}${day}${hours}${minutes}${seconds}${milliseconds}-${shortUuid}`;
+export function generateSpanId(): string {
+  return generateId().slice(0, 16);
 }
 
 /**
  * Interface for trace context to be passed through the request chain
+ * Uses camelCase to match Rust serde expectations
  */
 export interface TraceContext {
   /** Unique trace ID for the entire request chain */
-  trace_id: string;
+  traceId: string;
   /** Human-readable name for this span */
-  span_name: string;
+  spanName: string;
   /** Parent span ID for nested spans (null if root) */
-  parent_span_id: string | null;
+  parentSpanId: string | null;
 }
 
 /**
  * Creates a trace context for LLM operations
- * @param traceId The trace ID (should be generated once per agent loop)
+ * @param traceId The trace ID (should be taskId for agent loop traces)
  * @param model The model identifier (used in span name)
+ * @param parentSpanId Optional parent span ID for nested spans
  * @returns TraceContext object
  */
-export function createLlmTraceContext(traceId: string, model: string): TraceContext {
-  return {
-    trace_id: traceId,
-    span_name: `chat ${model}`,
-    parent_span_id: null,
+export function createLlmTraceContext(
+  traceId: string,
+  model: string,
+  parentSpanId?: string | null
+): TraceContext {
+  const context = {
+    traceId: traceId,
+    spanName: `chat ${model}`,
+    parentSpanId: parentSpanId ?? null,
   };
+  logger.info(`[Trace] Creating LLM trace context: ${JSON.stringify(context)}`);
+  return context;
 }

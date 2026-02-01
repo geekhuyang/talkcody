@@ -71,9 +71,9 @@ pub async fn init_tracing_schema(db: &Arc<Database>) -> Result<(), String> {
 
 /// SQL queries for trace operations
 pub mod queries {
-    /// Insert a new trace
+    /// Insert a new trace (ignores if already exists)
     pub const INSERT_TRACE: &str =
-        "INSERT INTO traces (id, started_at, ended_at, metadata) VALUES (?, ?, ?, ?)";
+        "INSERT OR IGNORE INTO traces (id, started_at, ended_at, metadata) VALUES (?, ?, ?, ?)";
 
     /// Insert a new span
     pub const INSERT_SPAN: &str = "INSERT INTO spans (id, trace_id, parent_span_id, name, started_at, ended_at, attributes) VALUES (?, ?, ?, ?, ?, ?, ?)";

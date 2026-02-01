@@ -109,18 +109,23 @@ impl TraceWriter {
     }
 
     /// Flush a batch of commands to the database
+    /// Ensures CreateTrace commands are executed first to satisfy foreign key constraints
     async fn flush_batch(db: &Arc<Database>, batch: &mut Vec<TraceCommand>) {
         if batch.is_empty() {
             return;
         }
 
-        // Convert commands to SQL statements
-        let mut statements: Vec<(String, Vec<serde_json::Value>)> = Vec::with_capacity(batch.len());
+        // Separate commands by type to ensure proper execution order
+        // CreateTrace must come before CreateSpan to satisfy FK constraints
+        let mut trace_inserts: Vec<(String, Vec<serde_json::Value>)> = Vec::new();
+        let mut span_inserts: Vec<(String, Vec<serde_json::Value>)> = Vec::new();
+        let mut span_closes: Vec<(String, Vec<serde_json::Value>)> = Vec::new();
+        let mut span_events: Vec<(String, Vec<serde_json::Value>)> = Vec::new();
 
         for cmd in batch.drain(..) {
             match cmd {
                 TraceCommand::CreateTrace(trace) => {
-                    statements.push((
+                    trace_inserts.push((
                         queries::INSERT_TRACE.to_string(),
                         vec![
                             serde_json::Value::String(trace.id),
@@ -136,7 +141,7 @@ impl TraceWriter {
                 TraceCommand::CreateSpan(span) => {
                     let attributes = serde_json::to_string(&span.attributes)
                         .unwrap_or_else(|_| "{}".to_string());
-                    statements.push((
+                    span_inserts.push((
                         queries::INSERT_SPAN.to_string(),
                         vec![
                             serde_json::Value::String(span.id),
@@ -154,7 +159,7 @@ impl TraceWriter {
                     ));
                 }
                 TraceCommand::CloseSpan { span_id, ended_at } => {
-                    statements.push((
+                    span_closes.push((
                         queries::CLOSE_SPAN.to_string(),
                         vec![
                             serde_json::Value::Number(ended_at.into()),
@@ -163,7 +168,7 @@ impl TraceWriter {
                     ));
                 }
                 TraceCommand::AddEvent(event) => {
-                    statements.push((
+                    span_events.push((
                         queries::INSERT_SPAN_EVENT.to_string(),
                         vec![
                             serde_json::Value::String(event.id),
@@ -177,6 +182,14 @@ impl TraceWriter {
                 _ => {} // Flush and Shutdown are handled separately
             }
         }
+
+        // Execute in order: traces first, then spans, then events, then closes
+        // This ensures FK constraints are satisfied
+        let mut statements: Vec<(String, Vec<serde_json::Value>)> = Vec::new();
+        statements.extend(trace_inserts);
+        statements.extend(span_inserts);
+        statements.extend(span_events);
+        statements.extend(span_closes);
 
         // Execute batch
         if !statements.is_empty() {
@@ -219,6 +232,7 @@ impl TraceWriter {
     }
 
     /// Start a new span and return its ID
+    /// If ensure_trace_exists is true, creates the trace if it doesn't exist
     pub fn start_span(
         &self,
         trace_id: String,
@@ -226,8 +240,25 @@ impl TraceWriter {
         name: String,
         attributes: std::collections::HashMap<String, serde_json::Value>,
     ) -> String {
+        self.start_span_with_trace(trace_id, parent_span_id, name, attributes, true)
+    }
+
+    /// Start a new span with optional trace creation
+    pub fn start_span_with_trace(
+        &self,
+        trace_id: String,
+        parent_span_id: Option<String>,
+        name: String,
+        attributes: std::collections::HashMap<String, serde_json::Value>,
+        ensure_trace_exists: bool,
+    ) -> String {
         let span_id = generate_span_id();
         let now = chrono::Utc::now().timestamp_millis();
+
+        // Create trace if it doesn't exist (for external trace IDs like taskId)
+        if ensure_trace_exists {
+            self.ensure_trace_exists(trace_id.clone(), now);
+        }
 
         let span = Span {
             id: span_id.clone(),
@@ -255,6 +286,34 @@ impl TraceWriter {
         }
 
         span_id
+    }
+
+    /// Ensure a trace exists in the database
+    /// Uses INSERT OR IGNORE to handle race conditions gracefully
+    fn ensure_trace_exists(&self, trace_id: String, started_at: i64) {
+        let trace = Trace {
+            id: trace_id,
+            started_at,
+            ended_at: None,
+            metadata: None,
+        };
+
+        match self.sender.try_send(TraceCommand::CreateTrace(trace)) {
+            Ok(_) => {}
+            Err(mpsc::error::TrySendError::Full(_)) => {
+                log::warn!("TraceWriter channel full, dropping trace creation");
+            }
+            Err(mpsc::error::TrySendError::Closed(_)) => {
+                log::error!("TraceWriter channel closed");
+            }
+        }
+    }
+
+    pub fn has_span_id(&self, span_id: &str) -> bool {
+        self.span_trace_ids
+            .lock()
+            .expect("span trace map")
+            .contains_key(span_id)
     }
 
     #[cfg(test)]

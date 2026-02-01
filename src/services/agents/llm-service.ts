@@ -11,7 +11,7 @@ import { convertToAnthropicFormat } from '@/lib/message-convert';
 import { MessageTransform } from '@/lib/message-transform';
 import { validateAnthropicMessages } from '@/lib/message-validate';
 import { toOpenAIToolDefinition } from '@/lib/tool-schema';
-import { createLlmTraceContext, generateTraceId } from '@/lib/trace-utils';
+import { createLlmTraceContext } from '@/lib/trace-utils';
 import { UsageTokenUtils } from '@/lib/usage-token-utils';
 import { generateId } from '@/lib/utils';
 import { getLocale, type SupportedLocale } from '@/locales';
@@ -321,10 +321,15 @@ export class LLMService {
     callbacks: AgentLoopCallbacks,
     abortController?: AbortController
   ): Promise<void> {
-    // Generate trace ID at the start of the agent loop
-    // This ID will persist across all iterations
-    const traceId = generateTraceId();
-    logger.info('[LLMService] Generated trace ID for agent loop', { traceId, taskId: this.taskId });
+    // Use taskId as trace ID for the entire agent loop
+    // This ensures all LLM calls in the same agent loop are grouped under one trace
+    const traceId = this.taskId;
+    // Note: parentSpanId is intentionally omitted until we create a real root span.
+    // Passing a non-existent parentSpanId causes FK failures on spans.
+    logger.info('[LLMService] Starting agent loop with trace', {
+      traceId,
+      taskId: this.taskId,
+    });
 
     // biome-ignore lint/suspicious/noAsyncPromiseExecutor: Complex agent loop requires async Promise executor
     return new Promise<void>(async (resolve, reject) => {

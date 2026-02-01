@@ -83,11 +83,19 @@ export class LlmClient {
     );
 
     // Now invoke Rust command with the requestId and traceContext
+    // traceContext must be inside the request object for Rust to receive it
+    const requestPayload = {
+      ...request,
+      requestId,
+      traceContext: request.traceContext ?? undefined,
+    };
+    logger.info(
+      `[LLM Client ${requestId}] Sending request with traceContext: ${JSON.stringify(requestPayload.traceContext)}`
+    );
     let response: StreamResponse;
     try {
       response = await invoke<StreamResponse>('llm_stream_text', {
-        request: { ...request, requestId },
-        traceContext: request.traceContext ?? undefined,
+        request: requestPayload,
       });
     } catch (error) {
       // Ensure cleanup on invoke failure to prevent listener leaks

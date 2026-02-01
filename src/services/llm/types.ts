@@ -60,9 +60,9 @@ export type ToolDefinition = {
 };
 
 export type TraceContext = {
-  trace_id: string;
-  span_name: string;
-  parent_span_id: string | null;
+  traceId: string;
+  spanName: string;
+  parentSpanId: string | null;
 };
 
 export type StreamTextRequest = {

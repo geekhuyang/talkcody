@@ -95,12 +95,26 @@ impl StreamHandler {
         let mut trace_finish_reason: Option<String> = None;
         let mut done_emitted = false;
 
+        log::info!(
+            "[LLM Stream {}] Request trace_context: {:?}",
+            request_id,
+            request.trace_context
+        );
+
         if let Some(ref trace_context) = request.trace_context {
             let trace_writer = window.app_handle().state::<Arc<TraceWriter>>();
-            let trace_id = trace_context
-                .trace_id
-                .clone()
-                .unwrap_or_else(|| trace_writer.start_trace());
+            log::info!("[LLM Stream {}] Received trace_context - trace_id: {:?}, span_name: {:?}, parent_span_id: {:?}", 
+                request_id, trace_context.trace_id, trace_context.span_name, trace_context.parent_span_id);
+            let trace_id = trace_context.trace_id.clone().unwrap_or_else(|| {
+                let new_id = trace_writer.start_trace();
+                log::info!(
+                    "[LLM Stream {}] No trace_id provided, generated new trace: {}",
+                    request_id,
+                    new_id
+                );
+                new_id
+            });
+            log::info!("[LLM Stream {}] Using trace_id: {}", request_id, trace_id);
 
             let span_name = trace_context
                 .span_name
@@ -148,9 +162,20 @@ impl StreamHandler {
                 span_name.to_string(),
                 attributes,
             );
-            trace_span_id = Some(span_id);
+            trace_span_id = Some(span_id.clone());
 
-            log::info!("[LLM Stream {}] Tracing span created", request_id);
+            let parent_exists = trace_context
+                .parent_span_id
+                .as_deref()
+                .map(|id| trace_writer.has_span_id(id))
+                .unwrap_or(true);
+            log::info!(
+                "[LLM Stream {}] Tracing span created: span_id={}, parent_span_id={:?}, parent_exists={}",
+                request_id,
+                span_id,
+                trace_context.parent_span_id,
+                parent_exists
+            );
         }
 
         let credentials = self.api_keys.get_credentials(provider).await?;
