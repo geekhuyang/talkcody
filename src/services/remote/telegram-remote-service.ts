@@ -18,7 +18,7 @@ import { taskService } from '@/services/task-service';
 import { useEditReviewStore } from '@/stores/edit-review-store';
 import { type ExecutionStatus, useExecutionStore } from '@/stores/execution-store';
 import { settingsManager, useSettingsStore } from '@/stores/settings-store';
-import { taskStore } from '@/stores/task-store';
+import { useTaskStore } from '@/stores/task-store';
 import type { CommandContext } from '@/types/command';
 import type {
   TelegramEditMessageRequest,
@@ -134,7 +134,7 @@ class TelegramRemoteService {
     }
 
     if (command === '/new') {
-      await this.resetSession(message.chatId);
+      await this.resetSession(message.chatId, args || 'Remote task');
       await this.handlePrompt(message, args || '');
       return;
     }
@@ -211,7 +211,7 @@ class TelegramRemoteService {
     }
     const model = await modelService.getCurrentModel();
 
-    const messages = taskStore.getState().getMessages(session.taskId);
+    const messages = useTaskStore.getState().getMessages(session.taskId);
 
     const systemPrompt = typeof agent?.systemPrompt === 'string' ? agent.systemPrompt : undefined;
 
@@ -231,6 +231,7 @@ class TelegramRemoteService {
     session.streamingMessageId = statusMessage.messageId;
     session.lastMessageId = statusMessage.messageId;
     session.sentChunks = [statusText];
+    session.lastStreamStatus = undefined; // Reset for new execution
   }
 
   private async handleStatus(message: TelegramInboundMessage): Promise<void> {
@@ -303,17 +304,21 @@ class TelegramRemoteService {
     return session;
   }
 
-  private async resetSession(chatId: number): Promise<void> {
+  private async resetSession(chatId: number, firstMessage: string = ''): Promise<void> {
     const session = this.sessions.get(chatId);
     if (!session) {
       return;
     }
+    // Clean up old session state
     this.lastStreamContent.delete(session.taskId);
     session.streamingMessageId = undefined;
     session.lastMessageId = undefined;
     session.sentChunks = [];
     session.lastStreamStatus = undefined;
     session.lastSentAt = 0;
+    // Create new task for this session
+    const newTaskId = await taskService.createTask(firstMessage || 'Remote task');
+    session.taskId = newTaskId;
   }
 
   private attachExecutionStreamListener(): void {
@@ -356,7 +361,13 @@ class TelegramRemoteService {
       return;
     }
 
-    const content = execution.streamingContent || '';
+    // Get final content from task store messages (streamingContent is cleared before this is called)
+    const messages = useTaskStore.getState().getMessages(session.taskId);
+    const lastAssistantMessage = messages
+      .slice()
+      .reverse()
+      .find((m) => m.role === 'assistant');
+    const content = lastAssistantMessage?.content?.toString() || execution.streamingContent || '';
     if (!content.trim()) {
       return;
     }
@@ -387,13 +398,13 @@ class TelegramRemoteService {
       session.sentChunks = [first];
     }
 
-    if (chunks.length > 1) {
-      for (let i = 1; i < chunks.length; i += 1) {
-        const chunk = chunks[i];
-        if (!chunk) continue;
-        await this.sendMessage(chatId, chunk);
-        session.sentChunks.push(chunk);
-      }
+    // Skip first chunk if it was already sent during streaming
+    const startIndex = session.streamingMessageId ? 1 : 0;
+    for (let i = startIndex; i < chunks.length; i += 1) {
+      const chunk = chunks[i];
+      if (!chunk) continue;
+      await this.sendMessage(chatId, chunk);
+      session.sentChunks.push(chunk);
     }
   }
 

@@ -134,6 +134,7 @@ interface SettingsActions {
   setAutoCodeReviewGlobal: (enabled: boolean) => Promise<void>;
   setHooksEnabled: (enabled: boolean) => Promise<void>;
   setTraceEnabled: (enabled: boolean) => Promise<void>;
+  setTelegramRemoteEnabled: (enabled: boolean) => Promise<void>;
   getAutoApproveEditsGlobal: () => boolean;
   getAutoApprovePlanGlobal: () => boolean;
   getAutoCodeReviewGlobal: () => boolean;
@@ -735,6 +736,11 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     set({ trace_enabled: enabled });
   },
 
+  setTelegramRemoteEnabled: async (enabled: boolean) => {
+    await settingsDb.set('telegram_remote_enabled', enabled.toString());
+    set({ telegram_remote_enabled: enabled });
+  },
+
   // Project Settings
   setProject: async (project: string) => {
     await settingsDb.set('project', project);
@@ -1213,6 +1219,8 @@ export const settingsManager = {
     useSettingsStore.getState().setAutoCodeReviewGlobal(enabled),
   setHooksEnabled: (enabled: boolean) => useSettingsStore.getState().setHooksEnabled(enabled),
   setTraceEnabled: (enabled: boolean) => useSettingsStore.getState().setTraceEnabled(enabled),
+  setTelegramRemoteEnabled: (enabled: boolean) =>
+    useSettingsStore.getState().setTelegramRemoteEnabled(enabled),
   setCustomToolsDir: (path: string) => useSettingsStore.getState().setCustomToolsDir(path),
 
   getModel: () => useSettingsStore.getState().getModel(),

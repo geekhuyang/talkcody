@@ -6,10 +6,30 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useLocale } from '@/hooks/use-locale';
+import { logger } from '@/lib/logger';
 import { telegramRemoteService } from '@/services/remote/telegram-remote-service';
 import { settingsManager } from '@/stores/settings-store';
 
 const DEFAULT_POLL_TIMEOUT = '25';
+
+/**
+ * Convert a settings value to boolean safely
+ * Handles both string 'true'/'false' and actual boolean values
+ */
+function toBoolean(value: unknown): boolean {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'string') return value === 'true';
+  return false;
+}
+
+/**
+ * Convert a settings value to string safely
+ * Handles undefined/null values
+ */
+function valueToString(value: unknown): string {
+  if (value === undefined || value === null) return '';
+  return String(value);
+}
 
 export function RemoteControlSettings() {
   const { t } = useLocale();
@@ -17,14 +37,16 @@ export function RemoteControlSettings() {
   const allowedChatsId = useId();
   const pollTimeoutId = useId();
   const [remoteEnabled, setRemoteEnabled] = useState(
-    settingsManager.get('telegram_remote_enabled') === 'true'
+    toBoolean(settingsManager.get('telegram_remote_enabled'))
   );
-  const [remoteToken, setRemoteToken] = useState(settingsManager.get('telegram_remote_token'));
+  const [remoteToken, setRemoteToken] = useState(
+    valueToString(settingsManager.get('telegram_remote_token'))
+  );
   const [allowedChats, setAllowedChats] = useState(
-    settingsManager.get('telegram_remote_allowed_chats')
+    valueToString(settingsManager.get('telegram_remote_allowed_chats'))
   );
   const [pollTimeout, setPollTimeout] = useState(
-    settingsManager.get('telegram_remote_poll_timeout') || DEFAULT_POLL_TIMEOUT
+    valueToString(settingsManager.get('telegram_remote_poll_timeout')) || DEFAULT_POLL_TIMEOUT
   );
 
   const validateRemoteSettings = () => {
@@ -49,7 +71,8 @@ export function RemoteControlSettings() {
     }
 
     try {
-      await settingsManager.set('telegram_remote_enabled', remoteEnabled.toString());
+      await settingsManager.initialize();
+      await settingsManager.setTelegramRemoteEnabled(remoteEnabled);
       await settingsManager.set('telegram_remote_token', remoteToken.trim());
       await settingsManager.set('telegram_remote_allowed_chats', allowedChats.trim());
       await settingsManager.set(
@@ -58,7 +81,8 @@ export function RemoteControlSettings() {
       );
       await telegramRemoteService.refresh();
       toast.success(t.Settings.remoteControl.saved);
-    } catch (_error) {
+    } catch (error) {
+      logger.error('[RemoteControlSettings] Failed to save remote control settings:', error);
       toast.error(t.Settings.remoteControl.saveFailed);
     }
   };
