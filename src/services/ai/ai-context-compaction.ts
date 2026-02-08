@@ -1,6 +1,8 @@
 import { logger } from '@/lib/logger';
+import { modelTypeService } from '@/providers/models/model-type-service';
 import { llmClient } from '@/services/llm/llm-client';
 import type { ContextCompactionResult } from '@/services/llm/types';
+import { ModelType } from '@/types/model-types';
 
 class AIContextCompactionService {
   /**
@@ -19,9 +21,12 @@ class AIContextCompactionService {
         throw new Error('Conversation history is required for compaction');
       }
 
+      const modelIdentifier =
+        model ?? (await modelTypeService.resolveModelType(ModelType.MESSAGE_COMPACTION));
+
       const result = await llmClient.compactContext({
         conversationHistory,
-        model,
+        model: modelIdentifier,
       });
 
       logger.info(

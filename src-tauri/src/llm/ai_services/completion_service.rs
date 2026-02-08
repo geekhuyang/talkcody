@@ -1,7 +1,10 @@
-use crate::llm::ai_services::stream_collector::{CollectResult, StreamCollector};
+use crate::llm::ai_services::model_resolver::{resolve_model_identifier, FallbackStrategy};
+use crate::llm::ai_services::stream_collector::StreamCollector;
+use crate::llm::ai_services::stream_runner::StreamRunner;
 use crate::llm::ai_services::types::{CompletionContext, CompletionResult};
-use crate::llm::streaming::stream_handler::StreamHandler;
-use crate::llm::types::StreamTextRequest;
+use crate::llm::auth::api_key_manager::ApiKeyManager;
+use crate::llm::providers::provider_registry::ProviderRegistry;
+use std::time::Duration;
 
 pub struct CompletionService;
 
@@ -14,7 +17,8 @@ impl CompletionService {
     pub async fn get_completion(
         &self,
         context: CompletionContext,
-        handler: &StreamHandler,
+        api_keys: &ApiKeyManager,
+        registry: &ProviderRegistry,
     ) -> Result<CompletionResult, String> {
         log::info!(
             "getCompletion context: fileName={}, language={}, cursorPosition={}, contentLength={}",
@@ -24,84 +28,43 @@ impl CompletionService {
             context.file_content.len()
         );
 
-        // Extract text before and after cursor for context
-        let before_cursor = if context.cursor_position < context.file_content.len() {
-            &context.file_content[..context.cursor_position]
-        } else {
-            &context.file_content
-        };
-        let after_cursor = if context.cursor_position < context.file_content.len() {
-            &context.file_content[context.cursor_position..]
-        } else {
-            ""
-        };
+        let byte_offset =
+            utf16_offset_to_byte_index(&context.file_content, context.cursor_position);
 
-        // Get the current line and context
-        let lines: Vec<&str> = before_cursor.split('\n').collect();
-        let current_line = lines.last().unwrap_or(&"");
-        let previous_context = if lines.len() > 10 {
-            lines[lines.len() - 10..].join("\n")
-        } else {
-            lines[..lines.len().saturating_sub(1)].join("\n")
-        };
+        let (previous_context, current_line, after_context) =
+            Self::extract_context(&context.file_content, byte_offset, 10, 5);
 
-        // Get first 5 lines after cursor for context
-        let after_lines: Vec<&str> = after_cursor.split('\n').take(5).collect();
-        let after_context = after_lines.join("\n");
-
-        // Create prompt for AI completion
-        let prompt = format!(
-            "You are an AI code completion assistant. Complete the following {} code.\n\n\
-             File: {}\n\
-             Context (previous lines):\n\
-             ```{}\n\
-             {}\n\
-             ```\n\n\
-             Current incomplete line: \"{}\"\n\n\
-             After cursor:\n\
-             ```{}\n\
-             {}\n\
-             ```\n\n\
-             Provide ONLY the completion text that should be inserted at the cursor position. \
-             Do not include the existing text or explanations.\n\
-             Response should be plain text without markdown formatting.\n\
-             Keep the completion concise and relevant to the current context.",
-            context.language,
-            context.file_name,
-            context.language,
-            previous_context,
-            current_line,
-            context.language,
-            after_context
+        let prompt = self.build_prompt(
+            &context.file_name,
+            &context.language,
+            &previous_context,
+            &current_line,
+            &after_context,
         );
 
-        // Build request - will be passed to handler for streaming
-        let request = StreamCollector::create_completion_request(
-            "claude-sonnet-4.5".to_string(), // CODE_STAR model equivalent
-            prompt,
-        );
+        let model_identifier = resolve_model_identifier(
+            api_keys,
+            registry,
+            context.model.clone(),
+            FallbackStrategy::AnyAvailable,
+        )
+        .await?;
 
-        // For now, we return a placeholder implementation
-        // The actual implementation would integrate with the StreamHandler
-        // Since StreamHandler requires a Window for emitting events,
-        // we need a different approach for non-window streaming
+        let request = StreamCollector::create_completion_request(model_identifier, prompt);
 
-        log::info!(
-            "AI Completion: would generate completion for {}",
-            context.file_name
-        );
+        let runner = StreamRunner::new(registry.clone(), api_keys.clone());
+        let result =
+            StreamCollector::collect_with_runner(&runner, request, Duration::from_secs(30)).await?;
 
-        // Return empty completion for now - full implementation requires
-        // refactoring StreamHandler to support non-window streaming
         Ok(CompletionResult {
-            completion: String::new(),
+            completion: result.text,
             range: None,
         })
     }
 
     /// Extract context around cursor position
-    fn extract_context<'a>(
-        content: &'a str,
+    fn extract_context(
+        content: &str,
         cursor_pos: usize,
         lines_before: usize,
         lines_after: usize,
@@ -119,8 +82,6 @@ impl CompletionService {
 
         let before_lines: Vec<&str> = before.split('\n').collect();
 
-        // If before ends with newline, current_line is empty (start of new line)
-        // Otherwise current_line is the last line
         let (current_line, previous_lines_count) = if before.ends_with('\n') {
             ("".to_string(), before_lines.len().saturating_sub(1))
         } else {
@@ -174,13 +135,24 @@ impl Default for CompletionService {
     }
 }
 
+fn utf16_offset_to_byte_index(text: &str, utf16_offset: usize) -> usize {
+    let mut count = 0usize;
+    for (byte_index, ch) in text.char_indices() {
+        let len = ch.len_utf16();
+        if count + len > utf16_offset {
+            return byte_index;
+        }
+        count += len;
+    }
+    text.len()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn extract_context_gets_correct_lines() {
-        let _service = CompletionService::new();
         let content =
             "line1\nline2\nline3\nline4\nline5\nline6\nline7\nline8\nline9\nline10\nline11\nline12";
 
@@ -252,5 +224,17 @@ mod tests {
 
         assert!(prompt.contains("```rust"));
         assert!(prompt.contains("file.rs"));
+    }
+
+    #[test]
+    fn utf16_offset_to_byte_index_handles_multibyte_chars() {
+        let text = "ab😀中";
+        // UTF-16 code units: a(1) b(1) 😀(2) 中(1)
+        assert_eq!(utf16_offset_to_byte_index(text, 0), 0);
+        assert_eq!(utf16_offset_to_byte_index(text, 1), 1);
+        assert_eq!(utf16_offset_to_byte_index(text, 2), 2);
+        // After emoji (2 code units) -> byte index after 😀
+        assert_eq!(utf16_offset_to_byte_index(text, 4), "ab😀".len());
+        assert_eq!(utf16_offset_to_byte_index(text, 5), text.len());
     }
 }

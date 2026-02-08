@@ -1,3 +1,4 @@
+use crate::llm::ai_services::stream_runner::StreamRunner;
 use crate::llm::types::{Message, StreamEvent, StreamTextRequest};
 use futures_util::StreamExt;
 use std::time::{Duration, Instant};
@@ -50,6 +51,43 @@ impl StreamCollector {
                 Err(_) => return Err(format!("Stream timeout after {:?}", timeout)),
             }
         }
+
+        let total_time = start_time.elapsed();
+
+        Ok(CollectResult {
+            text: full_text.trim().to_string(),
+            total_time_ms: total_time.as_millis() as u64,
+            time_to_first_delta_ms: first_delta_time.map(|d| d.as_millis() as u64),
+            delta_count,
+        })
+    }
+
+    /// Collect text using the non-window stream runner
+    pub async fn collect_with_runner(
+        runner: &StreamRunner,
+        request: StreamTextRequest,
+        timeout: Duration,
+    ) -> Result<CollectResult, String> {
+        let start_time = Instant::now();
+        let mut first_delta_time: Option<Duration> = None;
+        let mut delta_count = 0;
+        let mut full_text = String::new();
+
+        runner
+            .stream(request, timeout, |event| match event {
+                StreamEvent::TextDelta { text } => {
+                    if first_delta_time.is_none() {
+                        first_delta_time = Some(start_time.elapsed());
+                    }
+                    delta_count += 1;
+                    full_text.push_str(&text);
+                }
+                StreamEvent::Error { message } => {
+                    log::error!("Stream error: {}", message);
+                }
+                _ => {}
+            })
+            .await?;
 
         let total_time = start_time.elapsed();
 

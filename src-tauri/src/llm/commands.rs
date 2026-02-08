@@ -1,4 +1,8 @@
+use crate::llm::ai_services::completion_service::CompletionService;
+use crate::llm::ai_services::context_compaction_service::ContextCompactionService;
+use crate::llm::ai_services::git_message_service::GitMessageService;
 use crate::llm::ai_services::pricing_service::PricingService;
+use crate::llm::ai_services::task_title_service::TaskTitleService;
 use crate::llm::ai_services::types::{
     CalculateCostRequest, CalculateCostResult, CompletionContext, CompletionResult,
     ContextCompactionRequest, ContextCompactionResult, GitMessageContext, GitMessageResult,
@@ -207,49 +211,62 @@ pub async fn llm_get_completion(
     context: CompletionContext,
     state: State<'_, LlmState>,
 ) -> Result<CompletionResult, String> {
-    use crate::llm::ai_services::completion_service::CompletionService;
-
     let (registry, api_keys) = {
         let registry = state.registry.lock().await;
         let api_keys = state.api_keys.lock().await;
         (registry.clone(), api_keys.clone())
     };
 
-    let handler = StreamHandler::new(registry, api_keys);
     let service = CompletionService::new();
-
-    service.get_completion(context, &handler).await
+    service.get_completion(context, &api_keys, &registry).await
 }
 
 /// Generate git commit message
 #[tauri::command]
 pub async fn llm_generate_commit_message(
     context: GitMessageContext,
+    state: State<'_, LlmState>,
 ) -> Result<GitMessageResult, String> {
-    use crate::llm::ai_services::git_message_service::GitMessageService;
+    let (registry, api_keys) = {
+        let registry = state.registry.lock().await;
+        let api_keys = state.api_keys.lock().await;
+        (registry.clone(), api_keys.clone())
+    };
 
     let service = GitMessageService::new();
-    service.generate_commit_message(context).await
+    service
+        .generate_commit_message(context, &api_keys, &registry)
+        .await
 }
 
 /// Generate task title
 #[tauri::command]
 pub async fn llm_generate_title(
     request: TitleGenerationRequest,
+    state: State<'_, LlmState>,
 ) -> Result<TitleGenerationResult, String> {
-    use crate::llm::ai_services::task_title_service::TaskTitleService;
+    let (registry, api_keys) = {
+        let registry = state.registry.lock().await;
+        let api_keys = state.api_keys.lock().await;
+        (registry.clone(), api_keys.clone())
+    };
 
     let service = TaskTitleService::new();
-    service.generate_title(request).await
+    service.generate_title(request, &api_keys, &registry).await
 }
 
 /// Compact conversation context
 #[tauri::command]
 pub async fn llm_compact_context(
     request: ContextCompactionRequest,
+    state: State<'_, LlmState>,
 ) -> Result<ContextCompactionResult, String> {
-    use crate::llm::ai_services::context_compaction_service::ContextCompactionService;
+    let (registry, api_keys) = {
+        let registry = state.registry.lock().await;
+        let api_keys = state.api_keys.lock().await;
+        (registry.clone(), api_keys.clone())
+    };
 
     let service = ContextCompactionService::new();
-    service.compact_context(request).await
+    service.compact_context(request, &api_keys, &registry).await
 }

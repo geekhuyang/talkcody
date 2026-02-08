@@ -1,6 +1,8 @@
 import { logger } from '@/lib/logger';
+import { modelTypeService } from '@/providers/models/model-type-service';
 import { llmClient } from '@/services/llm/llm-client';
 import type { CompletionContext, CompletionResult } from '@/services/llm/types';
+import { ModelType } from '@/types/model-types';
 
 class AICompletionService {
   async getCompletion(context: CompletionContext): Promise<CompletionResult | null> {
@@ -12,7 +14,12 @@ class AICompletionService {
         contentLength: context.fileContent.length,
       });
 
-      const result = await llmClient.getCompletion(context);
+      const model = await modelTypeService.resolveModelType(ModelType.MAIN);
+
+      const result = await llmClient.getCompletion({
+        ...context,
+        model,
+      });
 
       if (result.completion) {
         logger.info('AI Completion result:', result.completion);

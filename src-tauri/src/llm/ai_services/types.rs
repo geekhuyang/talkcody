@@ -3,10 +3,14 @@ use serde::{Deserialize, Serialize};
 // Completion Service Types
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CompletionContext {
+    #[serde(rename = "fileContent")]
     pub file_content: String,
+    #[serde(rename = "cursorPosition")]
     pub cursor_position: usize,
+    #[serde(rename = "fileName")]
     pub file_name: String,
     pub language: String,
+    pub model: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -30,6 +34,7 @@ pub struct CompletionRange {
 // Context Compaction Service Types
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ContextCompactionRequest {
+    #[serde(rename = "conversationHistory")]
     pub conversation_history: String,
     pub model: Option<String>,
 }
@@ -42,8 +47,11 @@ pub struct ContextCompactionResult {
 // Git Message Service Types
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GitMessageContext {
+    #[serde(rename = "userInput")]
     pub user_input: Option<String>,
+    #[serde(rename = "diffText")]
     pub diff_text: String,
+    pub model: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

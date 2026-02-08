@@ -171,6 +171,7 @@ export type CompletionContext = {
   cursorPosition: number;
   fileName: string;
   language: string;
+  model?: string | null;
 };
 
 export type CompletionRange = {
@@ -188,6 +189,7 @@ export type CompletionResult = {
 export type GitMessageContext = {
   userInput?: string | null;
   diffText: string;
+  model?: string | null;
 };
 
 export type GitMessageResult = {

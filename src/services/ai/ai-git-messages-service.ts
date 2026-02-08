@@ -1,6 +1,8 @@
 import { logger } from '@/lib/logger';
+import { modelTypeService } from '@/providers/models/model-type-service';
 import { llmClient } from '@/services/llm/llm-client';
 import type { GitMessageContext, GitMessageResult } from '@/services/llm/types';
+import { ModelType } from '@/types/model-types';
 
 class AIGitMessagesService {
   async generateCommitMessage(context: GitMessageContext): Promise<GitMessageResult | null> {
@@ -12,7 +14,12 @@ class AIGitMessagesService {
         return null;
       }
 
-      const result = await llmClient.generateCommitMessage(context);
+      const model = await modelTypeService.resolveModelType(ModelType.SMALL);
+
+      const result = await llmClient.generateCommitMessage({
+        ...context,
+        model,
+      });
 
       if (result.message) {
         logger.info('AI Git Message result:', result.message);

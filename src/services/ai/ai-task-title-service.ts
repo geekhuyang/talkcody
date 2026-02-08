@@ -1,7 +1,9 @@
 import { logger } from '@/lib/logger';
+import { modelTypeService } from '@/providers/models/model-type-service';
 import { llmClient } from '@/services/llm/llm-client';
 import type { TitleGenerationResult } from '@/services/llm/types';
 import { settingsManager } from '@/stores/settings-store';
+import { ModelType } from '@/types/model-types';
 
 class AITaskTitleService {
   async generateTitle(userInput: string): Promise<TitleGenerationResult | null> {
@@ -12,10 +14,12 @@ class AITaskTitleService {
       }
 
       const language = settingsManager.getSync('language');
+      const model = await modelTypeService.resolveModelType(ModelType.SMALL);
 
       const result = await llmClient.generateTitle({
         userInput,
         language: language === 'zh' ? 'zh' : 'en',
+        model,
       });
 
       if (result.title) {

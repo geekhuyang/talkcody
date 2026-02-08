@@ -1,4 +1,10 @@
+use crate::llm::ai_services::model_resolver::{resolve_model_identifier, FallbackStrategy};
+use crate::llm::ai_services::stream_collector::StreamCollector;
+use crate::llm::ai_services::stream_runner::StreamRunner;
 use crate::llm::ai_services::types::{TitleGenerationRequest, TitleGenerationResult};
+use crate::llm::auth::api_key_manager::ApiKeyManager;
+use crate::llm::providers::provider_registry::ProviderRegistry;
+use std::time::Duration;
 
 pub struct TaskTitleService;
 
@@ -11,6 +17,8 @@ impl TaskTitleService {
     pub async fn generate_title(
         &self,
         request: TitleGenerationRequest,
+        api_keys: &ApiKeyManager,
+        registry: &ProviderRegistry,
     ) -> Result<TitleGenerationResult, String> {
         log::info!(
             "generateTitle: userInput length = {}",
@@ -30,16 +38,45 @@ impl TaskTitleService {
         };
 
         let prompt = self.build_prompt(&request.user_input, language_instruction);
-
         log::info!(
             "Generated prompt for title generation (length: {})",
             prompt.len()
         );
 
-        // For now, return empty title - full implementation would call LLM
-        Ok(TitleGenerationResult {
-            title: String::new(),
-        })
+        let preferred_model = request.model.clone();
+        let model_identifier = resolve_model_identifier(
+            api_keys,
+            registry,
+            preferred_model,
+            FallbackStrategy::AnyAvailable,
+        )
+        .await?;
+
+        let request = StreamCollector::create_completion_request(model_identifier, prompt);
+
+        let runner = StreamRunner::new(registry.clone(), api_keys.clone());
+        let result =
+            StreamCollector::collect_with_runner(&runner, request, Duration::from_secs(30)).await?;
+
+        let title = self.post_process_title(&result.text);
+        if title.is_empty() {
+            return Err("Empty title generated".to_string());
+        }
+
+        Ok(TitleGenerationResult { title })
+    }
+
+    fn post_process_title(&self, raw: &str) -> String {
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            return String::new();
+        }
+        let first_line = trimmed.lines().next().unwrap_or(trimmed).trim();
+        let without_quotes = first_line
+            .trim_matches('"')
+            .trim_matches('“')
+            .trim_matches('”');
+        without_quotes.to_string()
     }
 
     /// Build the prompt for title generation
@@ -81,6 +118,84 @@ impl Default for TaskTitleService {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::database::Database;
+    use crate::llm::auth::api_key_manager::ApiKeyManager;
+    use crate::llm::providers::provider_registry::ProviderRegistry;
+    use crate::llm::types::{
+        AuthType, ModelConfig, ModelPricing, ModelsConfiguration, ProtocolType, ProviderConfig,
+    };
+    use std::collections::HashMap;
+    use std::sync::Arc;
+    use tempfile::TempDir;
+
+    async fn setup_context() -> (ApiKeyManager, ProviderRegistry) {
+        let dir = TempDir::new().expect("temp dir");
+        let db_path = dir.path().join("models-test.db");
+        let db = Arc::new(Database::new(db_path.to_string_lossy().to_string()));
+        db.connect().await.expect("db connect");
+        db.execute(
+            "CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT, updated_at INTEGER)",
+            vec![],
+        )
+        .await
+        .expect("create settings");
+
+        let api_keys = ApiKeyManager::new(db, dir.path().join("app-data"));
+        api_keys
+            .set_setting("api_key_openai", "test-key")
+            .await
+            .expect("set api key");
+
+        let provider_config = ProviderConfig {
+            id: "openai".to_string(),
+            name: "openai".to_string(),
+            protocol: ProtocolType::OpenAiCompatible,
+            base_url: "http://localhost".to_string(),
+            api_key_name: "TEST_API_KEY".to_string(),
+            supports_oauth: false,
+            supports_coding_plan: false,
+            supports_international: false,
+            coding_plan_base_url: None,
+            international_base_url: None,
+            headers: None,
+            extra_body: None,
+            auth_type: AuthType::Bearer,
+        };
+        let registry = ProviderRegistry::new(vec![provider_config]);
+
+        let models_config = ModelsConfiguration {
+            version: "1".to_string(),
+            models: HashMap::from([(
+                "test-model".to_string(),
+                ModelConfig {
+                    name: "Test Model".to_string(),
+                    image_input: false,
+                    image_output: false,
+                    audio_input: false,
+                    interleaved: false,
+                    providers: vec!["openai".to_string()],
+                    provider_mappings: None,
+                    pricing: Some(ModelPricing {
+                        input: "0.0001".to_string(),
+                        output: "0.0002".to_string(),
+                        cached_input: None,
+                        cache_creation: None,
+                    }),
+                    context_length: Some(8192),
+                },
+            )]),
+        };
+
+        api_keys
+            .set_setting(
+                "models_config_json",
+                &serde_json::to_string(&models_config).expect("serialize config"),
+            )
+            .await
+            .expect("set models config");
+
+        (api_keys, registry)
+    }
 
     #[test]
     fn build_prompt_includes_user_input() {
@@ -132,6 +247,7 @@ mod tests {
 
     #[tokio::test]
     async fn generate_fails_with_empty_input() {
+        let (api_keys, registry) = setup_context().await;
         let service = TaskTitleService::new();
         let request = TitleGenerationRequest {
             user_input: "   ".to_string(),
@@ -139,40 +255,10 @@ mod tests {
             model: None,
         };
 
-        let result = service.generate_title(request).await;
+        let result = service.generate_title(request, &api_keys, &registry).await;
 
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("No user input"));
-    }
-
-    #[tokio::test]
-    async fn generate_succeeds_with_valid_input() {
-        let service = TaskTitleService::new();
-        let request = TitleGenerationRequest {
-            user_input: "How to implement authentication?".to_string(),
-            language: Some("en".to_string()),
-            model: None,
-        };
-
-        let result = service.generate_title(request).await;
-
-        assert!(result.is_ok());
-        // Result is empty string for now (no LLM call)
-        assert_eq!(result.unwrap().title, "");
-    }
-
-    #[tokio::test]
-    async fn generate_uses_chinese_when_specified() {
-        let service = TaskTitleService::new();
-        let request = TitleGenerationRequest {
-            user_input: "如何实现登录功能？".to_string(),
-            language: Some("zh".to_string()),
-            model: None,
-        };
-
-        let result = service.generate_title(request).await;
-
-        assert!(result.is_ok());
     }
 
     #[test]

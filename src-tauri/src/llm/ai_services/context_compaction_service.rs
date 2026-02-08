@@ -1,7 +1,10 @@
-use crate::llm::ai_services::types::{
-    ContextCompactionRequest, ContextCompactionResult, ModelFallbackInfo,
-};
-use std::time::Duration;
+use crate::llm::ai_services::model_resolver::{resolve_model_identifier, FallbackStrategy};
+use crate::llm::ai_services::stream_collector::StreamCollector;
+use crate::llm::ai_services::stream_runner::StreamRunner;
+use crate::llm::ai_services::types::{ContextCompactionRequest, ContextCompactionResult};
+use crate::llm::auth::api_key_manager::ApiKeyManager;
+use crate::llm::providers::provider_registry::ProviderRegistry;
+use std::time::{Duration, Instant};
 
 pub struct ContextCompactionService {
     compression_timeout_ms: u64,
@@ -19,12 +22,18 @@ impl ContextCompactionService {
         self
     }
 
+    pub fn timeout(&self) -> Duration {
+        Duration::from_millis(self.compression_timeout_ms)
+    }
+
     /// Compress conversation history using AI
     pub async fn compact_context(
         &self,
         request: ContextCompactionRequest,
+        api_keys: &ApiKeyManager,
+        registry: &ProviderRegistry,
     ) -> Result<ContextCompactionResult, String> {
-        let start_time = std::time::Instant::now();
+        let start_time = Instant::now();
 
         log::info!("Starting AI context compaction");
 
@@ -33,38 +42,43 @@ impl ContextCompactionService {
             return Err("Conversation history is required for compaction".to_string());
         }
 
-        // Get available model for compression
-        let model = self.get_available_model_for_compression(&request.model);
-        log::info!("Using model for compression: {}", model);
-
-        // Build the prompt with the 8-section template
         let prompt = self.build_compaction_prompt(&request.conversation_history);
-
-        // For now, return empty summary - full implementation would:
-        // 1. Make LLM call with timeout
-        // 2. Handle streaming response
-        // 3. Return compressed summary
-
         log::info!(
             "Context compaction prompt generated (length: {} chars)",
             prompt.len()
         );
 
+        let model_identifier = resolve_model_identifier(
+            api_keys,
+            registry,
+            request.model.clone(),
+            FallbackStrategy::Compaction,
+        )
+        .await?;
+
+        let stream_request = StreamCollector::create_completion_request(model_identifier, prompt);
+        let runner = StreamRunner::new(registry.clone(), api_keys.clone());
+        let result = StreamCollector::collect_with_runner(
+            &runner,
+            stream_request,
+            Duration::from_millis(self.compression_timeout_ms),
+        )
+        .await?;
+
+        let compressed_summary = result.text;
         let duration = start_time.elapsed();
+
         log::info!(
-            "Context compaction preparation completed - Time: {}ms",
+            "Context compaction completed - Time: {}ms",
             duration.as_millis()
         );
+        log::info!(
+            "Compressed summary length: {} characters (from {})",
+            compressed_summary.len(),
+            request.conversation_history.len()
+        );
 
-        // Placeholder: return empty result
-        Ok(ContextCompactionResult {
-            compressed_summary: String::new(),
-        })
-    }
-
-    /// Get timeout duration
-    pub fn timeout(&self) -> Duration {
-        Duration::from_millis(self.compression_timeout_ms)
+        Ok(ContextCompactionResult { compressed_summary })
     }
 
     /// Build the compaction prompt with the 8-section template
@@ -89,27 +103,6 @@ impl ContextCompactionService {
             conversation_history
         )
     }
-
-    /// Get the best available model for compression
-    fn get_available_model_for_compression(&self, preferred_model: &Option<String>) -> String {
-        // Default preferred model
-        let default_model = "gemini-2.5-flash-lite";
-
-        let preferred = preferred_model.as_deref().unwrap_or(default_model);
-
-        // For now, return the preferred model
-        // Full implementation would:
-        // 1. Check if preferred model is available
-        // 2. If not, find fallback with largest context window, then cheapest price
-        preferred.to_string()
-    }
-
-    /// Find fallback model based on context length and pricing
-    fn find_fallback_model(&self, _available_models: &[ModelFallbackInfo]) -> Option<String> {
-        // Sort by context length (descending), then by price (ascending)
-        // Return the best model identifier
-        None
-    }
 }
 
 impl Default for ContextCompactionService {
@@ -121,6 +114,84 @@ impl Default for ContextCompactionService {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::database::Database;
+    use crate::llm::auth::api_key_manager::ApiKeyManager;
+    use crate::llm::providers::provider_registry::ProviderRegistry;
+    use crate::llm::types::{
+        AuthType, ModelConfig, ModelPricing, ModelsConfiguration, ProtocolType, ProviderConfig,
+    };
+    use std::collections::HashMap;
+    use std::sync::Arc;
+    use tempfile::TempDir;
+
+    async fn setup_context() -> (ApiKeyManager, ProviderRegistry) {
+        let dir = TempDir::new().expect("temp dir");
+        let db_path = dir.path().join("models-test.db");
+        let db = Arc::new(Database::new(db_path.to_string_lossy().to_string()));
+        db.connect().await.expect("db connect");
+        db.execute(
+            "CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT, updated_at INTEGER)",
+            vec![],
+        )
+        .await
+        .expect("create settings");
+
+        let api_keys = ApiKeyManager::new(db, dir.path().join("app-data"));
+        api_keys
+            .set_setting("api_key_openai", "test-key")
+            .await
+            .expect("set api key");
+
+        let provider_config = ProviderConfig {
+            id: "openai".to_string(),
+            name: "openai".to_string(),
+            protocol: ProtocolType::OpenAiCompatible,
+            base_url: "http://localhost".to_string(),
+            api_key_name: "TEST_API_KEY".to_string(),
+            supports_oauth: false,
+            supports_coding_plan: false,
+            supports_international: false,
+            coding_plan_base_url: None,
+            international_base_url: None,
+            headers: None,
+            extra_body: None,
+            auth_type: AuthType::Bearer,
+        };
+        let registry = ProviderRegistry::new(vec![provider_config]);
+
+        let models_config = ModelsConfiguration {
+            version: "1".to_string(),
+            models: HashMap::from([(
+                "test-model".to_string(),
+                ModelConfig {
+                    name: "Test Model".to_string(),
+                    image_input: false,
+                    image_output: false,
+                    audio_input: false,
+                    interleaved: false,
+                    providers: vec!["openai".to_string()],
+                    provider_mappings: None,
+                    pricing: Some(ModelPricing {
+                        input: "0.0001".to_string(),
+                        output: "0.0002".to_string(),
+                        cached_input: None,
+                        cache_creation: None,
+                    }),
+                    context_length: Some(8192),
+                },
+            )]),
+        };
+
+        api_keys
+            .set_setting(
+                "models_config_json",
+                &serde_json::to_string(&models_config).expect("serialize config"),
+            )
+            .await
+            .expect("set models config");
+
+        (api_keys, registry)
+    }
 
     #[test]
     fn new_has_default_timeout() {
@@ -176,46 +247,18 @@ mod tests {
 
     #[tokio::test]
     async fn compact_fails_with_empty_history() {
+        let (api_keys, registry) = setup_context().await;
         let service = ContextCompactionService::new();
         let request = ContextCompactionRequest {
             conversation_history: "   ".to_string(),
             model: None,
         };
 
-        let result = service.compact_context(request).await;
+        let result = service.compact_context(request, &api_keys, &registry).await;
 
         assert!(result.is_err());
         assert!(result
             .unwrap_err()
             .contains("Conversation history is required"));
-    }
-
-    #[tokio::test]
-    async fn compact_succeeds_with_valid_history() {
-        let service = ContextCompactionService::new();
-        let request = ContextCompactionRequest {
-            conversation_history: "User: How do I implement auth?\nAI: Here's how...".to_string(),
-            model: Some("gemini-2.5-flash-lite".to_string()),
-        };
-
-        let result = service.compact_context(request).await;
-
-        assert!(result.is_ok());
-        // Result is empty for now (no LLM call)
-        assert_eq!(result.unwrap().compressed_summary, "");
-    }
-
-    #[test]
-    fn get_available_model_uses_preferred() {
-        let service = ContextCompactionService::new();
-        let model = service.get_available_model_for_compression(&Some("custom-model".to_string()));
-        assert_eq!(model, "custom-model");
-    }
-
-    #[test]
-    fn get_available_model_uses_default() {
-        let service = ContextCompactionService::new();
-        let model = service.get_available_model_for_compression(&None);
-        assert_eq!(model, "gemini-2.5-flash-lite");
     }
 }
