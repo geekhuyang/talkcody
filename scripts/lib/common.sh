@@ -218,10 +218,12 @@ notarize_dmg() {
     echo "  This may take 2-15 minutes, please wait..."
     echo ""
 
-    # Submit and capture output
+    # Submit and wait for completion
     local notarize_output
+    echo "  Submitting and waiting for notarization (this may take 2-15 minutes)..."
     if ! notarize_output=$(xcrun notarytool submit \
         --keychain-profile "talkcody-notary" \
+        --wait \
         "$dmg_file" 2>&1); then
         echo -e "${RED}Error: Notarization submission failed${NC}"
         echo "$notarize_output"
