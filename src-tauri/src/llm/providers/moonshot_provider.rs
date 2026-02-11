@@ -11,8 +11,7 @@ use crate::llm::protocols::{
 use crate::llm::providers::provider::{
     BaseProvider, Provider, ProviderContext, ProviderCredentials as Creds,
 };
-use crate::llm::types::ProtocolType;
-use crate::llm::types::ProviderConfig;
+use crate::llm::types::{ContentPart, Message, MessageContent, ProtocolType, ProviderConfig};
 use async_trait::async_trait;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -44,6 +43,27 @@ impl MoonshotProvider {
         }
         false
     }
+
+    fn has_video_input(messages: &[Message]) -> bool {
+        messages.iter().any(|msg| match msg {
+            Message::User { content, .. } | Message::Assistant { content, .. } => {
+                Self::content_has_video(content)
+            }
+            Message::Tool { content, .. } => content
+                .iter()
+                .any(|part| matches!(part, ContentPart::Video { .. })),
+            Message::System { .. } => false,
+        })
+    }
+
+    fn content_has_video(content: &MessageContent) -> bool {
+        match content {
+            MessageContent::Text(_) => false,
+            MessageContent::Parts(parts) => parts
+                .iter()
+                .any(|part| matches!(part, ContentPart::Video { .. })),
+        }
+    }
 }
 
 #[async_trait]
@@ -66,6 +86,11 @@ impl Provider for MoonshotProvider {
     }
 
     async fn resolve_base_url(&self, ctx: &ProviderContext<'_>) -> Result<String, String> {
+        // Video understanding is only supported on the standard /v1 endpoint, not the coding plan.
+        if Self::has_video_input(ctx.messages) {
+            return Ok(self.base.config.base_url.clone());
+        }
+
         self.base
             .resolve_base_url_with_fallback(ctx.api_key_manager)
             .await
