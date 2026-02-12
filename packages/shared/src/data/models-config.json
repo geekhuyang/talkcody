@@ -1,5 +1,5 @@
 {
-  "version": "2026-02-13T04:48:10.197Z",
+  "version": "2026-02-13T05:48:10.197Z",
   "models": {
     "gpt-5-nano": {
       "name": "GPT-5 Nano",
@@ -287,6 +287,7 @@
       "providers": [
         "aiGateway",
         "openRouter",
+        "kimi_coding",
         "moonshot"
       ],
       "providerMappings": {
