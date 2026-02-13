@@ -13,6 +13,7 @@ import { getLocale, type SupportedLocale } from '@/locales';
 import { parseModelIdentifier } from '@/providers/core/provider-utils';
 import { modelService } from '@/providers/stores/provider-store';
 import { agentRegistry } from '@/services/agents/agent-registry';
+import { aiPromptEnhancementService } from '@/services/ai/ai-prompt-enhancement-service';
 import { commandExecutor } from '@/services/commands/command-executor';
 import { commandRegistry } from '@/services/commands/command-registry';
 import { databaseService } from '@/services/database-service';
@@ -575,6 +576,31 @@ export const ChatBox = forwardRef<ChatBoxRef, ChatBoxProps>(
       }
     };
 
+    // Handle prompt enhancement
+    const handleEnhancePrompt = useCallback(
+      async (payload: {
+        originalPrompt: string;
+        enableContextExtraction: boolean;
+        model?: string;
+      }): Promise<string> => {
+        const conversationMessages = messages.map((msg) => ({
+          role: msg.role,
+          content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
+        }));
+
+        const result = await aiPromptEnhancementService.enhancePrompt({
+          originalPrompt: payload.originalPrompt,
+          projectPath: repositoryPath,
+          conversationMessages,
+          enableContextExtraction: payload.enableContextExtraction,
+          model: payload.model,
+        });
+
+        return result.enhancedPrompt;
+      },
+      [messages, repositoryPath]
+    );
+
     return (
       <div className="flex h-full w-full min-w-0 flex-col">
         <Dialog open={isCompactionDialogOpen} onOpenChange={setIsCompactionDialogOpen}>
@@ -690,6 +716,7 @@ export const ChatBox = forwardRef<ChatBoxRef, ChatBoxProps>(
           fileContent={fileContent}
           input={input}
           isLoading={isLoading}
+          onEnhancePrompt={handleEnhancePrompt}
           onInputChange={handleInputChange}
           onSubmit={handleSubmit}
           repositoryPath={repositoryPath}
