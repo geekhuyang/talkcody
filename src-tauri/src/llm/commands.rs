@@ -17,8 +17,9 @@ use crate::llm::streaming::stream_handler::StreamHandler;
 use crate::llm::transcription::service::TranscriptionService;
 use crate::llm::transcription::types::TranscriptionContext;
 use crate::llm::types::{
-    AvailableModel, CustomProviderConfig, ModelsConfiguration, StreamResponse, StreamTextRequest,
-    TranscriptionRequest, TranscriptionResponse,
+    AvailableModel, CustomProviderConfig, ImageGenerationRequest, ImageGenerationResponse,
+    ModelsConfiguration, StreamResponse, StreamTextRequest, TranscriptionRequest,
+    TranscriptionResponse,
 };
 use tauri::{Manager, State, Window};
 
@@ -196,6 +197,30 @@ pub async fn llm_transcribe_audio(
         language: result.language,
         duration: result.duration_in_seconds,
     })
+}
+
+#[tauri::command]
+pub async fn llm_generate_image(
+    request: ImageGenerationRequest,
+    state: State<'_, LlmState>,
+) -> Result<ImageGenerationResponse, String> {
+    let (registry, api_keys, models) = {
+        let registry = state.registry.lock().await;
+        let api_keys = state.api_keys.lock().await;
+        let models = api_keys.load_models_config().await?;
+        (registry.clone(), api_keys.clone(), models)
+    };
+
+    let custom_providers = api_keys.load_custom_providers().await?;
+
+    crate::llm::image_generation::service::ImageGenerationService::generate(
+        &api_keys,
+        &registry,
+        &custom_providers,
+        &models,
+        request,
+    )
+    .await
 }
 
 // AI Services Commands

@@ -1302,6 +1302,17 @@ export interface LocaleDefinition {
     };
   };
 
+  ImageGeneration: {
+    success: {
+      generated: (count: number) => string;
+    };
+    errors: {
+      emptyPrompt: string;
+      noImages: string;
+      providerNotSupported: (provider: string) => string;
+    };
+  };
+
   VoiceInput: {
     success: {
       transcriptionCompleted: string;

@@ -76,6 +76,7 @@ vi.mock('@/services/ai-pricing-service', () => ({
 vi.mock('@/services/llm/llm-client', () => ({
   llmClient: {
     streamText: vi.fn(),
+    generateImage: vi.fn(),
   },
 }));
 

@@ -1361,6 +1361,17 @@ const en: LocaleDefinition = {
     },
   },
 
+  ImageGeneration: {
+    success: {
+      generated: (count) => `Generated ${count} image${count === 1 ? '' : 's'}.`,
+    },
+    errors: {
+      emptyPrompt: 'Image prompt is empty. Please provide a description.',
+      noImages: 'No images returned by the provider.',
+      providerNotSupported: (provider) => `Image generation provider not supported: ${provider}`,
+    },
+  },
+
   VoiceInput: {
     success: {
       transcriptionCompleted: 'Transcription completed',

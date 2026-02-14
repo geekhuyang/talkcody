@@ -80,6 +80,7 @@ vi.mock('@/lib/llm-utils', () => ({
 vi.mock('@/services/llm/llm-client', () => ({
   llmClient: {
     streamText: vi.fn(),
+    generateImage: vi.fn(),
   },
 }));
 

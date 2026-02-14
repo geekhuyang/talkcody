@@ -288,6 +288,41 @@ pub struct TranscriptionResponse {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ImageGenerationRequest {
+    pub model: String,
+    pub prompt: String,
+    pub size: Option<String>,
+    pub quality: Option<String>,
+    pub n: Option<u32>,
+    #[serde(rename = "responseFormat")]
+    pub response_format: Option<String>,
+    #[serde(rename = "providerOptions")]
+    pub provider_options: Option<serde_json::Value>,
+    #[serde(rename = "requestId")]
+    pub request_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ImageGenerationResponse {
+    pub provider: String,
+    #[serde(rename = "images")]
+    pub images: Vec<GeneratedImage>,
+    #[serde(rename = "requestId")]
+    pub request_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GeneratedImage {
+    #[serde(rename = "b64Json")]
+    pub b64_json: Option<String>,
+    pub url: Option<String>,
+    #[serde(rename = "mimeType")]
+    pub mime_type: String,
+    #[serde(rename = "revisedPrompt")]
+    pub revised_prompt: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CustomProviderConfig {
     pub id: String,
     pub name: String,

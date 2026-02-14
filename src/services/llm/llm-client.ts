@@ -18,6 +18,8 @@ import type {
   ContextCompactionResult,
   GitMessageContext,
   GitMessageResult,
+  ImageGenerationRequest,
+  ImageGenerationResponse,
   Message,
   PromptEnhancementRequest,
   PromptEnhancementResult,
@@ -201,6 +203,10 @@ export class LlmClient {
 
   async enhancePrompt(request: PromptEnhancementRequest): Promise<PromptEnhancementResult> {
     return invoke<PromptEnhancementResult>('llm_enhance_prompt', { request });
+  }
+
+  async generateImage(request: ImageGenerationRequest): Promise<ImageGenerationResponse> {
+    return invoke<ImageGenerationResponse>('llm_generate_image', { request });
   }
 
   async registerCustomProvider(config: {

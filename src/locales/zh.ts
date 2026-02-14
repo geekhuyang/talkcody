@@ -1318,6 +1318,17 @@ const zh: LocaleDefinition = {
     },
   },
 
+  ImageGeneration: {
+    success: {
+      generated: (count) => `已生成 ${count} 张图片。`,
+    },
+    errors: {
+      emptyPrompt: '图片描述为空，请提供生成描述。',
+      noImages: '供应商未返回图片。',
+      providerNotSupported: (provider) => `不支持的图片生成供应商：${provider}`,
+    },
+  },
+
   VoiceInput: {
     success: {
       transcriptionCompleted: '转录完成',

@@ -170,6 +170,30 @@ export type TranscriptionResponse = {
   duration?: number | null;
 };
 
+export type ImageGenerationRequest = {
+  model: string;
+  prompt: string;
+  size?: string | null;
+  quality?: string | null;
+  n?: number | null;
+  responseFormat?: string | null;
+  providerOptions?: ProviderOptions;
+  requestId?: string | null;
+};
+
+export type GeneratedImage = {
+  b64Json?: string | null;
+  url?: string | null;
+  mimeType: string;
+  revisedPrompt?: string | null;
+};
+
+export type ImageGenerationResponse = {
+  provider: string;
+  images: GeneratedImage[];
+  requestId?: string | null;
+};
+
 // AI Services Types
 
 export type CompletionContext = {

@@ -104,26 +104,24 @@ describe('llmClient', () => {
     });
   });
 
-  it('calls llm_enhance_prompt with correct payload', async () => {
+  it('calls llm_generate_image with correct payload', async () => {
     const mockResult = {
-      enhancedPrompt: 'Enhanced version of the prompt',
-      extractedKeywords: ['React', 'TypeScript'],
-      generatedQueries: ['React component patterns'],
-      contextSnippetCount: 3,
+      provider: 'openai',
+      images: [{ b64Json: 'abc', mimeType: 'image/png' }],
+      requestId: 'req-1',
     };
+
     (invoke as ReturnType<typeof vi.fn>).mockResolvedValue(mockResult);
 
     const request = {
-      originalPrompt: 'Help me refactor this component',
-      projectPath: '/path/to/project',
-      conversationHistory: 'User: previous message\nAssistant: response',
-      enableContextExtraction: true,
-      model: 'gpt-4@openai',
+      model: 'dall-e-3@openai',
+      prompt: 'A sunset over mountains',
+      responseFormat: 'b64_json',
     };
 
-    const result = await llmClient.enhancePrompt(request);
+    const result = await llmClient.generateImage(request);
 
-    expect(invoke).toHaveBeenCalledWith('llm_enhance_prompt', { request });
+    expect(invoke).toHaveBeenCalledWith('llm_generate_image', { request });
     expect(result).toEqual(mockResult);
   });
 });

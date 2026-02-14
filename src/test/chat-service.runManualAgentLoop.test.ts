@@ -148,7 +148,7 @@ vi.mock('../services/hooks/hook-service', () => ({
   },
 }));
 
-vi.mock('../services/hooks/hook-state-service', () => ({
+vi.mock('@/services/hooks/hook-state-service', () => ({
   hookStateService: {
     consumeAdditionalContext: vi.fn(() => []),
     setStopHookActive: vi.fn(),
@@ -171,6 +171,7 @@ vi.mock('../lib/llm-utils', () => ({
 vi.mock('@/services/llm/llm-client', () => ({
   llmClient: {
     streamText: vi.fn(),
+    generateImage: vi.fn(),
   },
 }));
 

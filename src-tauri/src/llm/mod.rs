@@ -1,6 +1,7 @@
 pub mod ai_services;
 pub mod auth;
 pub mod commands;
+pub mod image_generation;
 pub mod models;
 pub mod protocols;
 pub mod providers;
