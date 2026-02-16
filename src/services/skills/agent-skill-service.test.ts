@@ -8,6 +8,7 @@ import { AgentSkillService } from './agent-skill-service';
 // Mock Tauri APIs
 vi.mock('@tauri-apps/api/path', () => ({
 	appDataDir: vi.fn().mockResolvedValue('/mock/app/data'),
+	homeDir: vi.fn().mockResolvedValue('/mock/home'),
 	join: vi.fn((...parts: string[]) => Promise.resolve(parts.join('/'))),
 	isAbsolute: vi.fn((path: string) => Promise.resolve(path.startsWith('/'))),
 	normalize: vi.fn((path: string) => Promise.resolve(path)),
@@ -65,7 +66,21 @@ describe('AgentSkillService', () => {
 		});
 	});
 
-	describe('listSkills', () => {
+	describe('home skills directory', () => {
+		it('should resolve home skills directory path', async () => {
+			const homePath = await service.getHomeSkillsDirPath();
+			expect(homePath).toBe('/mock/home/.talkcody/skills');
+		});
+
+		it('should create home skills directory if it does not exist', async () => {
+			vi.mocked(exists).mockResolvedValue(false);
+
+			const homePath = await service.ensureHomeSkillsDirExists();
+
+			expect(homePath).toBe('/mock/home/.talkcody/skills');
+			expect(mkdir).toHaveBeenCalledWith('/mock/home/.talkcody/skills', { recursive: true });
+		});
+	});
 		it('should list all valid skills', async () => {
 			vi.mocked(readDir).mockResolvedValue([
 				{ isDirectory: true, name: 'skill-one', isFile: false, isSymlink: false },

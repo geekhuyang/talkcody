@@ -26,6 +26,7 @@ import { exitPlanModeTool } from './exit-plan-mode-tool';
 import { githubPRTool } from './github-pr-tool';
 import { globTool } from './glob-tool';
 import { imageGenerationTool } from './image-generation-tool';
+import { installSkill } from './install-skill-tool';
 import { listFiles } from './list-files-tool';
 import { lspTool } from './lsp-tool';
 import { readFile } from './read-file-tool';
@@ -109,6 +110,16 @@ export const TOOL_DEFINITIONS = {
       canConcurrent: true,
       fileOperation: false,
       renderDoingUI: false,
+    },
+  },
+  installSkill: {
+    tool: installSkill,
+    label: 'Install Skill',
+    metadata: {
+      category: 'other' as ToolCategory,
+      canConcurrent: false,
+      fileOperation: true,
+      renderDoingUI: true,
     },
   },
   listFiles: {

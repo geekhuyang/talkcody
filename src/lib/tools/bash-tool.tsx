@@ -59,6 +59,10 @@ Output can be read using \`cat\` or \`tail -f\` on the output file path returned
   execute: async ({ command, runInBackground }, context): Promise<BashResult> => {
     // Resolve $RESOURCE paths before executing
     const resolvedCommand = await resolveCommandResourcePaths(command);
+    logger.info('Executing bash command', {
+      command: resolvedCommand,
+      taskId: context.taskId,
+    });
 
     // Log if command was modified
     if (resolvedCommand !== command) {

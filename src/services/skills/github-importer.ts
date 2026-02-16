@@ -288,7 +288,10 @@ export class GitHubImporter {
    * Scan a GitHub directory for skills using git clone (fallback method)
    * Note: Skills discovered this way will have _clonedPath set, and cleanup is caller's responsibility
    */
-  static async scanGitHubDirectoryWithGit(repoInfo: GitHubRepoInfo): Promise<{
+  static async scanGitHubDirectoryWithGit(
+    repoInfo: GitHubRepoInfo,
+    targetSkillsDir?: string
+  ): Promise<{
     skills: GitHubSkillInfo[];
     tempClonePath: string;
   }> {
@@ -296,7 +299,7 @@ export class GitHubImporter {
 
     // Create temporary directory for cloning
     const agentSkillService = await getAgentSkillService();
-    const skillsDir = await agentSkillService.getSkillsDirPath();
+    const skillsDir = targetSkillsDir ?? (await agentSkillService.getSkillsDirPath());
     const tempClonePath = await join(skillsDir, '.temp-clone-' + Date.now());
 
     try {
@@ -482,7 +485,10 @@ export class GitHubImporter {
    *
    * Returns both skills and optional tempClonePath that caller must clean up
    */
-  static async scanGitHubDirectory(repoInfo: GitHubRepoInfo): Promise<{
+  static async scanGitHubDirectory(
+    repoInfo: GitHubRepoInfo,
+    options?: { targetSkillsDir?: string }
+  ): Promise<{
     skills: GitHubSkillInfo[];
     tempClonePath?: string;
   }> {
@@ -570,7 +576,7 @@ export class GitHubImporter {
 
         // Fallback to git clone method
         logger.info('Using git clone method to fetch skills');
-        return await GitHubImporter.scanGitHubDirectoryWithGit(repoInfo);
+        return await GitHubImporter.scanGitHubDirectoryWithGit(repoInfo, options?.targetSkillsDir);
       }
 
       logger.error(`Failed to scan GitHub directory:`, error);
@@ -699,10 +705,11 @@ export class GitHubImporter {
    */
   static async importSkillFromLocalDirectory(
     skillInfo: GitHubSkillInfo,
-    sourcePath: string
+    sourcePath: string,
+    targetSkillsDir?: string
   ): Promise<void> {
     const agentSkillService = await getAgentSkillService();
-    const skillsDir = await agentSkillService.getSkillsDirPath();
+    const skillsDir = targetSkillsDir ?? (await agentSkillService.getSkillsDirPath());
     const skillPath = await join(skillsDir, skillInfo.directoryName);
 
     // Check if skill already exists
@@ -762,9 +769,12 @@ export class GitHubImporter {
   /**
    * Import a single skill from GitHub
    */
-  static async importSkillFromGitHub(skillInfo: GitHubSkillInfo): Promise<void> {
+  static async importSkillFromGitHub(
+    skillInfo: GitHubSkillInfo,
+    targetSkillsDir?: string
+  ): Promise<void> {
     const agentSkillService = await getAgentSkillService();
-    const skillsDir = await agentSkillService.getSkillsDirPath();
+    const skillsDir = targetSkillsDir ?? (await agentSkillService.getSkillsDirPath());
     const skillPath = await join(skillsDir, skillInfo.directoryName);
 
     // Check if skill already exists
@@ -828,10 +838,12 @@ export class GitHubImporter {
    * Import multiple skills from GitHub
    * @param skills Skills to import
    * @param tempClonePath Optional temporary clone path to clean up after import
+   * @param targetSkillsDir Optional target directory for installed skills
    */
   static async importMultipleSkills(
     skills: GitHubSkillInfo[],
-    tempClonePath?: string
+    tempClonePath?: string,
+    targetSkillsDir?: string
   ): Promise<{ succeeded: string[]; failed: Array<{ name: string; error: string }> }> {
     const succeeded: string[] = [];
     const failed: Array<{ name: string; error: string }> = [];
@@ -841,9 +853,13 @@ export class GitHubImporter {
         try {
           // Check if this skill was from git clone (has _clonedPath)
           if (skill._clonedPath) {
-            await GitHubImporter.importSkillFromLocalDirectory(skill, skill._clonedPath);
+            await GitHubImporter.importSkillFromLocalDirectory(
+              skill,
+              skill._clonedPath,
+              targetSkillsDir
+            );
           } else {
-            await GitHubImporter.importSkillFromGitHub(skill);
+            await GitHubImporter.importSkillFromGitHub(skill, targetSkillsDir);
           }
           succeeded.push(skill.skillName);
         } catch (error) {

@@ -11,13 +11,14 @@ export interface ImportFromGitHubOptions {
   repository: string; // e.g., "talkcody/skills"
   path: string; // e.g., "skills/theme-factory"
   skillId: string; // Unique ID for the skill
+  targetDir?: string; // Optional target directory for installed skills
 }
 
 /**
  * Import a skill from GitHub using simplified RemoteSkillConfig format
  */
 export async function importSkillFromGitHub(options: ImportFromGitHubOptions): Promise<void> {
-  const { repository, path, skillId } = options;
+  const { repository, path, skillId, targetDir } = options;
 
   // Parse repository (format: "owner/repo")
   const [owner, repo] = repository.split('/');
@@ -51,7 +52,9 @@ export async function importSkillFromGitHub(options: ImportFromGitHubOptions): P
     };
 
     // Scan the parent directory for skills
-    const { skills, tempClonePath } = await GitHubImporter.scanGitHubDirectory(repoInfo);
+    const { skills, tempClonePath } = await GitHubImporter.scanGitHubDirectory(repoInfo, {
+      targetSkillsDir: targetDir,
+    });
 
     let skillInfo: GitHubSkillInfo | undefined;
 
@@ -77,9 +80,13 @@ export async function importSkillFromGitHub(options: ImportFromGitHubOptions): P
 
       // Import the skill (handles both API and git clone methods)
       if (skillInfo._clonedPath) {
-        await GitHubImporter.importSkillFromLocalDirectory(skillInfo, skillInfo._clonedPath);
+        await GitHubImporter.importSkillFromLocalDirectory(
+          skillInfo,
+          skillInfo._clonedPath,
+          targetDir
+        );
       } else {
-        await GitHubImporter.importSkillFromGitHub(skillInfo);
+        await GitHubImporter.importSkillFromGitHub(skillInfo, targetDir);
       }
     } finally {
       // Clean up temp directory if it exists

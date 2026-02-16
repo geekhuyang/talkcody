@@ -3,6 +3,7 @@
  *
  * Import skills from Claude Code's skills directories:
  * - ~/.claude/skills/ (personal skills)
+ * - ~/.talkcody/skills/ (personal skills)
  * - .claude/skills/ (project skills)
  * - .talkcody/skills/ (project skills)
  */
@@ -56,6 +57,10 @@ export class ClaudeCodeImporter {
       const home = await homeDir();
       const personalPath = await join(home, '.claude', 'skills');
       await addIfExists(personalPath, 'personal');
+
+      // Personal skills: ~/.talkcody/skills/
+      const personalTalkcodyPath = await join(home, '.talkcody', 'skills');
+      await addIfExists(personalTalkcodyPath, 'personal');
     } catch (error) {
       logger.warn('Failed to check personal Claude Code skills directory:', error);
     }

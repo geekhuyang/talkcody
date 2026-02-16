@@ -5,7 +5,7 @@
  * https://agentskills.io/specification
  */
 
-import { appDataDir, isAbsolute, join, normalize } from '@tauri-apps/api/path';
+import { appDataDir, homeDir, isAbsolute, join, normalize } from '@tauri-apps/api/path';
 import {
   exists,
   mkdir,
@@ -60,10 +60,37 @@ export class AgentSkillService {
   }
 
   /**
+   * Get the home skills directory path
+   */
+  private async getHomeSkillsDir(): Promise<string> {
+    const home = await homeDir();
+    return await join(home, '.talkcody', 'skills');
+  }
+
+  /**
    * Get the skills directory path (public)
    */
   async getSkillsDirPath(): Promise<string> {
     return await this.getSkillsDir();
+  }
+
+  /**
+   * Get the home skills directory path (public)
+   */
+  async getHomeSkillsDirPath(): Promise<string> {
+    return await this.getHomeSkillsDir();
+  }
+
+  /**
+   * Ensure home skills directory exists and return its path
+   */
+  async ensureHomeSkillsDirExists(): Promise<string> {
+    const homeDirPath = await this.getHomeSkillsDir();
+    if (!(await exists(homeDirPath))) {
+      await mkdir(homeDirPath, { recursive: true });
+      logger.info(`Created home skills directory: ${homeDirPath}`);
+    }
+    return homeDirPath;
   }
 
   /**

@@ -151,8 +151,16 @@ You can optionally specify a starting line and number of lines to read a specifi
       // Handle $RESOURCE prefix for bundled resource files
       if (isResourcePath(resolvedPath)) {
         const resourcePath = stripResourcePrefix(resolvedPath);
+        logger.info('Reading resource file', {
+          resourcePath,
+          taskId: context.taskId,
+        });
         try {
           const fullPath = await resolveResourcePath(resolvedPath);
+          logger.info('Resolved resource file path', {
+            fullPath,
+            taskId: context.taskId,
+          });
           const content = await readTextFile(fullPath);
           return {
             success: true,
@@ -161,6 +169,7 @@ You can optionally specify a starting line and number of lines to read a specifi
             message: `Successfully read resource file: ${resolvedPath}`,
           };
         } catch (_error) {
+          logger.error('Error reading resource file:', _error);
           return {
             success: false,
             file_path: resolvedPath,
