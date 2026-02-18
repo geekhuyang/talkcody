@@ -52,15 +52,15 @@ export const RepositoryChatPanel = memo(function RepositoryChatPanel({
 }: RepositoryChatPanelProps) {
   const order = hasRepository ? 3 : 2;
   const defaultSize = isChatFullscreen
-    ? 100
+    ? '100%'
     : hasRepository
       ? hasOpenFiles || isTerminalVisible
-        ? 40
-        : 80
+        ? '40%'
+        : '80%'
       : shouldShowSidebar
-        ? 80
-        : 50;
-  const minSize = hasRepository ? 20 : 30;
+        ? '80%'
+        : '50%';
+  const minSize = hasRepository ? '20%' : '30%';
 
   return (
     <ResizablePanel
@@ -68,7 +68,7 @@ export const RepositoryChatPanel = memo(function RepositoryChatPanel({
       order={order}
       className="bg-white dark:bg-gray-950"
       defaultSize={defaultSize}
-      maxSize={100}
+      maxSize={'100%'}
       minSize={minSize}
     >
       <div className="flex h-full flex-col">

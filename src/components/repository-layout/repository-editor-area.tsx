@@ -81,9 +81,9 @@ export const RepositoryEditorArea = memo(function RepositoryEditorArea({
         id={editorAreaPanelId}
         order={2}
         className={showChatPanel ? 'border-r' : ''}
-        defaultSize={isEditorFullscreen || isTerminalFullscreen ? 100 : 40}
-        minSize={20}
-        maxSize={100}
+        defaultSize={isEditorFullscreen || isTerminalFullscreen ? '100%' : '40%'}
+        minSize={'20%'}
+        maxSize={'100%'}
       >
         <ResizablePanelGroup direction="vertical">
           {hasOpenFiles && showEditor && (
@@ -91,8 +91,8 @@ export const RepositoryEditorArea = memo(function RepositoryEditorArea({
               <ResizablePanel
                 id={fileEditorPanelId}
                 order={1}
-                defaultSize={isEditorFullscreen ? 100 : showTerminal ? 60 : 100}
-                minSize={20}
+                defaultSize={isEditorFullscreen ? '100%' : showTerminal ? '60%' : '100%'}
+                minSize={'20%'}
               >
                 <div className="flex h-full flex-col">
                   <div className="flex items-center border-b">
@@ -163,9 +163,11 @@ export const RepositoryEditorArea = memo(function RepositoryEditorArea({
             <ResizablePanel
               id={terminalPanelId}
               order={2}
-              defaultSize={isTerminalFullscreen ? 100 : hasOpenFiles && showEditor ? 40 : 100}
-              minSize={15}
-              maxSize={100}
+              defaultSize={
+                isTerminalFullscreen ? '100%' : hasOpenFiles && showEditor ? '40%' : '100%'
+              }
+              minSize={'15%'}
+              maxSize={'100%'}
             >
               <TerminalPanel
                 onCopyToChat={onCopyTerminalToChat}
