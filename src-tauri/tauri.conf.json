@@ -28,7 +28,10 @@
           "$APPDATA/**",
           "$HOME/**"
         ]
-      }
+      },
+      "capabilities": [
+        "default"
+      ]
     },
     "withGlobalTauri": true
   },

@@ -8,10 +8,10 @@ use std::path::PathBuf;
 use tokio::net::TcpListener;
 use tower_http::cors::{Any, CorsLayer};
 
-use tauri_app_lib::core::types::RuntimeEvent;
-use tauri_app_lib::server::config::ServerConfig;
-use tauri_app_lib::server::routes;
-use tauri_app_lib::server::state::ServerStateFactory;
+use talkcody_core::core::types::RuntimeEvent;
+use talkcody_server::config::ServerConfig;
+use talkcody_server::routes;
+use talkcody_server::state::ServerStateFactory;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

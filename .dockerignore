@@ -77,16 +77,27 @@ src/
 !src/services/
 src/services/*
 !src/services/codex-instructions.md
+
+# Keep server crate for API service
+!crates/
+!crates/server/
+!crates/server/**/*
 apps/
 specs/
 ~/
 scripts/
 
-
 # Backend UI files (not needed for API)
 # NOTE: Uncommented because Dockerfile needs these for build
 # src-tauri/icons/
 # src-tauri/capabilities/
+
+# Allow src-tauri workspace for server builds
+!src-tauri/
+!src-tauri/core/
+!src-tauri/core/**
+!src-tauri/server/
+!src-tauri/server/**
 
 # Large/binary files
 *.png

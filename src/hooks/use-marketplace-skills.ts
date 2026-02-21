@@ -1,7 +1,7 @@
 // Marketplace Skills hook for fetching and managing remote skills data
 // Now uses JSON-based configuration instead of database
 
-import { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { logger } from '@/lib/logger';
 import { remoteSkillsLoader } from '@/providers/remote-skills/remote-skills-loader';
 import type { RemoteSkillConfig } from '@/types/remote-skills';
@@ -116,24 +116,36 @@ export function useMarketplaceSkills(): UseMarketplaceSkillsReturn {
   );
 
   // Manual refresh
-  const refresh = useCallback(async () => {
+  // Store callbacks in refs to avoid stale closures in event listeners
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const refreshRef = React.useRef<any>(null);
+  refreshRef.current = async () => {
     remoteSkillsLoader.clearCache();
     await loadAllSkills();
     await loadSkills();
-  }, [loadAllSkills, loadSkills]);
+  };
+
+  const refresh = useCallback(async () => {
+    if (refreshRef.current) {
+      await refreshRef.current();
+    }
+  }, []);
 
   // Listen for remote skills updates
   useEffect(() => {
     const handleUpdate = () => {
       logger.info('Remote skills updated, refreshing...');
-      refresh().catch((err) => {
-        logger.error('Failed to refresh after remote skills update:', err);
-      });
+      const refreshFn = refreshRef.current;
+      if (refreshFn) {
+        refreshFn().catch((err: unknown) => {
+          logger.error('Failed to refresh after remote skills update:', err);
+        });
+      }
     };
 
     window.addEventListener('remoteSkillsUpdated', handleUpdate);
     return () => window.removeEventListener('remoteSkillsUpdated', handleUpdate);
-  }, [refresh]);
+  }, []); // Empty deps - uses ref
 
   // Load skills on mount
   useEffect(() => {

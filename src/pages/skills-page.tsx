@@ -111,15 +111,20 @@ export function SkillsPage() {
   const { createSkill, updateSkill, deleteSkill } = useSkillMutations();
 
   // Load marketplace data based on active tab and filters
+  // Use useRef to store the loadSkills function to avoid infinite loops
+  // due to marketplace object reference changing on every render
+  const loadSkillsRef = React.useRef(marketplace.loadSkills);
+  loadSkillsRef.current = marketplace.loadSkills;
+
   React.useEffect(() => {
     if (activeTab === 'all') {
-      marketplace.loadSkills({
+      loadSkillsRef.current({
         search: searchQuery || undefined,
         category: selectedCategory !== 'all' ? selectedCategory : undefined,
         sort: sortBy,
       });
     }
-  }, [activeTab, searchQuery, selectedCategory, sortBy, marketplace]);
+  }, [activeTab, searchQuery, selectedCategory, sortBy]);
 
   // Categories and tags are now loaded automatically with skills
 

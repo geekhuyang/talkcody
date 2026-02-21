@@ -1,5 +1,5 @@
 {
-  "version": "2026-02-18T06:03:42.353Z",
+  "version": "2026-02-19T06:03:42.353Z",
   "models": {
     "gpt-5-nano": {
       "name": "GPT-5 Nano",
@@ -119,25 +119,6 @@
       },
       "context_length": 400000
     },
-    "gemini-2.5-flash": {
-      "name": "Gemini 2.5 Flash",
-      "imageInput": true,
-      "providers": [
-        "google",
-        "aiGateway",
-        "openRouter"
-      ],
-      "providerMappings": {
-        "google": "gemini-2.5-flash",
-        "aiGateway": "google/gemini-2.5-flash",
-        "openRouter": "google/gemini-2.5-flash"
-      },
-      "pricing": {
-        "input": "0.0000003",
-        "output": "0.0000025"
-      },
-      "context_length": 1048576
-    },
     "gemini-3-flash": {
       "name": "Gemini 3 Flash",
       "imageInput": true,
@@ -160,11 +141,12 @@
       },
       "context_length": 1048576
     },
-    "gemini-2.5-pro": {
-      "name": "Gemini 2.5 Pro",
+    "gemini-3.1-pro-preview": {
+      "name": "Gemini 3.1 Pro Preview",
       "imageInput": true,
       "providers": [
         "google",
+        "github_copilot",
         "aiGateway",
         "openRouter"
       ],
@@ -189,10 +171,10 @@
         "openRouter"
       ],
       "providerMappings": {
-        "google": "gemini-3-pro-preview",
-        "github_copilot": "gemini-3-pro-preview",
-        "aiGateway": "google/gemini-3-pro-preview",
-        "openRouter": "google/gemini-3-pro-preview"
+        "google": "gemini-3.1-pro-preview",
+        "github_copilot": "gemini-3.1-pro-preview",
+        "aiGateway": "google/gemini-3.1-pro-preview",
+        "openRouter": "google/gemini-3.1-pro-preview"
       },
       "pricing": {
         "input": "0.000002",
