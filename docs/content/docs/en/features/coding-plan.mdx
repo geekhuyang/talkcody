@@ -9,7 +9,7 @@ import { Steps, Step } from 'fumadocs-ui/components/steps';
 
 ## What is Coding Plan?
 
-**Coding Plan** is a subscription plan designed specifically for AI coding scenarios, provided by MiniMax, Zhipu AI, and Moonshot. Coding Plan is optimized for high-frequency programming scenarios, offering a cost-effective subscription model that can save significant costs compared to direct API billing.
+**Coding Plan** is a subscription plan designed specifically for AI coding scenarios, provided by MiniMax, Zhipu AI, Moonshot, and Alibaba Cloud (Aliyun). Coding Plan is optimized for high-frequency programming scenarios, offering a cost-effective subscription model that can save significant costs compared to direct API billing.
 
 TalkCody supports Coding Plan for the following models:
 
@@ -18,6 +18,7 @@ TalkCody supports Coding Plan for the following models:
 | MiniMax 2 | MiniMax |
 | GLM 4.6 | Zhipu AI |
 | Kimi | Moonshot |
+| Qwen (Tongyi Qianwen) | Aliyun (Alibaba Cloud) |
 
 <Callout type="info">
 Coding Plan mode uses dedicated API endpoints that provide optimized responses for programming tasks.
@@ -35,6 +36,7 @@ First, you need to obtain an API Key from the respective provider:
 - **MiniMax**: Visit [MiniMax Platform](https://platform.minimaxi.com/docs/coding-plan/intro) to get your API Key
 - **Zhipu AI (GLM)**: Visit [Zhipu AI Platform](https://docs.bigmodel.cn/cn/coding-plan/overview) to get your API Key
 - **Moonshot (Kimi)**: Visit [Moonshot Platform](https://www.kimi.com/coding/docs/) to get your API Key
+- **Aliyun (Alibaba Cloud)**: Visit [Aliyun Model Studio](https://dash.console.aliyun.com/model-api) to get your API Key. Aliyun Coding Plan supports Qwen 3.5 Plus, GLM-5, Kimi K2.5, and Minimax 2.5 models.
 </Step>
 
 <Step>
@@ -89,6 +91,14 @@ When you enable Coding Plan, the API Key is automatically synced to the correspo
 - Understanding UI design mockups
 - Interpreting charts and flowcharts
 
+### Aliyun MCP Server
+
+| Server Name | Feature | Tool Name |
+|-------------|---------|-----------|
+| qwen-coding-plan | Web Search | `web_search` |
+
+**Web Search**: Search for the latest technical documentation, API references, and programming Q&A.
+
 ## How to Use MCP Tools
 
 <Steps>
@@ -109,6 +119,7 @@ In the toolbar above the chat input box, click the **MCP** button and select the
 - `minimax-coding-plan__web_search` (MiniMax Web Search)
 - `glm-coding-plan-search__webSearchPrime` (GLM Web Search)
 - GLM Image Recognition Tool
+- `qwen-coding-plan__web_search` (Aliyun Web Search)
 
 The selected tool will be active in the current conversation.
 </Step>

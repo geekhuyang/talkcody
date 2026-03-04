@@ -263,6 +263,25 @@ describe('Agent Registry - Auto-load Behavior', () => {
     expect(agent?.hidden).toBe(true);
   });
 
+  it('should auto-load universal skills agent', async () => {
+    const agent = await agentRegistry.get('universal-skills');
+
+    expect(agent).toBeDefined();
+    expect(agent?.id).toBe('universal-skills');
+    expect(agent?.hidden).toBe(false);
+    expect(Object.keys(agent?.tools || {})).toEqual(
+      expect.arrayContaining([
+        'readFile',
+        'editFile',
+        'writeFile',
+        'glob',
+        'bash',
+        'askUserQuestions',
+        'installSkill',
+      ])
+    );
+  });
+
   it('should auto-load orchestrator agent', async () => {
     const agent = await agentRegistry.get('orchestrator');
 
