@@ -47,8 +47,9 @@ impl OpenAiProvider {
 
     fn is_responses_model(model: &str) -> bool {
         let normalized = Self::normalize_model_id(model);
-        normalized.contains("gpt-5.3-codex")
+        normalized.contains("gpt-5.1-codex")
             || normalized.contains("gpt-5.2-codex")
+            || normalized.contains("gpt-5.3-codex")
             || normalized.starts_with("gpt-5.4")
             || normalized.starts_with("gpt-5.4-pro")
     }

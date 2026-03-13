@@ -11,11 +11,14 @@ pub struct OpenAiResponsesProtocol;
 
 impl OpenAiResponsesProtocol {
     fn normalize_model(model_name: &str) -> String {
+        // Strip path prefix (e.g. "openai/gpt-4" -> "gpt-4")
         let model_id = if model_name.contains('/') {
             model_name.split('/').next_back().unwrap_or(model_name)
         } else {
             model_name
         };
+        // Strip provider suffix (e.g. "gpt-5.1-codex-max@openai" -> "gpt-5.1-codex-max")
+        let model_id = model_id.split('@').next().unwrap_or(model_id);
         model_id.to_string()
     }
 
