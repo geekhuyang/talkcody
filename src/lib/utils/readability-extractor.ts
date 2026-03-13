@@ -319,9 +319,6 @@ async function tryFetchViaTalkCodyApi(
   }
 }
 
-/**
- * Extract main content from web pages using Mozilla Readability
- */
 export class ReadabilityExtractor {
   private timeout: number;
 
@@ -345,6 +342,14 @@ export class ReadabilityExtractor {
       const html = await htmlPromise;
       if (!html) {
         logger.warn('ReadabilityExtractor: failed to fetch HTML content');
+        logger.info(
+          'ReadabilityExtractor: markdown and HTML fetch failed, trying TalkCody API fallback'
+        );
+        const apiFallback = await tryFetchViaTalkCodyApi(url, this.timeout);
+        if (apiFallback) {
+          return apiFallback;
+        }
+        logger.warn('ReadabilityExtractor: TalkCody API fallback failed after fetch failure');
         return null;
       }
 

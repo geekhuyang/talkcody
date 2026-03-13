@@ -315,6 +315,51 @@ describe('web-fetcher', () => {
       mockAliasedFetchWithTimeout.mockReset();
     });
 
+    it('should use TalkCody API when markdown and HTML fetches fail', async () => {
+      mockAliasedFetchWithTimeout.mockImplementation(async (input: RequestInfo) => {
+        if (typeof input === 'string' && input.endsWith('.md')) {
+          return {
+            ok: false,
+            status: 404,
+            headers: {
+              get: () => 'text/plain',
+            },
+            text: vi.fn().mockResolvedValue(''),
+          } as unknown as Response;
+        }
+
+        return {
+          ok: false,
+          status: 404,
+          headers: {
+            get: () => 'text/html; charset=utf-8',
+          },
+          text: vi.fn().mockResolvedValue(''),
+        } as unknown as Response;
+      });
+
+      const { invoke } = await import('@tauri-apps/api/core');
+      vi.mocked(invoke).mockResolvedValue('device-123');
+
+      const { secureStorage } = await import('@/services/secure-storage');
+      vi.spyOn(secureStorage, 'getAuthToken').mockResolvedValue(null);
+
+      mockSimpleFetch.mockResolvedValue({
+        ok: true,
+        json: vi.fn().mockResolvedValue({
+          content: '# API Fallback\n\n' + 'y'.repeat(150),
+          url: 'https://docs.turso.tech/llms.txt',
+        }),
+      } as unknown as Response);
+
+      const { ReadabilityExtractor } = await import('./readability-extractor');
+      const extractor = new ReadabilityExtractor(10);
+      const result = await extractor.extract('https://docs.turso.tech/llms.txt');
+
+      expect(result?.content).toContain('API Fallback');
+      expect(mockSimpleFetch).toHaveBeenCalled();
+    });
+
     it('should use TalkCody API for CSR app shell pages', async () => {
       mockAliasedFetchWithTimeout.mockImplementation(async (input: RequestInfo) => {
         if (typeof input === 'string' && input.endsWith('.md')) {

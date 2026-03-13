@@ -16,11 +16,7 @@ impl OpenAiResponsesProtocol {
         } else {
             model_name
         };
-        let normalized = model_id.to_lowercase();
-        if normalized.contains("gpt-5.1-codex-max") || normalized.contains("gpt 5.1 codex max") {
-            return "gpt-5.1-codex-max".to_string();
-        }
-        "gpt-5.2-codex".to_string()
+        model_id.to_string()
     }
 
     fn tool_output_to_string(output: &Value) -> String {

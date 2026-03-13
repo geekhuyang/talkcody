@@ -54,7 +54,12 @@ export function ModelSelectorButton() {
   // Define priority models (these will appear at the top of the list)
   // Format: `${modelKey}@${provider}` or just `${modelKey}` to match any provider
   const priorityModelIdentifiers = useMemo(
-    () => ['gpt-5.3-codex@openai', 'kimi-k2.5@kimi_coding', 'minimax-m25@talkcody'],
+    () => [
+      'gpt-5.4@openai',
+      'gpt-5.3-codex@openai',
+      'kimi-k2.5@kimi_coding',
+      'minimax-m25@talkcody',
+    ],
     []
   );
 

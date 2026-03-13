@@ -40,11 +40,6 @@ export class LLMStreamParams {
       return undefined;
     }
 
-    const normalizedReasoningEffort = LLMStreamParams.normalizeReasoningEffort(
-      options.modelIdentifier,
-      options.reasoningEffort
-    );
-
     const { providerId } = parseModelIdentifier(options.modelIdentifier);
     const normalizedProviderId = providerId?.toLowerCase();
     const includeOpenAI = !normalizedProviderId || normalizedProviderId === 'openai';
@@ -68,26 +63,17 @@ export class LLMStreamParams {
 
     if (includeOpenAI) {
       providerOptionsMap.openai = {
-        reasoningEffort: normalizedReasoningEffort,
+        reasoningEffort: options.reasoningEffort,
       };
     }
 
     if (includeOpenRouter) {
       providerOptionsMap.openrouter = {
-        effort: normalizedReasoningEffort,
+        effort: options.reasoningEffort,
       };
     }
 
     return Object.keys(providerOptionsMap).length > 0 ? providerOptionsMap : undefined;
-  }
-
-  static normalizeReasoningEffort(modelIdentifier: string, reasoningEffort: ReasoningEffort) {
-    const { modelKey } = parseModelIdentifier(modelIdentifier);
-    const supportsXhigh = modelKey === 'gpt-5.2-codex' || modelKey === 'gpt-5.1-codex-max';
-    if (!supportsXhigh && reasoningEffort === 'xhigh') {
-      return 'high';
-    }
-    return reasoningEffort;
   }
 
   static temperature(modelIdentifier: string): number | undefined {

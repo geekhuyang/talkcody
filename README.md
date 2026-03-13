@@ -120,5 +120,5 @@ TalkCody is licensed under the MIT License. See [LICENSE](LICENSE) for details.
 - [libSQL](https://github.com/tursodatabase/libsql) - lightweight, embedded SQL database
 - [Shadcn UI](https://github.com/shadcn-ui/ui) - beautiful component library
 - [Fumadocs](https://github.com/fuma-nama/fumadocs) - beautiful documentation framework
-- [opencode-openai-codex-auth](https://github.com/numman-ali/opencode-openai-codex-auth) 
-
+- [opencode-openai-codex-auth](https://github.com/numman-ali/opencode-openai-codex-auth)
+- [baoyu-skills](https://github.com/JimLiu/baoyu-skills)

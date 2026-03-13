@@ -47,12 +47,10 @@ impl OpenAiProvider {
 
     fn is_responses_model(model: &str) -> bool {
         let normalized = Self::normalize_model_id(model);
-        normalized.contains("gpt-5.1-codex")
-            || normalized.contains("gpt 5.1 codex")
-            || normalized.contains("gpt-51-codex")
+        normalized.contains("gpt-5.3-codex")
             || normalized.contains("gpt-5.2-codex")
-            || normalized.contains("gpt 5.2 codex")
-            || normalized.contains("gpt-52-codex")
+            || normalized.starts_with("gpt-5.4")
+            || normalized.starts_with("gpt-5.4-pro")
     }
 
     async fn is_oauth_mode(&self, api_key_manager: &ApiKeyManager) -> bool {
@@ -198,7 +196,14 @@ impl Provider for OpenAiProvider {
                 provider_options: ctx.provider_options,
                 extra_body: ctx.provider_config.extra_body.as_ref(),
             };
-            self.protocol.build_request(request_ctx)
+            let mut body = self.protocol.build_request(request_ctx)?;
+            // OpenAI native API requires max_completion_tokens instead of deprecated max_tokens
+            if let Some(obj) = body.as_object_mut() {
+                if let Some(val) = obj.remove("max_tokens") {
+                    obj.insert("max_completion_tokens".to_string(), val);
+                }
+            }
+            Ok(body)
         }
     }
 
